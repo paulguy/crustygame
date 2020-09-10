@@ -1,0 +1,14 @@
+OBJS   = bmpconvert.o
+TARGET = bmpconvert
+CFLAGS = `pkg-config sdl2 --cflags` -Wall -Wextra -ggdb -Og
+LDFLAGS = `pkg-config sdl2 --libs`
+
+$(TARGET): $(OBJS)
+	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJS)
+
+all: $(TARGET)
+
+clean:
+	rm -f $(TARGET) $(OBJS)
+
+.PHONY: clean

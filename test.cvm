@@ -1,0 +1,272 @@
+include crustygame.inc
+
+TILEMAP_COLOR B 0 0 0 255
+TILEMAP_COLOR W 255 255 255 255
+TILEMAP_COLOR T 0 0 0 0
+
+expr BALL_TILESET_WIDTH 8
+expr BALL_TILESET_HEIGHT 8
+static BALL_TILESET ints "\
+    C_T C_T C_T C_T C_T C_T C_B C_B \
+    C_T C_T C_T C_T C_B C_B C_W C_W \
+    C_T C_T C_T C_B C_W C_W C_W C_W \
+    C_T C_T C_B C_W C_W C_W C_W C_W \
+    C_T C_B C_W C_W C_W C_W C_W C_W \
+    C_T C_B C_W C_W C_W C_W C_W C_W \
+    C_B C_W C_W C_W C_W C_W C_W C_W \
+    C_B C_W C_W C_W C_W C_W C_W C_W"
+expr BALL_TILEMAP_WIDTH 2
+expr BALL_TILEMAP_HEIGHT 2
+static BALL_TILEMAP ints "\
+    0 0 \
+    0 0"
+static BALL_TILEMAP_ATTRS ints " \
+    0 TILEMAP_HFLIP_MASK \
+    TILEMAP_VFLIP_MASK TILEMAP_BFLIP_MASK"
+static BALL_TILEMAP2_ATTRS ints " \
+    TILEMAP_ROTATE_180 TILEMAP_ROTATE_270 \
+    TILEMAP_ROTATE_90  TILEMAP_ROTATE_NONE"
+expr TEST_COMBO0 "TILEMAP_ROTATE_180  | TILEMAP_BFLIP_MASK"
+expr TEST_COMBO1 "TILEMAP_ROTATE_270  | TILEMAP_BFLIP_MASK"
+expr TEST_COMBO2 "TILEMAP_ROTATE_90   | TILEMAP_BFLIP_MASK"
+expr TEST_COMBO3 "TILEMAP_ROTATE_NONE | TILEMAP_BFLIP_MASK"
+static BALL_TILEMAP3_ATTRS ints " \
+    TEST_COMBO0 TEST_COMBO1 \
+    TEST_COMBO2 TEST_COMBO3"
+
+expr TILEMAP_WIDTH 16
+expr TILEMAP_HEIGHT 8
+expr TILEMAP_SIZE "TILEMAP_WIDTH * TILEMAP_HEIGHT"
+static tilemap ints "\
+    25 26 7  7  7  7  7  7  7  7  7  7  7  7  7  7 \
+    25 26 7  7  7  7  7  7  7  7  7  7  7  7  7  7 \
+    25 26 7  7  7  7  7  7  7  7  20 21 21 22 7  7 \
+    25 26 7  7  7  20 21 21 21 21 12 25 25 26 7  7 \
+    25 26 7  7  7  24 25 25 25 25 25 25 25 26 7  7 \
+    25 26 7  7  7  24 25 25 25 25 25 25 25 26 7  7 \
+    20 21 21 21 21 21 21 21 21 21 21 21 21 21 21 22 \
+    25 25 25 25 25 25 25 25 25 25 25 25 25 25 25 25"
+expr TILEMAP2_WIDTH 8
+expr TILEMAP2_HEIGHT 8
+expr TILEMAP2_SIZE "TILEMAP2_WIDTH * TILEMAP2_HEIGHT"
+static tilemap2 ints "\
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6 \
+    6 6 6 6 6 6 6 6"
+
+expr TILE_WIDTH 16
+expr TILE_HEIGHT 16
+binclude gfx ints "test_gfx.crsg"
+static tileset_id
+static ball_tileset_id
+static tilemap_id
+static tilemap2_id
+static ball_tilemap_id
+static ball_tilemap2_id
+static ball_tilemap3_id
+static layer_id
+static layer2_id
+static ball_id
+static ball2_id
+static ball3_id
+static posx 0
+static posy 0
+static xdir 1
+static ydir 1
+static scroll2 0
+static scroll3 0
+static scale floats 2.0
+static ballscale floats 4.0
+
+proc init
+    local tilesetdata ints 5
+    local size
+
+    move size gfx:1
+    mul  size gfx:2
+
+    move gfx_set_buffer gfx:3
+    move tilesetdata:0 gfx:1
+    move tilesetdata:1 gfx:2
+    move tilesetdata:2 gfx:1
+    mul  tilesetdata:2 4
+    move tilesetdata:3 TILE_WIDTH
+    move tilesetdata:4 TILE_HEIGHT
+    move gfx_add_tileset tilesetdata
+    move tileset_id gfx_get_return
+
+    move gfx_set_buffer BALL_TILESET
+    move tilesetdata:0 BALL_TILESET_WIDTH
+    move tilesetdata:1 BALL_TILESET_HEIGHT
+    move tilesetdata:2 BALL_TILESET_WIDTH
+    mul  tilesetdata:2 4
+    move tilesetdata:3 BALL_TILESET_WIDTH
+    move tilesetdata:4 BALL_TILESET_HEIGHT
+    move gfx_add_tileset tilesetdata
+    move ball_tileset_id gfx_get_return
+
+    move tilesetdata:0 TILEMAP_WIDTH
+    move tilesetdata:1 TILEMAP_HEIGHT
+    move gfx_add_tilemap tilesetdata
+    move tilemap_id gfx_get_return
+
+    move tilesetdata:0 TILEMAP2_WIDTH
+    move tilesetdata:1 TILEMAP2_HEIGHT
+    move gfx_add_tilemap tilesetdata
+    move tilemap2_id gfx_get_return
+
+    move tilesetdata:0 BALL_TILEMAP_WIDTH
+    move tilesetdata:1 BALL_TILEMAP_HEIGHT
+    move gfx_add_tilemap tilesetdata
+    move ball_tilemap_id gfx_get_return
+    move gfx_add_tilemap tilesetdata
+    move ball_tilemap2_id gfx_get_return
+    move gfx_add_tilemap tilesetdata
+    move ball_tilemap3_id gfx_get_return
+
+    move gfx_set_tilemap_tileset:tilemap_id tileset_id
+    move gfx_set_tilemap_tileset:tilemap2_id tileset_id
+    move gfx_set_tilemap_tileset:ball_tilemap_id ball_tileset_id
+    move gfx_set_tilemap_tileset:ball_tilemap2_id ball_tileset_id
+    move gfx_set_tilemap_tileset:ball_tilemap3_id ball_tileset_id
+
+    move gfx_set_buffer tilemap
+    move tilesetdata:0 0
+    move tilesetdata:1 0
+    move tilesetdata:2 TILEMAP_WIDTH
+    move tilesetdata:3 TILEMAP_WIDTH
+    move tilesetdata:4 TILEMAP_HEIGHT
+    move gfx_set_tilemap_map:tilemap_id tilesetdata
+
+    move gfx_set_buffer tilemap2
+    move tilesetdata:0 0
+    move tilesetdata:1 0
+    move tilesetdata:2 TILEMAP2_WIDTH
+    move tilesetdata:3 TILEMAP2_WIDTH
+    move tilesetdata:4 TILEMAP2_HEIGHT
+    move gfx_set_tilemap_map:tilemap2_id tilesetdata
+
+    move gfx_set_buffer BALL_TILEMAP
+    move tilesetdata:2 BALL_TILEMAP_WIDTH
+    move tilesetdata:3 BALL_TILEMAP_WIDTH
+    move tilesetdata:4 BALL_TILEMAP_HEIGHT
+    move gfx_set_tilemap_map:ball_tilemap_id tilesetdata
+    move gfx_set_tilemap_map:ball_tilemap2_id tilesetdata
+    move gfx_set_tilemap_map:ball_tilemap3_id tilesetdata
+
+    move gfx_set_buffer BALL_TILEMAP_ATTRS
+    move gfx_set_tilemap_attrs:ball_tilemap_id tilesetdata
+    move gfx_set_buffer BALL_TILEMAP2_ATTRS
+    move gfx_set_tilemap_attrs:ball_tilemap2_id tilesetdata
+    move gfx_set_buffer BALL_TILEMAP3_ATTRS
+    move gfx_set_tilemap_attrs:ball_tilemap3_id tilesetdata
+
+    move tilesetdata:0 0
+    move tilesetdata:1 0
+    move tilesetdata:2 TILEMAP_WIDTH
+    move tilesetdata:3 TILEMAP_HEIGHT
+    move gfx_update_tilemap:tilemap_id tilesetdata
+
+    move tilesetdata:2 TILEMAP2_WIDTH
+    move tilesetdata:3 TILEMAP2_HEIGHT
+    move gfx_update_tilemap:tilemap2_id tilesetdata
+
+    move tilesetdata:2 BALL_TILEMAP_WIDTH
+    move tilesetdata:3 BALL_TILEMAP_WIDTH
+    move gfx_update_tilemap:ball_tilemap_id tilesetdata
+    move gfx_update_tilemap:ball_tilemap2_id tilesetdata
+    move gfx_update_tilemap:ball_tilemap3_id tilesetdata
+
+    move gfx_add_layer tilemap_id
+    move layer_id gfx_get_return
+
+    move gfx_add_layer tilemap2_id
+    move layer2_id gfx_get_return
+
+    move gfx_add_layer ball_tilemap_id
+    move ball_id gfx_get_return
+
+    move gfx_add_layer ball_tilemap2_id
+    move ball2_id gfx_get_return
+
+    move gfx_add_layer ball_tilemap3_id
+    move ball3_id gfx_get_return
+
+    move gfx_set_layer_scale_x:layer_id scale
+    move gfx_set_layer_scale_y:layer_id scale
+    move size TILEMAP_WIDTH
+    mul  size TILE_WIDTH
+    div  size 2
+    move gfx_set_layer_w:layer_id size
+
+    move gfx_set_layer_scale_x:layer2_id scale
+    move gfx_set_layer_scale_y:layer2_id scale
+
+    move gfx_set_layer_scale_x:ball_id ballscale
+    move gfx_set_layer_scale_y:ball_id ballscale
+    move gfx_set_layer_x:ball_id 320
+    move gfx_set_layer_scale_x:ball2_id ballscale
+    move gfx_set_layer_scale_y:ball2_id ballscale
+    move gfx_set_layer_x:ball2_id 320
+    move gfx_set_layer_y:ball2_id 100
+    move gfx_set_layer_scale_x:ball3_id ballscale
+    move gfx_set_layer_scale_y:ball3_id ballscale
+    move gfx_set_layer_x:ball3_id 320
+    move gfx_set_layer_y:ball3_id 200
+ret
+
+proc event
+ret
+
+proc frame
+    move gfx_draw_layer layer2_id
+    move gfx_draw_layer layer_id
+    move gfx_draw_layer ball_id
+    move gfx_draw_layer ball2_id
+    move gfx_draw_layer ball3_id
+    add posx xdir
+    add posy ydir
+    add scroll2 1
+    add scroll3 1
+    move gfx_set_layer_x:layer_id posx
+    move gfx_set_layer_y:layer_id posy
+    move gfx_set_layer_x:layer2_id posx
+    move gfx_set_layer_y:layer2_id posy
+    move gfx_set_layer_scroll_x:layer_id scroll2
+    move gfx_set_layer_scroll_y:layer_id scroll3
+    cmp posx -100
+    jumpz xchange
+    cmp posx 484
+    jumpz xchange
+    jump yscroll
+
+label xchange
+    mul xdir -1
+
+label yscroll
+    cmp posy -100
+    jumpz ychange
+    cmp posy 324
+    jumpz ychange
+    jump scroll2
+
+label ychange
+    mul ydir -1
+ 
+label scroll2
+    cmp scroll2 255
+    jumpl scroll3
+    move scroll2 0
+
+label scroll3
+    cmp scroll3 127
+    jumpl end
+    move scroll3 0
+
+label end
+ret
