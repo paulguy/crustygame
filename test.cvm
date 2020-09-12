@@ -1,5 +1,7 @@
 include crustygame.inc
 
+static NL string "\n"
+
 TILEMAP_COLOR B 0 0 0 255
 TILEMAP_COLOR W 255 255 255 255
 TILEMAP_COLOR T 0 0 0 0
@@ -82,6 +84,12 @@ static scroll2 0
 static scroll3 0
 static scale floats 2.0
 static ballscale floats 4.0
+
+macro SET_VIDEO_MODE
+    local videomode string VIDEOMODE
+    move string_out videomode
+    move gfx_set_video_mode videomode
+endmacro SET_VIDEO_MODE
 
 proc init
     local tilesetdata ints 5
@@ -218,6 +226,22 @@ proc init
     move gfx_set_layer_scale_y:ball3_id ballscale
     move gfx_set_layer_x:ball3_id 320
     move gfx_set_layer_y:ball3_id 200
+
+    move size gfx_get_width
+    move out size
+    move string_out NL
+    move size gfx_get_height
+    move out size
+    move string_out NL
+
+    SET_VIDEO_MODE
+
+    move size gfx_get_width
+    move out size
+    move string_out NL
+    move size gfx_get_height
+    move out size
+    move string_out NL
 ret
 
 proc event

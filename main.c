@@ -11,6 +11,9 @@
 #define WINDOW_WIDTH    (640)
 #define WINDOW_HEIGHT   (480)
 
+#define VIDEO_MODE_STR_SIZE (256)
+#define VIDEO_MODE_SEPARATOR 'x'
+
 typedef struct {
     SDL_Window *win;
     SDL_Renderer *renderer;
@@ -600,7 +603,85 @@ int gfx_draw_layer(void *priv,
 
     return(tilemap_draw_layer(state->ll, *(int *)ptr));
 }
- 
+
+int gfx_set_video_mode(void *priv,
+                       CrustyType type,
+                       unsigned int size,
+                       void *ptr,
+                       unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    char mode[VIDEO_MODE_STR_SIZE];
+
+    if(type != CRUSTY_TYPE_CHAR ||
+       size > VIDEO_MODE_STR_SIZE - 1) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    memcpy(mode, (char *)ptr, size);
+    mode[size] = '\0';
+    fprintf(stderr, "%s\n", mode);
+
+    if(strcmp("fullscreen", mode) == 0) {
+        if(SDL_SetWindowFullscreen(state->win,
+                                   SDL_WINDOW_FULLSCREEN_DESKTOP) < 0) {
+            fprintf(stderr, "Failed to set window fullscreen.\n");
+            return(-1);
+        }
+    } else {
+        char *x;
+        char *end;
+        x = strchr(mode, VIDEO_MODE_SEPARATOR);
+        if(x == NULL || x == mode || x[0] == '\0') {
+            fprintf(stderr, "Malformed video mode: %s\n", mode);
+            return(-1);
+        }
+        x[0] = '\0';
+        x = &(x[1]);
+        unsigned long int width, height;
+        width = strtoul(mode, &end, 10);
+        if(end == mode || end[0] != '\0') {
+            fprintf(stderr, "Malformed number: %s\n", mode);
+            return(-1);
+        }
+        height = strtoul(x, &end, 10);
+        if(end == x || end[0] != '\0') {
+            fprintf(stderr, "Malformed number: %s\n", x);
+            return(-1);
+        }
+        if(SDL_SetWindowFullscreen(state->win, 0) < 0) {
+            fprintf(stderr, "Failed to set windowed.\n");
+            return(-1);
+        }
+        SDL_SetWindowSize(state->win, width, height);
+    }
+
+    return(0);
+}
+
+int gfx_get_width(void *priv, void *val, unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int temp;
+
+    if(SDL_GetRendererOutputSize(state->renderer, (int *)val, &temp) < 0) {
+        fprintf(stderr, "Failed to get renderer output size.\n");
+        return(-1);
+    }
+
+    return(0);
+}
+
+int gfx_get_height(void *priv, void *val, unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int temp;
+
+    if(SDL_GetRendererOutputSize(state->renderer, &temp, (int *)val) < 0) {
+        fprintf(stderr, "Failed to get renderer output size.\n");
+        return(-1);
+    }
+
+    return(0);
+}
 
 int get_ticks(void *priv, void *val, unsigned int index) {
     *(int *)val = SDL_GetTicks();
@@ -798,6 +879,24 @@ int main(int argc, char **argv) {
             .readType = CRUSTY_TYPE_NONE,
             .read = NULL, .readpriv = NULL,
             .write = gfx_draw_layer, .writepriv = &state
+        },
+        {
+            .name = "gfx_set_video_mode", .length = 1,
+            .readType = CRUSTY_TYPE_NONE,
+            .read = NULL, .readpriv = NULL,
+            .write = gfx_set_video_mode, .writepriv = &state
+        },
+        {
+            .name = "gfx_get_width", .length = 1,
+            .readType = CRUSTY_TYPE_INT,
+            .read = gfx_get_width, .readpriv = &state,
+            .write = NULL, .writepriv = NULL
+        },
+        {
+            .name = "gfx_get_height", .length = 1,
+            .readType = CRUSTY_TYPE_INT,
+            .read = gfx_get_height, .readpriv = &state,
+            .write = NULL, .writepriv = NULL
         },
         {
             .name = "get_ticks", .length = 1,
