@@ -17,6 +17,9 @@
  * along with crustymidi.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef _CRUSTYVM_H
+#define _CRUSTYVM_H
+
 #define CRUSTY_IO_READ_FUNC_DECL(X)   int (*X)(void *priv, \
                                                void *val, \
                                                unsigned int index)
@@ -195,3 +198,5 @@ int crustyvm_has_entrypoint(CrustyVM *cvm, const char *name);
 
 unsigned int crustyvm_get_tokenmem(CrustyVM *cvm);
 unsigned int crustyvm_get_stackmem(CrustyVM *cvm);
+
+#endif

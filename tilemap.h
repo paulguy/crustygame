@@ -1,3 +1,6 @@
+#ifndef _TILEMAP_H
+#define _TILEMAP_H
+
 #include <SDL.h>
 
 #define TILEMAP_HFLIP_MASK (0x01)
@@ -88,3 +91,5 @@ int tilemap_set_layer_scale_y(LayerList *ll, unsigned int index, double scale_y)
 int tilemap_set_layer_rotation(LayerList *ll, unsigned int index, double angle);
  
 int tilemap_draw_layer(LayerList *ll, unsigned int index);
+
+#endif

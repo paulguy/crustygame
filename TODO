@@ -1,0 +1,9 @@
+fix read callback to write callback move
+translate SDL event types to internal event types - underway
+Sanitize paths for include/binclude
+Add a way to signal to quit
+layer blend modes, alpha mod, color mod
+Save file/memory support (with sanitized paths)
+Expand some kind of standard library of macros/procedures - longterm
+Audio
+Graphical demos and example games

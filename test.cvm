@@ -1,6 +1,21 @@
 include crustygame.inc
 
+static KEYDOWN string "KEYDOWN"
+static KEYUP string "KEYUP"
+static MOUSEMOTION string "MOUSEMOTION"
+static MOUSEBUTTONDOWN string "MOUSEBUTTONDOWN"
+static MOUSEBUTTONUP string "MOUSEBUTTONUP"
+static MOUSEWHEEL string "MOUSEWHEEL"
+static JOYAXISMOTION string "JOYAXISMOTION"
+static JOYBALLMOTION string "JOYBALLMOTION"
+static JOYHATMOTION string "JOYHATMOTION"
+static JOYBUTTONDOWN string "JOYBUTTONDOWN"
+static JOYBUTTONUP string "JOYBUTTONUP"
+static CONTROLLERAXISMOTION string "CONTROLLERAXISMOTION"
+static CONTROLLERBUTTONDOWN string "CONTROLLERBUTTONDOWN"
+static CONTROLLERBUTTONUP string "CONTROLLERBUTTONUP"
 static NL string "\n"
+static SPC string " "
 
 TILEMAP_COLOR B 0 0 0 255
 TILEMAP_COLOR W 255 255 255 255
@@ -92,118 +107,49 @@ macro SET_VIDEO_MODE
 endmacro SET_VIDEO_MODE
 
 proc init
-    local tilesetdata ints 5
     local size
 
     move size gfx:1
-    mul  size gfx:2
+    mul  size 4
+    call GFX_ADD_TILESET gfx:3 gfx:1 gfx:2 size TILE_WIDTH TILE_HEIGHT tileset_id
 
-    move gfx_set_buffer gfx:3
-    move tilesetdata:0 gfx:1
-    move tilesetdata:1 gfx:2
-    move tilesetdata:2 gfx:1
-    mul  tilesetdata:2 4
-    move tilesetdata:3 TILE_WIDTH
-    move tilesetdata:4 TILE_HEIGHT
-    move gfx_add_tileset tilesetdata
-    move tileset_id gfx_get_return
+    move size BALL_TILESET_WIDTH
+    mul  size 4
+    call GFX_ADD_TILESET BALL_TILESET BALL_TILESET_WIDTH BALL_TILESET_HEIGHT size BALL_TILESET_WIDTH BALL_TILESET_HEIGHT ball_tileset_id
 
-    move gfx_set_buffer BALL_TILESET
-    move tilesetdata:0 BALL_TILESET_WIDTH
-    move tilesetdata:1 BALL_TILESET_HEIGHT
-    move tilesetdata:2 BALL_TILESET_WIDTH
-    mul  tilesetdata:2 4
-    move tilesetdata:3 BALL_TILESET_WIDTH
-    move tilesetdata:4 BALL_TILESET_HEIGHT
-    move gfx_add_tileset tilesetdata
-    move ball_tileset_id gfx_get_return
+    call GFX_ADD_TILEMAP TILEMAP_WIDTH TILEMAP_HEIGHT tilemap_id
+    call GFX_ADD_TILEMAP TILEMAP2_WIDTH TILEMAP2_HEIGHT tilemap2_id
+    call GFX_ADD_TILEMAP BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT ball_tilemap_id
+    call GFX_ADD_TILEMAP BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT ball_tilemap2_id
+    call GFX_ADD_TILEMAP BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT ball_tilemap3_id
 
-    move tilesetdata:0 TILEMAP_WIDTH
-    move tilesetdata:1 TILEMAP_HEIGHT
-    move gfx_add_tilemap tilesetdata
-    move tilemap_id gfx_get_return
+    call GFX_SET_TILEMAP_TILESET tilemap_id tileset_id
+    call GFX_SET_TILEMAP_TILESET tilemap2_id tileset_id
+    call GFX_SET_TILEMAP_TILESET ball_tilemap_id ball_tileset_id
+    call GFX_SET_TILEMAP_TILESET ball_tilemap2_id ball_tileset_id
+    call GFX_SET_TILEMAP_TILESET ball_tilemap3_id ball_tileset_id
 
-    move tilesetdata:0 TILEMAP2_WIDTH
-    move tilesetdata:1 TILEMAP2_HEIGHT
-    move gfx_add_tilemap tilesetdata
-    move tilemap2_id gfx_get_return
+    call GFX_SET_TILEMAP_MAP tilemap_id tilemap 0 0 TILEMAP_WIDTH TILEMAP_WIDTH TILEMAP_HEIGHT
+    call GFX_SET_TILEMAP_MAP tilemap2_id tilemap2 0 0 TILEMAP2_WIDTH TILEMAP2_WIDTH TILEMAP2_HEIGHT
+    call GFX_SET_TILEMAP_MAP ball_tilemap_id BALL_TILEMAP 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
+    call GFX_SET_TILEMAP_MAP ball_tilemap2_id BALL_TILEMAP 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
+    call GFX_SET_TILEMAP_MAP ball_tilemap3_id BALL_TILEMAP 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
 
-    move tilesetdata:0 BALL_TILEMAP_WIDTH
-    move tilesetdata:1 BALL_TILEMAP_HEIGHT
-    move gfx_add_tilemap tilesetdata
-    move ball_tilemap_id gfx_get_return
-    move gfx_add_tilemap tilesetdata
-    move ball_tilemap2_id gfx_get_return
-    move gfx_add_tilemap tilesetdata
-    move ball_tilemap3_id gfx_get_return
+    call GFX_SET_TILEMAP_ATTRS ball_tilemap_id BALL_TILEMAP_ATTRS 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
+    call GFX_SET_TILEMAP_ATTRS ball_tilemap2_id BALL_TILEMAP2_ATTRS 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
+    call GFX_SET_TILEMAP_ATTRS ball_tilemap3_id BALL_TILEMAP3_ATTRS 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
 
-    move gfx_set_tilemap_tileset:tilemap_id tileset_id
-    move gfx_set_tilemap_tileset:tilemap2_id tileset_id
-    move gfx_set_tilemap_tileset:ball_tilemap_id ball_tileset_id
-    move gfx_set_tilemap_tileset:ball_tilemap2_id ball_tileset_id
-    move gfx_set_tilemap_tileset:ball_tilemap3_id ball_tileset_id
+    call GFX_UPDATE_TILEMAP tilemap_id 0 0 TILEMAP_WIDTH TILEMAP_HEIGHT
+    call GFX_UPDATE_TILEMAP tilemap2_id 0 0 TILEMAP2_WIDTH TILEMAP2_HEIGHT
+    call GFX_UPDATE_TILEMAP ball_tilemap_id 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
+    call GFX_UPDATE_TILEMAP ball_tilemap2_id 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
+    call GFX_UPDATE_TILEMAP ball_tilemap3_id 0 0 BALL_TILEMAP_WIDTH BALL_TILEMAP_HEIGHT
 
-    move gfx_set_buffer tilemap
-    move tilesetdata:0 0
-    move tilesetdata:1 0
-    move tilesetdata:2 TILEMAP_WIDTH
-    move tilesetdata:3 TILEMAP_WIDTH
-    move tilesetdata:4 TILEMAP_HEIGHT
-    move gfx_set_tilemap_map:tilemap_id tilesetdata
-
-    move gfx_set_buffer tilemap2
-    move tilesetdata:0 0
-    move tilesetdata:1 0
-    move tilesetdata:2 TILEMAP2_WIDTH
-    move tilesetdata:3 TILEMAP2_WIDTH
-    move tilesetdata:4 TILEMAP2_HEIGHT
-    move gfx_set_tilemap_map:tilemap2_id tilesetdata
-
-    move gfx_set_buffer BALL_TILEMAP
-    move tilesetdata:2 BALL_TILEMAP_WIDTH
-    move tilesetdata:3 BALL_TILEMAP_WIDTH
-    move tilesetdata:4 BALL_TILEMAP_HEIGHT
-    move gfx_set_tilemap_map:ball_tilemap_id tilesetdata
-    move gfx_set_tilemap_map:ball_tilemap2_id tilesetdata
-    move gfx_set_tilemap_map:ball_tilemap3_id tilesetdata
-
-    move gfx_set_buffer BALL_TILEMAP_ATTRS
-    move gfx_set_tilemap_attrs:ball_tilemap_id tilesetdata
-    move gfx_set_buffer BALL_TILEMAP2_ATTRS
-    move gfx_set_tilemap_attrs:ball_tilemap2_id tilesetdata
-    move gfx_set_buffer BALL_TILEMAP3_ATTRS
-    move gfx_set_tilemap_attrs:ball_tilemap3_id tilesetdata
-
-    move tilesetdata:0 0
-    move tilesetdata:1 0
-    move tilesetdata:2 TILEMAP_WIDTH
-    move tilesetdata:3 TILEMAP_HEIGHT
-    move gfx_update_tilemap:tilemap_id tilesetdata
-
-    move tilesetdata:2 TILEMAP2_WIDTH
-    move tilesetdata:3 TILEMAP2_HEIGHT
-    move gfx_update_tilemap:tilemap2_id tilesetdata
-
-    move tilesetdata:2 BALL_TILEMAP_WIDTH
-    move tilesetdata:3 BALL_TILEMAP_WIDTH
-    move gfx_update_tilemap:ball_tilemap_id tilesetdata
-    move gfx_update_tilemap:ball_tilemap2_id tilesetdata
-    move gfx_update_tilemap:ball_tilemap3_id tilesetdata
-
-    move gfx_add_layer tilemap_id
-    move layer_id gfx_get_return
-
-    move gfx_add_layer tilemap2_id
-    move layer2_id gfx_get_return
-
-    move gfx_add_layer ball_tilemap_id
-    move ball_id gfx_get_return
-
-    move gfx_add_layer ball_tilemap2_id
-    move ball2_id gfx_get_return
-
-    move gfx_add_layer ball_tilemap3_id
-    move ball3_id gfx_get_return
+    call GFX_ADD_LAYER tilemap_id layer_id
+    call GFX_ADD_LAYER tilemap2_id layer2_id
+    call GFX_ADD_LAYER ball_tilemap_id ball_id
+    call GFX_ADD_LAYER ball_tilemap2_id ball2_id
+    call GFX_ADD_LAYER ball_tilemap3_id ball3_id
 
     move gfx_set_layer_scale_x:layer_id scale
     move gfx_set_layer_scale_y:layer_id scale
@@ -234,7 +180,7 @@ proc init
     move out size
     move string_out NL
 
-    SET_VIDEO_MODE
+    if VIDEOMODE SET_VIDEO_MODE
 
     move size gfx_get_width
     move out size
@@ -244,7 +190,39 @@ proc init
     move string_out NL
 ret
 
+macro CHECK_EVENT_TYPE THISTYPE NEXTTYPE
+    cmp eventtype CRUSTYGAME_THISTYPE
+    jumpn CHECK_NEXTTYPE
+    move string_out THISTYPE
+    jump CHECK_FOUND
+    label CHECK_NEXTTYPE
+endmacro CHECK_EVENT_TYPE
+
 proc event
+    local eventtype
+    local eventtime
+
+    move eventtype event_get_type
+    CHECK_EVENT_TYPE KEYDOWN KEYUP
+    CHECK_EVENT_TYPE KEYUP MOUSEMOTION
+    CHECK_EVENT_TYPE MOUSEMOTION MOUSEBUTTONDOWN
+    CHECK_EVENT_TYPE MOUSEBUTTONDOWN MOUSEBUTTONUP
+    CHECK_EVENT_TYPE MOUSEBUTTONUP MOUSEWHEEL
+    CHECK_EVENT_TYPE MOUSEWHEEL JOYAXISMOTION
+    CHECK_EVENT_TYPE JOYAXISMOTION JOYBALLMOTION
+    CHECK_EVENT_TYPE JOYBALLMOTION JOYHATMOTION
+    CHECK_EVENT_TYPE JOYHATMOTION JOYBUTTONDOWN
+    CHECK_EVENT_TYPE JOYBUTTONDOWN JOYBUTTONUP
+    CHECK_EVENT_TYPE JOYBUTTONUP CONTROLLERAXISMOTION
+    CHECK_EVENT_TYPE CONTROLLERAXISMOTION CONTROLLERBUTTONDOWN
+    CHECK_EVENT_TYPE CONTROLLERBUTTONDOWN CONTROLLERBUTTONUP
+    CHECK_EVENT_TYPE CONTROLLERBUTTONUP FOUND
+    move string_out SPC
+    move out eventtype
+    move string_out SPC
+    move out event_get_time
+    move string_out NL
+
 ret
 
 proc frame

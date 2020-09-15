@@ -1,6 +1,6 @@
-OBJS   = crustyvm.o tilemap.o main.o
+OBJS   = callbacks.o crustyvm.o tilemap.o main.o
 TARGET = crustygame
-CFLAGS = `pkg-config sdl2 --cflags` -Wall -Wextra -ggdb -Og
+CFLAGS = `pkg-config sdl2 --cflags` -Wall -Wextra -Wno-unused-parameter -ggdb -Og
 LDFLAGS = `pkg-config sdl2 --libs` -lm
 
 $(TARGET): $(OBJS)

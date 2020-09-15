@@ -1780,8 +1780,7 @@ static int preprocess(CrustyVM *cvm,
                     if(i == 1 &&
                        strcmp(GET_ACTIVE(0), "if") == 0 &&
                        strcmp(GET_ACTIVE(1),
-                              &(cvm->tokenmem[inVar[j]])) == 0 &&
-                       strcmp(&(cvm->tokenmem[inValue[j]]), "0") == 0) {
+                              &(cvm->tokenmem[inVar[j]])) == 0) {
                         continue;
                     }
                     tokenstart = string_replace(cvm,
@@ -1930,7 +1929,10 @@ static int preprocess(CrustyVM *cvm,
                     for(j = 0; j < inVars; j++) {
                         if(strcmp(GET_ACTIVE(1),
                                   &(cvm->tokenmem[inVar[j]])) == 0) {
-                            dothing = 1;
+                            if(strcmp(&(cvm->tokenmem[inValue[j]]),
+                                      "0") != 0) {
+                                dothing = 1;
+                            }
                             break;
                         }
                     }
@@ -1940,7 +1942,9 @@ static int preprocess(CrustyVM *cvm,
                         num = strtol(GET_ACTIVE(1), &endchar, 0);
                         /* check that the entire string was valid and that the
                            result was not zero */
-                        if(GET_ACTIVE(1)[0] != '\0' && *endchar == '\0' && num != 0) {
+                        if(GET_ACTIVE(1)[0] != '\0' &&
+                           *endchar == '\0' &&
+                           num != 0) {
                             dothing = 1;
                         }
                     }
@@ -4384,6 +4388,9 @@ static int read_var(CrustyVM *cvm,
                     unsigned int index) {
     if(var->read != NULL) {
         if(var->type == CRUSTY_TYPE_CHAR) {
+            /* the function will assume only 1 byte of storage so make sure it
+             * is all clear. */
+            intval = 0;
             return(var->read(var->readpriv, intval, index));
         } else if(var->type == CRUSTY_TYPE_FLOAT) {
             return(var->read(var->readpriv, floatval, index));
@@ -5051,20 +5058,12 @@ static void store_result(CrustyVM *cvm,
 #define JUMP_INSTRUCTION(CMP) \
     if(cvm->resulttype == CRUSTY_TYPE_INT) { \
         if(cvm->intresult CMP 0) { \
-            if(cvm->ip == (unsigned int)(cvm->inst[cvm->ip + JUMP_LOCATION])) { \
-                cvm->status = CRUSTY_STATUS_READY; \
-                break; \
-            } \
             cvm->ip = (unsigned int)(cvm->inst[cvm->ip + JUMP_LOCATION]); \
         } else { \
             cvm->ip += JUMP_ARGS + 1; \
         } \
     } else { \
         if(cvm->floatresult CMP 0.0) { \
-            if(cvm->ip == (unsigned int)(cvm->inst[cvm->ip + JUMP_LOCATION])) { \
-                cvm->status = CRUSTY_STATUS_READY; \
-                break; \
-            } \
             cvm->ip = (unsigned int)(cvm->inst[cvm->ip + JUMP_LOCATION]); \
         } else { \
             cvm->ip += JUMP_ARGS + 1; \
@@ -5106,22 +5105,69 @@ CrustyStatus crustyvm_step(CrustyVM *cvm) {
             if(dest->write != NULL) { /* destination is callback */
                 if((srcflags & MOVE_FLAG_TYPE_MASK) == MOVE_FLAG_VAR) {
                     src = &(cvm->var[srcval]);
+                    if(src->read != NULL) {
+                        if(src->type == CRUSTY_TYPE_CHAR) {
+                            /* the function will assume only 1 byte of storage
+                             * so make sure it is all clear. */
+                            cvm->intresult = 0;
+                            if(src->read(src->readpriv,
+                                         &(cvm->intresult),
+                                         srcindex)) {
+                                cvm->status = CRUSTY_STATUS_CALLBACK_FAILED;
+                                return(cvm->status);
+                            }
+                            cvm->resulttype = CRUSTY_TYPE_INT;
+                        } else if(src->type == CRUSTY_TYPE_FLOAT) {
+                            if(src->read(src->readpriv,
+                                         &(cvm->floatresult),
+                                         srcindex)) {
+                                cvm->status = CRUSTY_STATUS_CALLBACK_FAILED;
+                                return(cvm->status);
+                            }
+                            cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                        } else { /* INT */
+                            if(src->read(src->readpriv,
+                                         &(cvm->intresult),
+                                         srcindex)) {
+                                cvm->status = CRUSTY_STATUS_CALLBACK_FAILED;
+                                return(cvm->status);
+                            }
+                            cvm->resulttype = CRUSTY_TYPE_INT;
+                        }
 
-                    if(src->type == CRUSTY_TYPE_INT) {
-                        srcptr += srcindex * sizeof(int);
-                    } else if(src->type == CRUSTY_TYPE_FLOAT) {
-                        srcptr += srcindex * sizeof(double);
+                        if(dest->write(dest->writepriv,
+                                       cvm->resulttype,
+                                       1,
+                                       cvm->resulttype == CRUSTY_TYPE_INT ?
+                                           (void *)&(cvm->intresult) :
+                                           (void *)&(cvm->floatresult),
+                                       destindex) < 0) {
+                            cvm->status = CRUSTY_STATUS_CALLBACK_FAILED;
+                            return(cvm->status);
+                        }
                     } else {
-                        srcptr += srcindex;
-                    }
+                        if(src->type == CRUSTY_TYPE_INT) {
+                            srcptr += srcindex * sizeof(int);
+                            cvm->intresult = *(int *)(&(cvm->stack[srcptr]));
+                            cvm->resulttype = CRUSTY_TYPE_INT;
+                        } else if(src->type == CRUSTY_TYPE_FLOAT) {
+                            srcptr += srcindex * sizeof(double);
+                            cvm->floatresult = *(float *)(&(cvm->stack[srcptr]));
+                            cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                        } else {
+                            srcptr += srcindex;
+                            cvm->intresult = cvm->stack[srcptr];
+                            cvm->resulttype = CRUSTY_TYPE_INT;
+                        }
 
-                    if(dest->write(dest->writepriv,
-                                   src->type,
-                                   src->length - srcindex,
-                                   &(cvm->stack[srcptr]),
-                                   destindex) < 0) {
-                        cvm->status = CRUSTY_STATUS_CALLBACK_FAILED;
-                        return(cvm->status);
+                        if(dest->write(dest->writepriv,
+                                       src->type,
+                                       src->length - srcindex,
+                                       &(cvm->stack[srcptr]),
+                                       destindex) < 0) {
+                            cvm->status = CRUSTY_STATUS_CALLBACK_FAILED;
+                            return(cvm->status);
+                        }
                     }
                 } else {
                     if(dest->write(dest->writepriv,
@@ -5133,7 +5179,7 @@ CrustyStatus crustyvm_step(CrustyVM *cvm) {
                         return(cvm->status);
                     }
                 }
-               } else { /* destination is memory */
+            } else { /* destination is memory */
                 if(fetch_val(cvm,
                              srcflags,
                              srcval,
@@ -5290,10 +5336,17 @@ CrustyStatus crustyvm_step(CrustyVM *cvm) {
             cvm->ip += MOVE_ARGS + 1;
             break;
         case CRUSTY_INSTRUCTION_TYPE_CMP:
-            POPULATE_ARGS
-
             /* this one is a bit special because destination never needs to be
                written to, so treat both as src references */
+            destflags = cvm->inst[cvm->ip + MOVE_DEST_FLAGS]; \
+            destval = cvm->inst[cvm->ip + MOVE_DEST_VAL]; \
+            destindex = cvm->inst[cvm->ip + MOVE_DEST_INDEX]; \
+            destptr = cvm->sp; \
+            srcflags = cvm->inst[cvm->ip + MOVE_SRC_FLAGS]; \
+            srcval = cvm->inst[cvm->ip + MOVE_SRC_VAL]; \
+            srcindex = cvm->inst[cvm->ip + MOVE_SRC_INDEX]; \
+            srcptr = cvm->sp; \
+
             if(update_src_ref(cvm, &destflags, &destval, &destindex, &destptr) < 0) {
                 break;
             }
@@ -5490,7 +5543,7 @@ static CrustyLine *inst_to_line(CrustyVM *cvm, unsigned int inst) {
 }
 
 void crustyvm_debugtrace(CrustyVM *cvm, int full) {
-    unsigned int csp, sp, ip;
+    unsigned int startcsp, csp, sp, ip;
     unsigned int flags, val, index, ptr;
     unsigned int i, j;
     CrustyProcedure *proc;
@@ -5504,6 +5557,7 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
 #endif
 
     csp = cvm->csp;
+    startcsp = csp;
     sp = cvm->sp;
     ip = cvm->ip;
 
@@ -5514,7 +5568,11 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
         if(line == NULL) {
             LOG_PRINTF_BARE(cvm, "invalid");
         } else {
-            LOG_PRINTF_BARE(cvm, "%s:%u", line->module, line->line);
+            /* IP at the top of the stack is the current line, but IP further
+             * up the stack points to the next instruction. */
+            LOG_PRINTF_BARE(cvm, "%s:%u", line->module, csp == startcsp ?
+                                                        line->line :
+                                                        line->line - 1);
         }
         for(i = 0; i < proc->args; i++) {
             LOG_PRINTF_BARE(cvm, " %s", proc->var[i]->name);
