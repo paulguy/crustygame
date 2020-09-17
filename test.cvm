@@ -221,8 +221,17 @@ proc event
     move out eventtype
     move string_out SPC
     move out event_get_time
-    move string_out NL
+    move string_out SPC
 
+    cmp eventtype CRUSTYGAME_KEYDOWN
+    jumpn end
+    move out event_get_button
+    cmp event_get_button CRUSTYGAMEK_q
+    jumpn end
+
+    move set_running 0
+label end
+    move string_out NL
 ret
 
 proc frame

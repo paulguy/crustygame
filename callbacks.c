@@ -536,6 +536,23 @@ int get_ticks(void *priv, void *val, unsigned int index) {
     return(0);
 }
 
+int set_running(void *priv,
+                CrustyType type,
+                unsigned int size,
+                void *ptr,
+                unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+
+    if(type != CRUSTY_TYPE_INT) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    state->running = *(int *)ptr;
+
+    return(0);
+}
+
 int event_get_type(void *priv, void *val, unsigned int index) {
     SDL_Event *event = (SDL_Event *)priv;
  
@@ -623,11 +640,84 @@ int event_get_button(void *priv, void *val, unsigned int index) {
             *(int *)val = ((SDL_JoyButtonEvent *)priv)->button;
             break;
         case SDL_CONTROLLERAXISMOTION:
-            *(int *)val = ((SDL_ControllerAxisEvent *)priv)->axis;
+            switch(((SDL_ControllerAxisEvent *)priv)->axis) {
+                case SDL_CONTROLLER_AXIS_LEFTX:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_AXIS_LEFTX;
+                    break;
+                case SDL_CONTROLLER_AXIS_LEFTY:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_AXIS_LEFTY;
+                    break;
+                case SDL_CONTROLLER_AXIS_RIGHTX:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_AXIS_RIGHTX;
+                    break;
+                case SDL_CONTROLLER_AXIS_RIGHTY:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_AXIS_RIGHTY;
+                    break;
+                case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_AXIS_TRIGGERLEFT;
+                    break;
+                case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_AXIS_TRIGGERRIGHT;
+                    break;
+                default:
+                    fprintf(stderr, "Invalid game controller axis: %d\n", 
+                                    ((SDL_ControllerAxisEvent *)priv)->axis);
+                    return(-1);
+            }
             break;
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
-            *(int *)val = ((SDL_ControllerButtonEvent *)priv)->button;
+            switch(((SDL_ControllerButtonEvent *)priv)->button) {
+                case SDL_CONTROLLER_BUTTON_A:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_A;
+                    break;
+                case SDL_CONTROLLER_BUTTON_B:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_B;
+                    break;
+                case SDL_CONTROLLER_BUTTON_X:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_X;
+                    break;
+                case SDL_CONTROLLER_BUTTON_Y:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_Y;
+                    break;
+                case SDL_CONTROLLER_BUTTON_BACK:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_BACK;
+                    break;
+                case SDL_CONTROLLER_BUTTON_GUIDE:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_GUIDE;
+                    break;
+                case SDL_CONTROLLER_BUTTON_START:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_START;
+                    break;
+                case SDL_CONTROLLER_BUTTON_LEFTSTICK:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_LEFTSTICK;
+                    break;
+                case SDL_CONTROLLER_BUTTON_RIGHTSTICK:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_RIGHTSTICK;
+                    break;
+                case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_LEFTSHOULDER;
+                    break;
+                case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_RIGHTSHOULDER;
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_DPAD_UP;
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_DPAD_DOWN;
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_DPAD_LEFT;
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                    *(int *)val = CRUSTYGAME_CONTROLLER_BUTTON_DPAD_RIGHT;
+                    break;
+                default:
+                    fprintf(stderr, "Invalid game controller button: %d\n",
+                                    ((SDL_ControllerButtonEvent *)priv)->button);
+                    return(-1);
+            }
             break;
         default:
             fprintf(stderr, "Invalid event type.\n");
@@ -914,6 +1004,12 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_INT,
         .read = get_ticks, .readpriv = NULL,
         .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "set_running", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = set_running, .writepriv = &state
     },
     {
         .name = "event_get_type", .length = 1,
