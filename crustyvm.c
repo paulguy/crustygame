@@ -5586,22 +5586,20 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
             ptr = STACK_ARG(sp, i + 1)->ptr;
             switch(flags & MOVE_FLAG_TYPE_MASK) {
                 case MOVE_FLAG_VAR:
-                    LOG_PRINTF(cvm, " %u: %s -> %s.%s@%u[%u]:%u %X\n",
+                    LOG_PRINTF(cvm, " %u: %s -> %s.%s@%u[%u]:%u\n",
                                i,
                                proc->var[i]->name,
                                cvm->var[val].proc == NULL ? "Global" : cvm->var[val].proc->name,
                                cvm->var[val].name,
                                ptr,
                                cvm->var[val].length,
-                               index,
-                               flags);
+                               index);
                     break;
                 case MOVE_FLAG_IMMEDIATE:
-                    LOG_PRINTF(cvm, " %u: %s -> %u %X\n",
+                    LOG_PRINTF(cvm, " %u: %s = %d\n",
                                i,
                                proc->var[i]->name,
-                               val,
-                               flags);
+                               val);
                     break;
                 default:
                     LOG_PRINTF(cvm, " %u: Invalid flags %X\n", i, flags);
