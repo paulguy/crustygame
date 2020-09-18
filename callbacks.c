@@ -116,6 +116,11 @@ int gfx_add_tileset(void *priv,
     int *buf = (int *)ptr;
     w = buf[0];  h = buf[1];  pitch = buf[2];
     tw = buf[3]; th = buf[4];
+    if(w < 0 || h < 0 || pitch < 0 || tw < 0 || th < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
+
     /* check to see, given a particular dimensions and pitch, that
      * the buffer has enough space to create the entire surface */
     if(state->size < (pitch * (h - 1)) + (w * 4)) {
@@ -162,6 +167,11 @@ int gfx_add_tilemap(void *priv,
     /* set variables to usable names */
     int *buf = (int *)ptr;
     w = buf[0]; h = buf[1];
+  
+    if(w < 0 || h < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
 
     state->ret = tilemap_add_tilemap(state->ll, w, h);
     if(state->ret < 0) {
@@ -218,6 +228,11 @@ int gfx_set_tilemap_map(void *priv,
     x = buf[0]; y = buf[1]; pitch = buf[2];
     w = buf[3]; h = buf[4];
 
+    if(x < 0 || y < 0 || pitch < 0 || w < 0 || h < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
+
     if(((h - 1) * pitch) + w > state->size / sizeof(unsigned int)) {
         fprintf(stderr, "Buffer too small to hold tilemap.\n");
         return(-1);
@@ -248,6 +263,11 @@ int gfx_set_tilemap_attrs(void *priv,
     x = buf[0]; y = buf[1]; pitch = buf[2];
     w = buf[3]; h = buf[4];
 
+    if(x < 0 || y < 0 || pitch < 0 || w < 0 || h < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
+
     if(((h - 1) * pitch) + w < state->size / sizeof(unsigned int)) {
         fprintf(stderr, "Buffer too small to hold tilemap.\n");
         return(-1);
@@ -277,6 +297,11 @@ int gfx_update_tilemap(void *priv,
     int *buf = (int *)ptr;
     x = buf[0]; y = buf[1];
     w = buf[2]; h = buf[3];
+
+    if(x < 0 || y < 0 || w < 0 || h < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
 
     return(tilemap_update_tilemap(state->ll, index, x, y, w, h));
 }

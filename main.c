@@ -365,7 +365,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Program reached an exception while running: "
                         "%s\n",
                 crustyvm_statusstr(crustyvm_get_status(cvm)));
-        crustyvm_debugtrace(cvm, 1);
+        crustyvm_debugtrace(cvm, 0);
         goto error2;
     }
 
@@ -447,7 +447,7 @@ int main(int argc, char **argv) {
                         fprintf(stderr, "Program reached an exception while "
                                         "running: %s\n",
                                 crustyvm_statusstr(crustyvm_get_status(cvm)));
-                        crustyvm_debugtrace(cvm, 1);
+                        crustyvm_debugtrace(cvm, 0);
                         goto error4;
                     }
                     break;
@@ -461,7 +461,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "Program reached an exception while "
                             "running: %s\n",
                     crustyvm_statusstr(crustyvm_get_status(cvm)));
-            crustyvm_debugtrace(cvm, 1);
+            crustyvm_debugtrace(cvm, 0);
             goto error4;
         }
 
