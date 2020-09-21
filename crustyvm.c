@@ -23,6 +23,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <math.h>
+#include <sys/stat.h>
 
 #ifdef CRUSTY_TEST
 #include <stdarg.h>
@@ -277,6 +278,57 @@ const char *CRUSTY_STATUSES[] = {
     "Invalid status code"
 };
 
+FILE *crustyvm_open_file(const char *filename,
+                         char **safepath,
+                         void (*log_cb)(void *priv, const char *fmt, ...),
+                         void *log_priv) {
+    FILE *in;
+    char *fullpath;
+    char *slash;
+    struct stat filestat;
+
+    if(stat(filename, &filestat) < 0) {
+        log_cb(log_priv, "Failed to stat %s.\n", filename);
+        return(NULL);
+    }
+    if(!S_ISREG(filestat.st_mode)) {
+        log_cb(log_priv, "Not a file: %s\n", filename);
+        return(NULL);
+    }
+    
+    fullpath = realpath(filename, NULL);
+    if(fullpath == NULL) {
+        log_cb(log_priv, "Failed to get full path.\n");
+        return(NULL);
+    }
+    /* not likely but may as well */
+    slash = strrchr(fullpath, '/');
+    if(slash[1] == '\0') {
+        log_cb(log_priv, "Invalid path? %s\n", fullpath);
+        return(NULL);
+    }
+    slash[1] = '\0';
+    if(*safepath != NULL) {
+        if(strncmp(fullpath, *safepath, strlen(*safepath)) != 0) {
+            log_cb(log_priv, "File attempted to be accessed from unsafe path: "
+                              "%s\n", fullpath);
+            free(fullpath);
+            return(NULL);
+        }
+        free(fullpath);
+    } else {
+        *safepath = fullpath;
+    }
+
+    in = fopen(filename, "rb");
+    if(in == NULL) {
+        log_cb(log_priv, "Failed to open file %s.\n", filename);
+        return(NULL);
+    }
+
+    return(in);
+}
+
 static CrustyVM *init() {
     CrustyVM *cvm;
 
@@ -491,6 +543,7 @@ static long add_token(CrustyVM *cvm,
 
 static int tokenize(CrustyVM *cvm,
                     const char *modulename,
+                    char *safepath,
                     const char *programdata,
                     unsigned long programdatalen) {
     unsigned int i;
@@ -721,7 +774,10 @@ static int tokenize(CrustyVM *cvm,
                    convenience macros though so log messages point to the right
                    line/module */
                 FILE *in;
-                in = fopen(GET_TOKEN(cvm->lines, 1), "rb");
+                in = crustyvm_open_file(GET_TOKEN(cvm->lines, 1),
+                                        &safepath,
+                                        cvm->log_cb,
+                                        cvm->log_priv);
                 if(in == NULL) {
                     LOG_PRINTF_TOK(cvm, "Failed to open include file %s.\n",
                                    GET_TOKEN(cvm->lines, 1));
@@ -2506,7 +2562,8 @@ static int variable_declaration(CrustyVM *cvm,
     return(0);
 }
 
-static int symbols_scan(CrustyVM *cvm) {
+static int symbols_scan(CrustyVM *cvm,
+                        char *safepath) {
     unsigned int i, j;
     CrustyProcedure *curProc = NULL;
 
@@ -2699,8 +2756,12 @@ static int symbols_scan(CrustyVM *cvm) {
                 LOG_PRINTF_TOK(cvm, "Type must be chars, ints or floats.\n");
                 goto failure;
             }
-
-            FILE *in = fopen(GET_TOKEN(cvm->logline, 3), "rb");
+            
+            FILE *in;
+            in = crustyvm_open_file(GET_TOKEN(cvm->logline, 3),
+                                    &safepath,
+                                    cvm->log_cb,
+                                    cvm->log_priv);
             if(in == NULL) {
                 LOG_PRINTF_TOK(cvm, "Failed to open %s for reading.\n",
                                     GET_TOKEN(cvm->logline, 3));
@@ -3940,6 +4001,7 @@ static int write_lines(CrustyVM *cvm, const char *name, int byOffset) {
 #endif
 
 CrustyVM *crustyvm_new(const char *name,
+                       char *safepath,
                        const char *program,
                        long len,
                        unsigned int flags,
@@ -3984,7 +4046,7 @@ CrustyVM *crustyvm_new(const char *name,
     LOG_PRINTF(cvm, "Start\n");
 #endif
 
-    if(tokenize(cvm, name, program, len) < 0) {
+    if(tokenize(cvm, name, safepath, program, len) < 0) {
         crustyvm_free(cvm);
         return(NULL);
     }
@@ -4174,7 +4236,7 @@ CrustyVM *crustyvm_new(const char *name,
     LOG_PRINTF(cvm, "Start\n");
 #endif
 
-    if(symbols_scan(cvm) < 0) {
+    if(symbols_scan(cvm, safepath) < 0) {
         LOG_PRINTF(cvm, "Symbols scan failed.\n");
         crustyvm_free(cvm);
         return(NULL);
@@ -5785,6 +5847,7 @@ int write_string_to(void *priv,
 
 int main(int argc, char **argv) {
     const char *filename = NULL;
+    char *fullpath;
     unsigned int i;
     unsigned int arglen;
     char *equals;
@@ -5795,7 +5858,7 @@ int main(int argc, char **argv) {
     unsigned int vars = 0;
 
     FILE *in = NULL;
-    CrustyVM *cvm;
+    CrustyVM *cvm = NULL;
     char *program = NULL;
     long len;
     int result;
@@ -5920,7 +5983,8 @@ int main(int argc, char **argv) {
         goto error;
     }
 
-    in = fopen(filename, "rb");
+    fullpath = NULL;
+    in = crustyvm_open_file(filename, &fullpath, vprintf_cb, stderr);
     if(in == NULL) {
         fprintf(stderr, "Failed to open file %s.\n", filename);
         goto error;
@@ -5940,6 +6004,7 @@ int main(int argc, char **argv) {
 
     program = malloc(len);
     if(program == NULL) {
+        fprintf(stderr, "Failed to allocate memory for program.\n");
         goto error;
     }
 
@@ -5951,7 +6016,8 @@ int main(int argc, char **argv) {
     fclose(in);
     in = NULL;
 
-    cvm = crustyvm_new(filename, program, len,
+    cvm = crustyvm_new(filename, fullpath,
+                       program, len,
                        CRUSTY_FLAG_OUTPUT_PASSES
                        /* | CRUSTY_FLAG_TRACE */,
                        0,
@@ -5986,12 +6052,20 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
 
 error:
+    if(cvm != NULL) {
+        free(cvm);
+    }
+
     if(program != NULL) {
         free(program);
     }
 
     if(in != NULL) {
         fclose(in);
+    }
+
+    if(fullpath != NULL) {
+        free(fullpath);
     }
 
     CLEAN_ARGS

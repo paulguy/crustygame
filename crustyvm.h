@@ -68,11 +68,27 @@ typedef struct {
 typedef struct CrustyVM_s CrustyVM;
 
 /*
+ * Convenience function to open a file and set/check safepath.
+ *
+ * filename         Name of file to try opening.
+ * safepath         Pointer to a pointer to the name.  Must be a validpointer
+ *                  but it can point to a NULL pointer which will then be
+ *                  set to the new safe path.
+ * log_cb           see log_cb for crustyvm_new
+ * log_priv         see log_priv for crustyvm_new
+ */
+FILE *crustyvm_open_file(const char *filename,
+                         char **safepath,
+                         void (*log_cb)(void *priv, const char *fmt, ...),
+                         void *log_priv);
+ 
+/*
  * Load a program and prepare the VM to run.
  *
  * name             The name of the module.  Must be not NULL but only used for
  *                  messages passed to the user.
  * program          Buffer containing the program text.
+ * safepath         Path which files may be referenced from by (b)include.
  * len              Length of the program in bytes.
  * flags            Bitfield of flags which describe how certain things should
  *                  happen:
@@ -112,6 +128,7 @@ typedef struct CrustyVM_s CrustyVM;
  * returns          The newly loaded CrustyVM.
  */
 CrustyVM *crustyvm_new(const char *name,
+                       char *safepath,
                        const char *program,
                        long len,
                        unsigned int flags,

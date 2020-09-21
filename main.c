@@ -190,6 +190,7 @@ int main(int argc, char **argv) {
     /* CrustyVM stuff */
     unsigned int i;
     const char *filename = NULL;
+    char *fullpath;
     unsigned int arglen;
     char *equals;
     char *temp;
@@ -203,12 +204,6 @@ int main(int argc, char **argv) {
     char *program = NULL;
     long len;
     int result;
-    if(initialize_SDL(&(state.win),
-                      &(state.renderer),
-                      &format) < 0) {
-        fprintf(stderr, "Failed to initialize SDL.\n");
-        goto error0;
-    }
 
     /* CrustyVM stuff */
 
@@ -240,14 +235,14 @@ int main(int argc, char **argv) {
                     if(tempa == NULL) {
                         fprintf(stderr, "Failed to allocate memory "
                                         "for vars list.\n");
-                        goto error2;
+                        goto error_arglist;
                     }
                     var = tempa;
                     tempa = realloc(value, sizeof(char *) * (vars + 1));
                     if(tempa == NULL) {
                         fprintf(stderr, "Failed to allocate memory "
                                         "for values list.\n");
-                        goto error2;
+                        goto error_arglist;
                     }
                     value = tempa;
                     /* difference from start, take away "-D", add
@@ -256,7 +251,7 @@ int main(int argc, char **argv) {
                     if(temp == NULL) {
                         fprintf(stderr, "Failed to allocate memory "
                                         "for var.\n");
-                        goto error2;
+                        goto error_arglist;
                     }
                     memcpy(temp, &(argv[i][2]), equals - argv[i] - 2);
                     temp[equals - argv[i] - 2] = '\0';
@@ -270,7 +265,7 @@ int main(int argc, char **argv) {
                     if(temp == NULL) {
                         fprintf(stderr, "Failed to allocate memory "
                                         "for value.\n");
-                        goto error2;
+                        goto error_arglist;
                     }
                     memcpy(temp,
                            &(equals[1]),
@@ -292,44 +287,40 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(filename == NULL) {
-        fprintf(stderr, "USAGE: %s [(<filename>|-D<var>=<value>) ...]"
-                        " [-- <filename>]\n", argv[0]);
-        goto error2;
-    }
-
-    in = fopen(filename, "rb");
+    fullpath = NULL;
+    in = crustyvm_open_file(filename, &fullpath, vprintf_cb, stderr);
     if(in == NULL) {
         fprintf(stderr, "Failed to open file %s.\n", filename);
-        goto error2;
+        goto error_fullpath;
     }
 
     if(fseek(in, 0, SEEK_END) < 0) {
        fprintf(stderr, "Failed to seek to end of file.\n");
-       goto error2;
+       goto error_infile;
     }
 
     len = ftell(in);
     if(len < 0) {
         fprintf(stderr, "Failed to get file length.\n");
-        goto error2;
+        goto error_infile;
     }
     rewind(in);
 
     program = malloc(len);
     if(program == NULL) {
-        goto error2;
+        goto error_infile;
     }
 
     if(fread(program, 1, len, in) < (unsigned long)len) {
         fprintf(stderr, "Failed to read file.\n");
-        goto error2;
+        goto error_infile;
     }
 
     fclose(in);
     in = NULL;
 
-    cvm = crustyvm_new(filename, program, len,
+    cvm = crustyvm_new(filename, fullpath, 
+                       program, len,
                        CRUSTY_FLAG_DEFAULTS,
                        0,
                        cb, CRUSTYGAME_CALLBACKS,
@@ -337,8 +328,9 @@ int main(int argc, char **argv) {
                        vprintf_cb, stderr);
     if(cvm == NULL) {
         fprintf(stderr, "Failed to load program.\n");
-        goto error2;
+        goto error_infile;
     }
+    /* some early cleanup of things we're done with */
     free(program);
     program = NULL;
     CLEAN_ARGS
@@ -349,6 +341,13 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Stack size: %u\n",
                     crustyvm_get_stackmem(cvm));
 
+    if(initialize_SDL(&(state.win),
+                      &(state.renderer),
+                      &format) < 0) {
+        fprintf(stderr, "Failed to initialize SDL.\n");
+        goto error_cvm;
+    }
+
     /* initialize the layerlist */
     state.ll = layerlist_new(state.renderer,
                              format,
@@ -356,7 +355,7 @@ int main(int argc, char **argv) {
                              stderr);
     if(state.ll == NULL) {
         fprintf(stderr, "Failed to create layerlist.\n");
-        goto error3;
+        goto error_sdl;
     }
 
     /* call program init */
@@ -366,19 +365,19 @@ int main(int argc, char **argv) {
                         "%s\n",
                 crustyvm_statusstr(crustyvm_get_status(cvm)));
         crustyvm_debugtrace(cvm, 0);
-        goto error2;
+        goto error_ll;
     }
 
     state.running = 1;
     while(state.running) {
         if(SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
-            goto error1;
+            goto error_ll;
         } 
 
         if(SDL_RenderClear(state.renderer) < 0) {
             fprintf(stderr, "Failed to clear screen.\n");
-            goto error1;
+            goto error_ll;
         }
 
         /* needs to be transparent so tilemap updates work */
@@ -386,7 +385,7 @@ int main(int argc, char **argv) {
                                   0, 0, 0,
                                   SDL_ALPHA_TRANSPARENT) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
-            goto error1;
+            goto error_ll;
         } 
 
         while(SDL_PollEvent(&(state.lastEvent))) {
@@ -448,7 +447,7 @@ int main(int argc, char **argv) {
                                         "running: %s\n",
                                 crustyvm_statusstr(crustyvm_get_status(cvm)));
                         crustyvm_debugtrace(cvm, 0);
-                        goto error4;
+                        goto error_ll;
                     }
                     break;
                 default:
@@ -462,26 +461,30 @@ int main(int argc, char **argv) {
                             "running: %s\n",
                     crustyvm_statusstr(crustyvm_get_status(cvm)));
             crustyvm_debugtrace(cvm, 0);
-            goto error4;
+            goto error_ll;
         }
 
         SDL_RenderPresent(state.renderer);
     }
 
     fprintf(stderr, "Program completed successfully.\n");
-    crustyvm_free(cvm);
     layerlist_free(state.ll);
 
     SDL_DestroyWindow(state.win);
     SDL_Quit();
 
+    crustyvm_free(cvm);
+
     exit(EXIT_SUCCESS);
 
-error4:
+error_ll:
     layerlist_free(state.ll);
-error3:
+error_sdl:
+    SDL_DestroyWindow(state.win);
+    SDL_Quit();
+error_cvm:
     crustyvm_free(cvm);
-error2:
+error_infile:
     if(program != NULL) {
         free(program);
     }
@@ -489,11 +492,10 @@ error2:
     if(in != NULL) {
         fclose(in);
     }
-
+error_fullpath:
+    free(fullpath);
+error_arglist:
     CLEAN_ARGS
-error1:
-    SDL_DestroyWindow(state.win);
-    SDL_Quit();
-error0:
+
     return(EXIT_FAILURE);
 }
