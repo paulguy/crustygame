@@ -108,6 +108,7 @@ endmacro SET_VIDEO_MODE
 
 proc init
     local size
+    local color ints 3
 
     move size gfx:1
     mul  size 4
@@ -164,14 +165,23 @@ proc init
     move gfx_set_layer_scale_x:ball_id ballscale
     move gfx_set_layer_scale_y:ball_id ballscale
     move gfx_set_layer_x:ball_id 320
+    move color:0 255
+    move color:1 0
+    move color:2 0
+    move gfx_set_layer_colormod:ball_id color
     move gfx_set_layer_scale_x:ball2_id ballscale
     move gfx_set_layer_scale_y:ball2_id ballscale
     move gfx_set_layer_x:ball2_id 320
     move gfx_set_layer_y:ball2_id 100
+    move gfx_set_layer_alphamod:ball2_id 128
     move gfx_set_layer_scale_x:ball3_id ballscale
     move gfx_set_layer_scale_y:ball3_id ballscale
     move gfx_set_layer_x:ball3_id 320
     move gfx_set_layer_y:ball3_id 200
+    move color:0 0
+    move color:2 255
+    move gfx_set_layer_colormod:ball3_id color
+    move gfx_set_layer_blend_mode:ball3_id GFX_BLENDMODE_ADD
 
     move size gfx_get_width
     move out size
@@ -191,7 +201,7 @@ proc init
 ret
 
 macro CHECK_EVENT_TYPE THISTYPE NEXTTYPE
-    cmp eventtype CRUSTYGAME_THISTYPE
+    cmp eventtype INPUT_TYPE_THISTYPE
     jumpn CHECK_NEXTTYPE
     move string_out THISTYPE
     jump CHECK_FOUND
@@ -223,10 +233,10 @@ proc event
     move out event_get_time
     move string_out SPC
 
-    cmp eventtype CRUSTYGAME_KEYDOWN
+    cmp eventtype INPUT_TYPE_KEYDOWN
     jumpn end
     move out event_get_button
-    cmp event_get_button CRUSTYGAMEK_q
+    cmp event_get_button INPUT_KEY_q
     jumpn end
 
     move set_running 0

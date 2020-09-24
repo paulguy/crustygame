@@ -42,6 +42,11 @@
 #define CRUSTYGAME_CONTROLLER_BUTTON_DPAD_LEFT      (13)
 #define CRUSTYGAME_CONTROLLER_BUTTON_DPAD_RIGHT     (14)
 
+#define CRUSTYGAME_BLENDMODE_BLEND (0x01)
+#define CRUSTYGAME_BLENDMODE_ADD   (0x02)
+#define CRUSTYGAME_BLENDMODE_MOD   (0x04)
+#define CRUSTYGAME_BLENDMODE_MUL   (0x08)
+
 typedef struct {
     SDL_Window *win;
     SDL_Renderer *renderer;

@@ -461,6 +461,83 @@ int gfx_set_layer_scale_y(void *priv,
     return(tilemap_set_layer_scale_y(state->ll, index, *(double *)ptr));
 }
 
+int gfx_set_layer_colormod(void *priv,
+                           CrustyType type,
+                           unsigned int size,
+                           void *ptr,
+                           unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int r, g, b;
+
+    if(type != CRUSTY_TYPE_INT || size < 3) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    int *buf = (int *)ptr;
+    r = buf[0]; g = buf[1]; b = buf[2];
+
+    if(r < 0 || g < 0 || b < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
+
+    return(tilemap_set_layer_colormod(state->ll, index, r, g, b));
+}
+
+int gfx_set_layer_alphamod(void *priv,
+                           CrustyType type,
+                           unsigned int size,
+                           void *ptr,
+                           unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+
+    if(type != CRUSTY_TYPE_INT) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    int alphamod = *(int *)ptr;
+
+    if(alphamod < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
+
+    return(tilemap_set_layer_alphamod(state->ll, index, alphamod));
+}
+
+int gfx_set_layer_blend_mode(void *priv,
+                             CrustyType type,
+                             unsigned int size,
+                             void *ptr,
+                             unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int sdl_blendMode;
+
+    if(type != CRUSTY_TYPE_INT) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    int blendMode = *(int *)ptr;
+    sdl_blendMode = 0;
+    if(blendMode & CRUSTYGAME_BLENDMODE_BLEND) {
+        sdl_blendMode |= SDL_BLENDMODE_BLEND;
+    }
+    if(blendMode & CRUSTYGAME_BLENDMODE_ADD) {
+        sdl_blendMode |= SDL_BLENDMODE_ADD;
+    }
+    if(blendMode & CRUSTYGAME_BLENDMODE_MOD) {
+        sdl_blendMode |= SDL_BLENDMODE_MOD;
+    }
+    if(blendMode & CRUSTYGAME_BLENDMODE_MUL) {
+        sdl_blendMode |= SDL_BLENDMODE_MUL;
+    }
+
+    return(tilemap_set_layer_blend_mode(state->ll, index, sdl_blendMode));
+}
+
 int gfx_draw_layer(void *priv,
                    CrustyType type,
                    unsigned int size,
@@ -999,6 +1076,24 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = gfx_set_layer_scale_y, .writepriv = &state
+    },
+    {
+        .name = "gfx_set_layer_colormod", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = gfx_set_layer_colormod, .writepriv = &state
+    },
+    {
+        .name = "gfx_set_layer_alphamod", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = gfx_set_layer_alphamod, .writepriv = &state
+    },
+    {
+        .name = "gfx_set_layer_blend_mode", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = gfx_set_layer_blend_mode, .writepriv = &state
     },
     {
         .name = "gfx_draw_layer", .length = 1,

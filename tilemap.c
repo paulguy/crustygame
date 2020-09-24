@@ -4,6 +4,10 @@
 
 #include "tilemap.h"
 
+#define ALLOWED_BLENDMODES_MASK (SDL_BLENDMODE_BLEND | \
+                                 SDL_BLENDMODE_ADD | \
+                                 SDL_BLENDMODE_MOD | \
+                                 SDL_BLENDMODE_MUL)
 #define FUDGE (0.0001)
 
 #define LOG_PRINTF(LL, FMT, ...) \
@@ -47,6 +51,11 @@ typedef struct {
     double scale_x;
     double scale_y;
     double angle;
+    Uint8 colormod_r;
+    Uint8 colormod_g;
+    Uint8 colormod_b;
+    Uint8 alphamod;
+    Uint8 blendMode;
 } Layer;
 
 typedef struct LayerList_t {
@@ -558,10 +567,6 @@ int tilemap_update_tilemap(LayerList *ll,
             LOG_PRINTF(ll, "Failed to clear texture.\n");
             return(-1);
         }
-        if(SDL_SetTextureBlendMode(tilemap->tex, SDL_BLENDMODE_BLEND) < 0) {
-            LOG_PRINTF(ll, "Failed to set texture blend mode.\n");
-            return(-1);
-        }
     }
     /* set it to be rendered to */
     if(SDL_SetRenderTarget(ll->renderer, tilemap->tex) < 0) {
@@ -699,6 +704,11 @@ int tilemap_add_layer(LayerList *ll,
         ll->layer[0].scale_x = 1.0;
         ll->layer[0].scale_y = 1.0;
         ll->layer[0].angle = 0.0;
+        ll->layer[0].colormod_r = 255;
+        ll->layer[0].colormod_g = 255;
+        ll->layer[0].colormod_b = 255;
+        ll->layer[0].alphamod = 255;
+        ll->layer[0].blendMode = SDL_BLENDMODE_BLEND;
         ll->layer[0].tilemap = tilemap;
         return(0);
     }
@@ -715,6 +725,11 @@ int tilemap_add_layer(LayerList *ll,
             ll->layer[i].scale_x = 1.0;
             ll->layer[i].scale_y = 1.0;
             ll->layer[i].angle = 0.0;
+            ll->layer[i].colormod_r = 255;
+            ll->layer[i].colormod_g = 255;
+            ll->layer[i].colormod_b = 255;
+            ll->layer[i].alphamod = 255;
+            ll->layer[i].blendMode = SDL_BLENDMODE_BLEND;
             ll->layer[i].tilemap = tilemap;
             return(i);
         }
@@ -738,6 +753,11 @@ int tilemap_add_layer(LayerList *ll,
     ll->layer[i].scale_x = 1.0;
     ll->layer[i].scale_y = 1.0;
     ll->layer[i].angle = 0.0;
+    ll->layer[i].colormod_r = 255;
+    ll->layer[i].colormod_g = 255;
+    ll->layer[i].colormod_b = 255;
+    ll->layer[i].alphamod = 255;
+    ll->layer[i].blendMode = SDL_BLENDMODE_BLEND;
     ll->layer[i].tilemap = tilemap;
     /* initialize empty excess surfaces as NULL */
     for(j = i + 1; j < ll->layersmem; j++) {
@@ -944,6 +964,49 @@ int tilemap_set_layer_rotation(LayerList *ll, unsigned int index, double angle) 
     return(0);
 }
 
+int tilemap_set_layer_colormod(LayerList *ll, unsigned int index, Uint8 r, Uint8 g, Uint8 b) {
+    if(index >= ll->layersmem ||
+       ll->layer[index].tilemap == -1) {
+        LOG_PRINTF(ll, "Invalid layer index.\n");
+        return(-1);
+    }
+
+    ll->layer[index].colormod_r = r;
+    ll->layer[index].colormod_g = g;
+    ll->layer[index].colormod_b = b;
+
+    return(0);
+}
+ 
+int tilemap_set_layer_alphamod(LayerList *ll, unsigned int index, Uint8 alphamod) {
+    if(index >= ll->layersmem ||
+       ll->layer[index].tilemap == -1) {
+        LOG_PRINTF(ll, "Invalid layer index.\n");
+        return(-1);
+    }
+
+    ll->layer[index].alphamod = alphamod;
+
+    return(0);
+}
+
+int tilemap_set_layer_blend_mode(LayerList *ll, unsigned int index, int blendMode) {
+    if(index >= ll->layersmem ||
+       ll->layer[index].tilemap == -1) {
+        LOG_PRINTF(ll, "Invalid layer index.\n");
+        return(-1);
+    }
+
+    if(blendMode & ~ALLOWED_BLENDMODES_MASK) {
+        LOG_PRINTF(ll, "Invaled blendmodes mask.\n");
+        return(-1);
+    }
+
+    ll->layer[index].blendMode = blendMode;
+
+    return(0);
+}
+ 
 int tilemap_draw_layer(LayerList *ll, unsigned int index) {
     Tileset *tileset;
     Tilemap *tilemap;
@@ -963,6 +1026,21 @@ int tilemap_draw_layer(LayerList *ll, unsigned int index) {
 
     layer = &(ll->layer[index]);
     tilemap = &(ll->tilemap[layer->tilemap]);
+    if(SDL_SetTextureColorMod(tilemap->tex,
+                              layer->colormod_r,
+                              layer->colormod_g,
+                              layer->colormod_b) < 0) {
+        fprintf(stderr, "Failed to set layer colormod.\n");
+        return(-1);
+    }
+    if(SDL_SetTextureAlphaMod(tilemap->tex, layer->alphamod) < 0) {
+        fprintf(stderr, "Failed to set layer alphamod.\n");
+        return(-1);
+    }
+    if(SDL_SetTextureBlendMode(tilemap->tex, layer->blendMode) < 0) {
+        fprintf(stderr, "Failed to set layer blend mode.\n");
+        return(-1);
+    }
     tileset = &(ll->tileset[tilemap->tileset]);
     tmw = tilemap->w * tileset->tw;
     tmh = tilemap->h * tileset->th;
