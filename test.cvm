@@ -91,12 +91,10 @@ static layer2_id
 static ball_id
 static ball2_id
 static ball3_id
-static posx 0
-static posy 0
+static pos ints "0 0"
 static xdir 1
 static ydir 1
-static scroll2 0
-static scroll3 0
+static scroll ints "0 0"
 static scale floats 2.0
 static ballscale floats 4.0
 
@@ -107,16 +105,16 @@ macro SET_VIDEO_MODE
 endmacro SET_VIDEO_MODE
 
 proc init
-    local size
-    local color ints 3
+    local temp ints 3
+    local tempf floats "0.0 0.0"
 
-    move size gfx:1
-    mul  size 4
-    call GFX_ADD_TILESET gfx:3 gfx:1 gfx:2 size TILE_WIDTH TILE_HEIGHT tileset_id
+    move temp gfx:1
+    mul  temp 4
+    call GFX_ADD_TILESET gfx:3 gfx:1 gfx:2 temp TILE_WIDTH TILE_HEIGHT tileset_id
 
-    move size BALL_TILESET_WIDTH
-    mul  size 4
-    call GFX_ADD_TILESET BALL_TILESET BALL_TILESET_WIDTH BALL_TILESET_HEIGHT size BALL_TILESET_WIDTH BALL_TILESET_HEIGHT ball_tileset_id
+    move temp BALL_TILESET_WIDTH
+    mul  temp 4
+    call GFX_ADD_TILESET BALL_TILESET BALL_TILESET_WIDTH BALL_TILESET_HEIGHT temp BALL_TILESET_WIDTH BALL_TILESET_HEIGHT ball_tileset_id
 
     call GFX_ADD_TILEMAP TILEMAP_WIDTH TILEMAP_HEIGHT tilemap_id
     call GFX_ADD_TILEMAP TILEMAP2_WIDTH TILEMAP2_HEIGHT tilemap2_id
@@ -152,51 +150,52 @@ proc init
     call GFX_ADD_LAYER ball_tilemap2_id ball2_id
     call GFX_ADD_LAYER ball_tilemap3_id ball3_id
 
-    move gfx_set_layer_scale_x:layer_id scale
-    move gfx_set_layer_scale_y:layer_id scale
-    move size TILEMAP_WIDTH
-    mul  size TILE_WIDTH
-    div  size 2
-    move gfx_set_layer_w:layer_id size
+    move tempf:0 scale
+    move tempf:1 scale
+    move gfx_set_layer_scale:layer_id tempf
+    move temp:0 TILEMAP_WIDTH
+    mul  temp:0 TILE_WIDTH
+    div  temp:0 2
+    move temp:1 TILEMAP_HEIGHT
+    mul  temp:1 TILE_HEIGHT
+    move gfx_set_layer_window:layer_id temp
 
-    move gfx_set_layer_scale_x:layer2_id scale
-    move gfx_set_layer_scale_y:layer2_id scale
+    move tempf:0 scale
+    move tempf:1 scale
+    move gfx_set_layer_scale:layer2_id tempf
 
-    move gfx_set_layer_scale_x:ball_id ballscale
-    move gfx_set_layer_scale_y:ball_id ballscale
-    move gfx_set_layer_x:ball_id 320
-    move color:0 255
-    move color:1 0
-    move color:2 0
-    move gfx_set_layer_colormod:ball_id color
-    move gfx_set_layer_scale_x:ball2_id ballscale
-    move gfx_set_layer_scale_y:ball2_id ballscale
-    move gfx_set_layer_x:ball2_id 320
-    move gfx_set_layer_y:ball2_id 100
+    move tempf:0 ballscale
+    move tempf:1 ballscale
+    move gfx_set_layer_scale:ball_id tempf
+    move gfx_set_layer_scale:ball2_id tempf
+    move gfx_set_layer_scale:ball3_id tempf
+    move temp:0 320
+    move temp:1 0
+    move gfx_set_layer_pos:ball_id temp
+    move temp:1 100
+    move gfx_set_layer_pos:ball2_id temp
+    move temp:1 200
+    move gfx_set_layer_pos:ball3_id temp
+    move temp:0 255
+    move temp:1 0
+    move temp:2 0
+    move gfx_set_layer_colormod:ball_id temp
+    move temp:0 0
+    move temp:2 255
+    move gfx_set_layer_colormod:ball3_id temp
     move gfx_set_layer_alphamod:ball2_id 128
-    move gfx_set_layer_scale_x:ball3_id ballscale
-    move gfx_set_layer_scale_y:ball3_id ballscale
-    move gfx_set_layer_x:ball3_id 320
-    move gfx_set_layer_y:ball3_id 200
-    move color:0 0
-    move color:2 255
-    move gfx_set_layer_colormod:ball3_id color
-    move gfx_set_layer_blend_mode:ball3_id GFX_BLENDMODE_ADD
+    move gfx_set_layer_blendmode:ball3_id GFX_BLENDMODE_ADD
 
-    move size gfx_get_width
-    move out size
+    move out gfx_get_width
     move string_out NL
-    move size gfx_get_height
-    move out size
+    move out gfx_get_height
     move string_out NL
 
     if VIDEOMODE SET_VIDEO_MODE
 
-    move size gfx_get_width
-    move out size
+    move out gfx_get_width
     move string_out NL
-    move size gfx_get_height
-    move out size
+    move out gfx_get_height
     move string_out NL
 ret
 
@@ -250,19 +249,16 @@ proc frame
     move gfx_draw_layer ball_id
     move gfx_draw_layer ball2_id
     move gfx_draw_layer ball3_id
-    add posx xdir
-    add posy ydir
-    add scroll2 1
-    add scroll3 1
-    move gfx_set_layer_x:layer_id posx
-    move gfx_set_layer_y:layer_id posy
-    move gfx_set_layer_x:layer2_id posx
-    move gfx_set_layer_y:layer2_id posy
-    move gfx_set_layer_scroll_x:layer_id scroll2
-    move gfx_set_layer_scroll_y:layer_id scroll3
-    cmp posx -100
+    add pos:0 xdir
+    add pos:1 ydir
+    add scroll:0 1
+    add scroll:1 1
+    move gfx_set_layer_pos:layer_id pos
+    move gfx_set_layer_pos:layer2_id pos
+    move gfx_set_layer_scroll_pos:layer_id scroll
+    cmp pos:0 -100
     jumpz xchange
-    cmp posx 484
+    cmp pos:0 484
     jumpz xchange
     jump yscroll
 
@@ -270,9 +266,9 @@ label xchange
     mul xdir -1
 
 label yscroll
-    cmp posy -100
+    cmp pos:1 -100
     jumpz ychange
-    cmp posy 324
+    cmp pos:1 324
     jumpz ychange
     jump scroll2
 
@@ -280,14 +276,14 @@ label ychange
     mul ydir -1
  
 label scroll2
-    cmp scroll2 255
+    cmp scroll:0 255
     jumpl scroll3
-    move scroll2 0
+    move scroll:0 0
 
 label scroll3
-    cmp scroll3 127
+    cmp scroll:1 127
     jumpl end
-    move scroll3 0
+    move scroll:1 0
 
 label end
 ret

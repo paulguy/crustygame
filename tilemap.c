@@ -780,7 +780,7 @@ int tilemap_free_layer(LayerList *ll, unsigned int index) {
     return(0);
 }
 
-int tilemap_set_layer_x(LayerList *ll, unsigned int index, int x) {
+int tilemap_set_layer_pos(LayerList *ll, unsigned int index, int x, int y) {
     if(index >= ll->layersmem ||
        ll->layer[index].tilemap == -1) {
         LOG_PRINTF(ll, "Invalid layer index.\n");
@@ -788,27 +788,16 @@ int tilemap_set_layer_x(LayerList *ll, unsigned int index, int x) {
     }
 
     ll->layer[index].x = x;
-
-    return(0);
-}
-
-int tilemap_set_layer_y(LayerList *ll, unsigned int index, int y) {
-    if(index >= ll->layersmem ||
-       ll->layer[index].tilemap == -1) {
-        LOG_PRINTF(ll, "Invalid layer index.\n");
-        return(-1);
-    }
-
     ll->layer[index].y = y;
 
     return(0);
 }
 
-int tilemap_set_layer_w(LayerList *ll, unsigned int index, int w) {
+int tilemap_set_layer_window(LayerList *ll, unsigned int index, int w, int h) {
     Layer *layer;
     Tilemap *tilemap;
     Tileset *tileset;
-    unsigned int tmw;
+    unsigned int tmw, tmh;
 
     if(index >= ll->layersmem ||
        ll->layer[index].tilemap == -1) {
@@ -820,51 +809,28 @@ int tilemap_set_layer_w(LayerList *ll, unsigned int index, int w) {
     tilemap = &(ll->tilemap[layer->tilemap]);
     tileset = &(ll->tileset[tilemap->tileset]);
     tmw = tilemap->w * tileset->tw;
+    tmh = tilemap->h * tileset->th;
 
-    if(w < 0 ||
-       w > tmw) {
-        LOG_PRINTF(ll, "Layer width out of range.\n");
+    if(w < 0 || h < 0 ||
+       w > tmw || h > tmh) {
+        LOG_PRINTF(ll, "Layer window out of range.\n");
         return(-1);
     }
  
     layer->w = w;
-
-    return(0);
-}
-
-int tilemap_set_layer_h(LayerList *ll, unsigned int index, int h) {
-    Layer *layer;
-    Tilemap *tilemap;
-    Tileset *tileset;
-    unsigned int tmh;
-
-    if(index >= ll->layersmem ||
-       ll->layer[index].tilemap == -1) {
-        LOG_PRINTF(ll, "Invalid layer index.\n");
-        return(-1);
-    }
-
-    layer = &(ll->layer[index]);
-    tilemap = &(ll->tilemap[layer->tilemap]);
-    tileset = &(ll->tileset[tilemap->tileset]);
-    tmh = tilemap->h * tileset->th;
-
-    if(h < 0 ||
-       h > tmh) {
-        LOG_PRINTF(ll, "Layer height out of range.\n");
-        return(-1);
-    }
- 
     layer->h = h;
 
     return(0);
 }
 
-int tilemap_set_layer_scroll_x(LayerList *ll, unsigned int index, int scroll_x) {
+int tilemap_set_layer_scroll_pos(LayerList *ll,
+                                 unsigned int index,
+                                 int scroll_x,
+                                 int scroll_y) {
     Layer *layer;
     Tilemap *tilemap;
     Tileset *tileset;
-    unsigned int tmw;
+    unsigned int tmw, tmh;
 
     if(index >= ll->layersmem ||
        ll->layer[index].tilemap == -1) {
@@ -876,50 +842,27 @@ int tilemap_set_layer_scroll_x(LayerList *ll, unsigned int index, int scroll_x) 
     tilemap = &(ll->tilemap[layer->tilemap]);
     tileset = &(ll->tileset[tilemap->tileset]);
     tmw = tilemap->w * tileset->tw;
+    tmh = tilemap->h * tileset->th;
 
-    if(scroll_x < 0 ||
-       scroll_x > tmw - 1) {
-        LOG_PRINTF(ll, "Layer X scroll out of range.\n");
+    if(scroll_x < 0 || scroll_y < 0 ||
+       scroll_x > tmw - 1 || scroll_y > tmh - 1) {
+        LOG_PRINTF(ll, "Layer scroll pos out of range.\n");
         return(-1);
     }
  
     layer->scroll_x = scroll_x;
-
-    return(0);
-}
-
-int tilemap_set_layer_scroll_y(LayerList *ll, unsigned int index, int scroll_y) {
-    Layer *layer;
-    Tilemap *tilemap;
-    Tileset *tileset;
-    unsigned int tmh;
-
-    if(index >= ll->layersmem ||
-       ll->layer[index].tilemap == -1) {
-        LOG_PRINTF(ll, "Invalid layer index.\n");
-        return(-1);
-    }
-
-    layer = &(ll->layer[index]);
-    tilemap = &(ll->tilemap[layer->tilemap]);
-    tileset = &(ll->tileset[tilemap->tileset]);
-    tmh = tilemap->h * tileset->th;
-
-    if(scroll_y < 0 ||
-       scroll_y > tmh - 1) {
-        LOG_PRINTF(ll, "Layer Y scroll out of range.\n");
-        return(-1);
-    }
- 
     layer->scroll_y = scroll_y;
 
     return(0);
 }
 
-int tilemap_set_layer_scale_x(LayerList *ll, unsigned int index, double scale_x) {
+int tilemap_set_layer_scale(LayerList *ll,
+                            unsigned int index,
+                            double scale_x,
+                            double scale_y) {
     /* SDL doesn't seem to allow negative rect coords and just clamps to 0 so
      * to avoid unexpected behavior, just throw an error to the user. */
-    if(scale_x < 0.0) {
+    if(scale_x < 0.0 || scale_y < 0.0) {
         LOG_PRINTF(ll, "Negative X scale.\n");
         return(-1);
     }
@@ -931,22 +874,6 @@ int tilemap_set_layer_scale_x(LayerList *ll, unsigned int index, double scale_x)
     }
 
     ll->layer[index].scale_x = scale_x;
-
-    return(0);
-}
-
-int tilemap_set_layer_scale_y(LayerList *ll, unsigned int index, double scale_y) {
-    if(scale_y < 0.0) {
-        LOG_PRINTF(ll, "Negative Y scale.\n");
-        return(-1);
-    }
-
-    if(index >= ll->layersmem ||
-       ll->layer[index].tilemap == -1) {
-        LOG_PRINTF(ll, "Invalid layer index.\n");
-        return(-1);
-    }
-
     ll->layer[index].scale_y = scale_y;
 
     return(0);
@@ -990,7 +917,7 @@ int tilemap_set_layer_alphamod(LayerList *ll, unsigned int index, Uint8 alphamod
     return(0);
 }
 
-int tilemap_set_layer_blend_mode(LayerList *ll, unsigned int index, int blendMode) {
+int tilemap_set_layer_blendmode(LayerList *ll, unsigned int index, int blendMode) {
     if(index >= ll->layersmem ||
        ll->layer[index].tilemap == -1) {
         LOG_PRINTF(ll, "Invalid layer index.\n");

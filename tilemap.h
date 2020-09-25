@@ -79,17 +79,38 @@ int tilemap_update_tilemap(LayerList *ll,
 
 int tilemap_add_layer(LayerList *ll,
                       unsigned int tilemap);
-int tilemap_free_layer(LayerList *ll, unsigned int index);
-int tilemap_set_layer_x(LayerList *ll, unsigned int index, int x);
-int tilemap_set_layer_y(LayerList *ll, unsigned int index, int y);
-int tilemap_set_layer_w(LayerList *ll, unsigned int index, int w);
-int tilemap_set_layer_h(LayerList *ll, unsigned int index, int h);
-int tilemap_set_layer_scroll_x(LayerList *ll, unsigned int index, int scroll_x);
-int tilemap_set_layer_scroll_y(LayerList *ll, unsigned int index, int scroll_y);
-int tilemap_set_layer_scale_x(LayerList *ll, unsigned int index, double scale_x);
-int tilemap_set_layer_scale_y(LayerList *ll, unsigned int index, double scale_y);
-int tilemap_set_layer_rotation(LayerList *ll, unsigned int index, double angle);
- 
+int tilemap_free_layer(LayerList *ll,
+                       unsigned int index);
+int tilemap_set_layer_pos(LayerList *ll,
+                          unsigned int index,
+                          int x,
+                          int y);
+int tilemap_set_layer_window(LayerList *ll,
+                             unsigned int index,
+                             int w,
+                             int h);
+int tilemap_set_layer_scroll_pos(LayerList *ll,
+                                 unsigned int index,
+                                 int scroll_x,
+                                 int scroll_y);
+int tilemap_set_layer_scale(LayerList *ll,
+                            unsigned int index,
+                            double scale_x,
+                            double scale_y);
+int tilemap_set_layer_rotation(LayerList *ll,
+                               unsigned int index,
+                               double angle);
+int tilemap_set_layer_colormod(LayerList *ll,
+                               unsigned int index,
+                               Uint8 r,
+                               Uint8 g,
+                               Uint8 b);
+int tilemap_set_layer_alphamod(LayerList *ll,
+                                unsigned int index,
+                                Uint8 alphamod);
+int tilemap_set_layer_blendmode(LayerList *ll,
+                                unsigned int index,
+                                int blendMode);
 int tilemap_draw_layer(LayerList *ll, unsigned int index);
 
 #endif
