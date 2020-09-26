@@ -34,7 +34,8 @@ typedef struct {
     unsigned int w;
     unsigned int h;
     unsigned int *map;
-    unsigned int *attrs;
+    unsigned int *attr_flags;
+    Uint32 *attr_colormod;
     SDL_Texture *tex; /* cached surface */
 
     unsigned int refs; /* layers referencing this tileset */
@@ -320,7 +321,8 @@ int tilemap_add_tilemap(LayerList *ll,
         ll->tilemap[0].h = h;
         ll->tilemap[0].tileset = -1;
         ll->tilemap[0].tex = NULL;
-        ll->tilemap[0].attrs = NULL;
+        ll->tilemap[0].attr_flags = NULL;
+        ll->tilemap[0].attr_colormod = NULL;
         ll->tilemap[0].refs = 0;
         return(0);
     }
@@ -339,7 +341,8 @@ int tilemap_add_tilemap(LayerList *ll,
             ll->tilemap[i].h = h;
             ll->tilemap[i].tileset = -1;
             ll->tilemap[i].tex = NULL;
-            ll->tilemap[i].attrs = NULL;
+            ll->tilemap[i].attr_flags = NULL;
+            ll->tilemap[i].attr_colormod = NULL;
             ll->tilemap[i].refs = 0;
             return(i);
         }
@@ -365,7 +368,8 @@ int tilemap_add_tilemap(LayerList *ll,
     ll->tilemap[i].h = h;
     ll->tilemap[i].tileset = -1;
     ll->tilemap[i].tex = NULL;
-    ll->tilemap[i].attrs = NULL;
+    ll->tilemap[i].attr_flags = NULL;
+    ll->tilemap[i].attr_colormod = NULL;
     ll->tilemap[i].refs = 0;
     /* initialize empty excess surfaces as NULL */
     for(j = i + 1; j < ll->tilemapsmem; j++) {
@@ -390,10 +394,14 @@ int tilemap_free_tilemap(LayerList *ll, unsigned int index) {
     }
     free(ll->tilemap[index].map);
     ll->tilemap[index].map = NULL;
-    /* free any attribute map */
-    if(ll->tilemap[index].attrs != NULL) {
-        free(ll->tilemap[index].attrs);
-        ll->tilemap[index].attrs = NULL;
+    /* free any attribute layers */
+    if(ll->tilemap[index].attr_flags != NULL) {
+        free(ll->tilemap[index].attr_flags);
+        ll->tilemap[index].attr_flags = NULL;
+    }
+    if(ll->tilemap[index].attr_colormod != NULL) {
+       free(ll->tilemap[index].attr_colormod);
+        ll->tilemap[index].attr_colormod = NULL;
     }
     /* clear cached surface */
     if(ll->tilemap[index].tex != NULL) {
@@ -464,14 +472,14 @@ int tilemap_set_tilemap_map(LayerList *ll,
     return(0);
 }
 
-int tilemap_set_tilemap_attrs(LayerList *ll,
-                              unsigned int index,
-                              unsigned int x,
-                              unsigned int y,
-                              unsigned int pitch,
-                              unsigned int w,
-                              unsigned int h,
-                              unsigned int *value) {
+int tilemap_set_tilemap_attr_flags(LayerList *ll,
+                                   unsigned int index,
+                                   unsigned int x,
+                                   unsigned int y,
+                                   unsigned int pitch,
+                                   unsigned int w,
+                                   unsigned int h,
+                                   unsigned int *value) {
     unsigned int i;
 
     /* make sure index is a valid tilemap */
@@ -493,21 +501,72 @@ int tilemap_set_tilemap_attrs(LayerList *ll,
     }
     
     /* allocate space for an attribute map if one doesn't exist */
-    if(ll->tilemap[index].attrs == NULL) {
-        ll->tilemap[index].attrs =
+    if(ll->tilemap[index].attr_flags == NULL) {
+        ll->tilemap[index].attr_flags =
             malloc(sizeof(unsigned int) *
                    ll->tilemap[index].w *
                    ll->tilemap[index].h);
-        if(ll->tilemap[index].attrs == NULL) {
+        if(ll->tilemap[index].attr_flags == NULL) {
             LOG_PRINTF(ll, "Failed to allocate tilemap attribute map.\n");
             return(-1);
         }
-        memset(ll->tilemap[index].attrs, 0,
+        memset(ll->tilemap[index].attr_flags, 0,
                sizeof(unsigned int) * w * h);
     }
  
     for(i = y; i < y + h; i++) {
-        memcpy(&(ll->tilemap[index].attrs[ll->tilemap[index].w * i + x]),
+        memcpy(&(ll->tilemap[index].attr_flags[ll->tilemap[index].w * i + x]),
+               &(value[(pitch * i) + x]),
+               sizeof(unsigned int) * w); 
+    }
+
+    return(0);
+}
+
+int tilemap_set_tilemap_attr_colormod(LayerList *ll,
+                                      unsigned int index,
+                                      unsigned int x,
+                                      unsigned int y,
+                                      unsigned int pitch,
+                                      unsigned int w,
+                                      unsigned int h,
+                                      unsigned int *value) {
+    unsigned int i;
+
+    /* make sure index is a valid tilemap */
+    if(index >= ll->tilemapsmem ||
+       ll->tilemap[index].map == NULL) {
+        LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
+        return(-1);
+    }
+
+    /* make sure start coordinate and end position don't go out of
+     * range */
+    if(x > ll->tilemap[index].w ||
+       y > ll->tilemap[index].h ||
+       x + w > ll->tilemap[index].w ||
+       y + h > ll->tilemap[index].h) {
+        LOG_PRINTF(ll, "Position/size would expand outside of "
+                       "tilemap.\n");
+        return(-1);
+    }
+    
+    /* allocate space for an attribute map if one doesn't exist */
+    if(ll->tilemap[index].attr_colormod == NULL) {
+        ll->tilemap[index].attr_colormod =
+            malloc(sizeof(unsigned int) *
+                   ll->tilemap[index].w *
+                   ll->tilemap[index].h);
+        if(ll->tilemap[index].attr_colormod == NULL) {
+            LOG_PRINTF(ll, "Failed to allocate tilemap attribute map.\n");
+            return(-1);
+        }
+        memset(ll->tilemap[index].attr_colormod, 0,
+               sizeof(unsigned int) * w * h);
+    }
+ 
+    for(i = y; i < y + h; i++) {
+        memcpy(&(ll->tilemap[index].attr_colormod[ll->tilemap[index].w * i + x]),
                &(value[(pitch * i) + x]),
                sizeof(unsigned int) * w); 
     }
@@ -526,6 +585,7 @@ int tilemap_update_tilemap(LayerList *ll,
     Tilemap *tilemap;
     Tileset *tileset;
     unsigned int attr;
+    Uint32 colormod;
     double angle;
     SDL_RendererFlip flip;
 
@@ -605,9 +665,24 @@ int tilemap_update_tilemap(LayerList *ll,
             src.y = src.x / tileset->maxx;
             src.x %= tileset->maxx;
             src.x *= tileset->tw; src.y *= tileset->th;
-            if(tilemap->attrs &&
-               tilemap->attrs[tilemap->w * j + i] != 0) {
-                attr = tilemap->attrs[tilemap->w * j + i];
+            if(tilemap->attr_colormod) {
+                colormod = tilemap->attr_colormod[tilemap->w * j + i];
+                if(SDL_SetTextureColorMod(tileset->tex,
+                        (colormod & TILEMAP_RMASK) >> TILEMAP_RSHIFT,
+                        (colormod & TILEMAP_GMASK) >> TILEMAP_GSHIFT,
+                        (colormod & TILEMAP_BMASK) >> TILEMAP_BSHIFT) < 0) {
+                    fprintf(stderr, "Failed to set tile colormod.\n");
+                    return(-1);
+                }
+                if(SDL_SetTextureAlphaMod(tileset->tex,
+                        (colormod & TILEMAP_AMASK) >> TILEMAP_ASHIFT) < 0) {
+                    fprintf(stderr, "Failed to set tile alphamod.\n");
+                    return(-1);
+                }
+            }
+            if(tilemap->attr_flags &&
+               tilemap->attr_flags[tilemap->w * j + i] != 0) {
+                attr = tilemap->attr_flags[tilemap->w * j + i];
                 memcpy(&finaldest, &dest, sizeof(SDL_Rect));
                 flip = SDL_FLIP_NONE;
                 if(attr & TILEMAP_HFLIP_MASK) {
@@ -655,6 +730,16 @@ int tilemap_update_tilemap(LayerList *ll,
                                   &src,
                                   &dest) < 0) {
                     LOG_PRINTF(ll, "Failed to render tile.\n");
+                    return(-1);
+                }
+            }
+            if(tilemap->attr_colormod) {
+                if(SDL_SetTextureColorMod(tileset->tex, 255, 255, 255) < 0) {
+                    fprintf(stderr, "Failed to set tile colormod.\n");
+                    return(-1);
+                }
+                if(SDL_SetTextureAlphaMod(tileset->tex, 255) < 0) {
+                    fprintf(stderr, "Failed to set tile alphamod.\n");
                     return(-1);
                 }
             }
@@ -1060,352 +1145,3 @@ int tilemap_draw_layer(LayerList *ll, unsigned int index) {
 
     return(0);
 }
-
-#ifdef CRUSTY_TEST
-#include <stdio.h>
-
-#define WINDOW_TITLE "Tilemap Test"
-#define WINDOW_WIDTH (640)
-#define WINDOW_HEIGHT (480)
-
-void vprintf_cb(void *priv, const char *fmt, ...) {
-    va_list ap;
-    FILE *out = priv;
-
-    va_start(ap, fmt);
-    vfprintf(out, fmt, ap);
-}
-
-int main(int argc, char **argv) {
-    LayerList *ll;
-    int drivers;
-    int bestdrv, softdrv, selectdrv;
-    Uint32 bestfmt, softfmt, selectfmt;
-    int i, j;
-    SDL_RendererInfo driver;
-    SDL_Window *win;
-    SDL_Renderer *renderer;
-    Uint32 R, G, B, Z, W, T, P;
-    int tileset_id;
-    int tilemap_id;
-    int tilemap_layer_id;
-    int sprite_id;
-    int spritemap_id;
-    int spritemap_layer_id;
-
-    R = TILEMAP_COLOR(255, 0, 0, 255);
-    G = TILEMAP_COLOR(0, 255, 0, 255);
-    B = TILEMAP_COLOR(0, 0, 255, 255);
-    Z = TILEMAP_COLOR(0, 0, 0, 0);
-    W = TILEMAP_COLOR(255, 255, 255, 255);
-    T = TILEMAP_COLOR(0, 0, 0, 0);
-    P = TILEMAP_COLOR(255, 0, 255, 255);
-
-    Uint32 tileset[18 * 18] = {
-        Z,Z,Z,Z,R,Z,Z,Z,Z,R,R,R,R,R,Z,Z,P,P,
-        Z,Z,Z,G,G,Z,Z,Z,G,G,Z,Z,Z,G,G,Z,P,P,
-        Z,Z,B,B,B,Z,Z,Z,Z,Z,Z,Z,Z,B,B,Z,P,P,
-        Z,Z,Z,W,W,Z,Z,Z,Z,Z,Z,Z,W,W,Z,Z,P,P,
-        Z,Z,Z,B,B,Z,Z,Z,Z,Z,B,B,B,Z,Z,Z,P,P,
-        Z,Z,Z,G,G,Z,Z,Z,Z,G,G,Z,Z,Z,Z,Z,P,P,
-        Z,Z,R,R,R,R,Z,Z,R,R,R,R,R,R,R,Z,P,P,
-        Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,P,P,
-        Z,R,R,R,R,R,Z,Z,Z,Z,Z,R,R,R,Z,Z,P,P,
-        G,G,Z,Z,Z,G,G,Z,Z,Z,G,G,G,G,Z,Z,P,P,
-        Z,Z,Z,Z,Z,B,B,Z,Z,B,B,Z,B,B,Z,Z,P,P,
-        Z,Z,Z,W,W,W,Z,Z,W,W,Z,Z,W,W,Z,Z,P,P,
-        Z,Z,Z,Z,Z,B,B,Z,B,B,B,B,B,B,B,Z,P,P,
-        G,G,Z,Z,Z,G,G,Z,Z,Z,Z,Z,G,G,Z,Z,P,P,
-        Z,R,R,R,R,R,Z,Z,Z,Z,Z,Z,R,R,Z,Z,P,P,
-        Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,P,P,
-        P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,
-        P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
-    };
-
-    unsigned int tilemap[16 * 16] = {
-        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        2,2,0,0,0,0,0,0,0,0,0,0,0,0,2,2,
-        3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
-        3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3
-    };
-
-    Uint32 sprite[8 * 16] = {
-        T,T,G,G,G,G,T,T,
-        T,G,G,G,G,G,G,T,
-        T,G,B,G,G,B,G,T,
-        T,P,P,P,P,P,P,T,
-        T,P,P,P,W,P,P,T,
-        T,P,P,P,P,P,P,T,
-        T,P,R,R,R,R,P,T,
-        T,T,P,P,P,P,T,T,
-        T,T,T,G,G,T,T,T,
-        T,G,G,G,G,G,G,T,
-        T,T,T,G,G,T,T,T,
-        T,T,B,B,B,B,T,T,
-        T,B,B,T,T,B,B,T,
-        T,B,B,T,T,B,B,T,
-        T,B,B,T,T,B,B,T,
-        T,W,W,T,T,W,W,T
-    };
-
-    unsigned int spritemap[1 * 1] = {
-        0
-    };
-
-    if(SDL_Init(SDL_INIT_VIDEO) < 0) {
-        fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
-    }
-
-    drivers = SDL_GetNumRenderDrivers();
-    fprintf(stderr, "Video Drivers: %d\n", drivers);
-
-    bestdrv = -1;
-    bestfmt = SDL_PIXELFORMAT_UNKNOWN;
-    softdrv = -1;
-    softfmt = SDL_PIXELFORMAT_UNKNOWN;
-    for(i = 0; i < drivers; i++) {
-        if(SDL_GetRenderDriverInfo(i, &driver) < 0) {
-            fprintf(stderr, "Couldn't get driver info for index %d.\n",
-                    i);
-            continue;
-        }
-
-        fprintf(stderr, "Driver %d: %s", i, driver.name);
-        if((driver.flags & SDL_RENDERER_SOFTWARE) &&
-           softdrv == -1) {
-            for(j = 0; j < driver.num_texture_formats; j++) {
-                if(SDL_BITSPERPIXEL(driver.texture_formats[j]) >= 24) {
-                    fprintf(stderr, " (fallback)");
-                    softfmt = driver.texture_formats[j];
-                    softdrv = i;
-                    break;
-                }
-            }
-        } else if((driver.flags & SDL_RENDERER_ACCELERATED) &&
-                  (driver.flags & SDL_RENDERER_TARGETTEXTURE) &&
-                  bestdrv == -1) {
-            for(j = 0; j < driver.num_texture_formats; j++) {
-                if(SDL_BITSPERPIXEL(driver.texture_formats[j]) >= 24) {
-                    fprintf(stderr, " (selected)");
-                    bestfmt = driver.texture_formats[j];
-                    bestdrv = i;
-                    break;
-                }
-            }
-        }
-        fprintf(stderr, "\n");
-        fprintf(stderr, "Flags: (%08X) ", driver.flags);
-        if(driver.flags & SDL_RENDERER_SOFTWARE)
-            fprintf(stderr, "SOFTWARE ");
-        if(driver.flags & SDL_RENDERER_ACCELERATED)
-            fprintf(stderr, "ACCELERATED ");
-        if(driver.flags & SDL_RENDERER_PRESENTVSYNC)
-            fprintf(stderr, "PRESENTVSYNC ");
-        if(driver.flags & SDL_RENDERER_TARGETTEXTURE)
-            fprintf(stderr, "TARGETTEXTURE ");
-        fprintf(stderr, "\n");
-        fprintf(stderr, "Formats: ");
-        for(j = 0; j < driver.num_texture_formats; j++) {
-            fprintf(stderr, "(%08X) %s ",
-                    driver.texture_formats[i],
-                    SDL_GetPixelFormatName(driver.texture_formats[i]));
-        }
-        fprintf(stderr, "\n");
-        fprintf(stderr, "Max Texture Size: %d x %d\n",
-                driver.max_texture_width,
-                driver.max_texture_height);
-    }
-
-    win = SDL_CreateWindow(WINDOW_TITLE,
-                           SDL_WINDOWPOS_UNDEFINED,
-                           SDL_WINDOWPOS_UNDEFINED,
-                           WINDOW_WIDTH,
-                           WINDOW_HEIGHT,
-                           0);
-    if(win == NULL) {
-        fprintf(stderr, "Failed to create SDL window.\n");
-        goto error0;
-    }
- 
-    if(bestdrv < 0) {
-        if(softdrv < 0) {
-            fprintf(stderr, "No accelerated or software driver found? "
-                            "Trying index 0...\n");
-            if(SDL_GetRenderDriverInfo(0, &driver) < 0) {
-                fprintf(stderr, "Couldn't get driver info for index "
-                                "0.\n");
-                goto error1;
-            }
-            selectfmt = SDL_PIXELFORMAT_UNKNOWN;
-            for(j = 0; j < driver.num_texture_formats; j++) {
-                if(SDL_BITSPERPIXEL(driver.texture_formats[j]) >= 24) {
-                    selectfmt = driver.texture_formats[j];
-                    break;
-                }
-            }
-            if(selectfmt == SDL_PIXELFORMAT_UNKNOWN) {
-                fprintf(stderr, "Coulnd't find true color pixel "
-                                "format.\n");
-                goto error1;
-            }
-
-            selectdrv = 0;
-        } else {
-            fprintf(stderr, "No accelerated driver found, falling "
-                            "back to software (%d).\n", softdrv);
-            selectfmt = softfmt;
-            selectdrv = softdrv;
-        }
-    } else {
-        fprintf(stderr, "Selecting first accelerated driver (%d).\n",
-                        bestdrv);
-        selectfmt = bestfmt;
-        selectdrv = bestdrv;
-    }
-
-    renderer = SDL_CreateRenderer(win, selectdrv, 0);
-    if(renderer == NULL) {
-        fprintf(stderr, "Failed to create SDL renderer.\n");
-        goto error1;
-    }
-
-    if(SDL_RenderSetScale(renderer, 2.0, 2.0) < 0) {
-        fprintf(stderr, "Failed to set render scale.\n");
-        goto error1;
-    }
-
-    ll = layerlist_new(renderer, selectfmt, vprintf_cb, stderr);
-    if(ll == NULL) {
-        fprintf(stderr, "Failed to create layerlist.\n");
-        goto error1;
-    }
-
-    tileset_id = tilemap_add_tileset(ll,
-                                     tileset,
-                                     16, 16,
-                                     18 * sizeof(Uint32),
-                                     8, 8);
-    if(tileset_id < 0) {
-        fprintf(stderr, "Failed to add tileset.\n");
-        goto error2;
-    }
-    tilemap_id = tilemap_add_tilemap(ll, 16, 16);
-    if(tilemap_id < 0) {
-        fprintf(stderr, "Failed to add tilemap.\n");
-        goto error2;
-    }
-    if(tilemap_set_tilemap_tileset(ll, tilemap_id, tileset_id) < 0) {
-        fprintf(stderr, "Failed to apply tileset.\n");
-        goto error2;
-    }
-    if(tilemap_set_tilemap_map(ll,
-                               tilemap_id,
-                               0,
-                               0,
-                               tilemap,
-                               sizeof(tilemap) /
-                               sizeof(tilemap[0])) < 0) {
-        fprintf(stderr, "Failed to apply tilemap.\n");
-        goto error2;
-    }
-    if(tilemap_update_tilemap(ll, tilemap_id, 0, 0, 16, 16) < 0) {
-        fprintf(stderr, "Failed to update tilemap.\n");
-        goto error2;
-    }
-    tilemap_layer_id = tilemap_add_layer(ll, tilemap_id);
-    if(tilemap_layer_id < 0) {
-        fprintf(stderr, "Failed to add tilemap layer.\n");
-        goto error2;
-    }
-
-    sprite_id = tilemap_add_tileset(ll,
-                                    sprite,
-                                    8, 16,
-                                    8 * sizeof(Uint32),
-                                    8, 16);
-    if(sprite_id < 0) {
-        fprintf(stderr, "Failed to add sprite.\n");
-        goto error2;
-    }
-    spritemap_id = tilemap_add_tilemap(ll, 1, 1);
-    if(spritemap_id < 0) {
-        fprintf(stderr, "Failed to add spritemap.\n");
-        goto error2;
-    }
-    if(tilemap_set_tilemap_tileset(ll, spritemap_id, sprite_id) < 0) {
-        fprintf(stderr, "Failed to apply spriteset.\n");
-        goto error2;
-    }
-    if(tilemap_set_tilemap_map(ll,
-                               spritemap_id,
-                               0,
-                               0,
-                               spritemap,
-                               sizeof(spritemap) /
-                               sizeof(spritemap[0])) < 0) {
-        fprintf(stderr, "Failed to apply spritemap.\n");
-        goto error2;
-    }
-    if(tilemap_update_tilemap(ll, spritemap_id, 0, 0, 1, 1) < 0) {
-        fprintf(stderr, "Failed to update spritemap.\n");
-        goto error2;
-    }
-    spritemap_layer_id = tilemap_add_layer(ll, spritemap_id);
-    if(tilemap_layer_id < 0) {
-        fprintf(stderr, "Failed to add spritemap layer.\n");
-        goto error2;
-    }
-
-    if(SDL_SetRenderDrawColor(renderer,
-                              0, 0, 255,
-                              SDL_ALPHA_OPAQUE) < 0) {
-        fprintf(stderr, "Failed to set render draw color.\n");
-        goto error2;
-    }
-    if(SDL_RenderClear(renderer) < 0) {
-        fprintf(stderr, "Failed to clear screen.\n");
-        goto error2;
-    }
-    if(SDL_SetRenderDrawColor(renderer,
-                              0, 0, 0,
-                              SDL_ALPHA_TRANSPARENT) < 0) {
-        fprintf(stderr, "Failed to set render draw color.\n");
-        goto error2;
-    }
- 
-    if(tilemap_draw_layer(ll, tilemap_layer_id) < 0) {
-        fprintf(stderr, "Failed to draw layer.\n");
-        goto error2;
-    }
-    if(tilemap_draw_layer(ll, spritemap_layer_id) < 0) {
-        fprintf(stderr, "Failed to draw layer.\n");
-        goto error2;
-    }
-
-    SDL_RenderPresent(renderer);
-    SDL_Delay(1000);
-
-error2:
-    layerlist_free(ll);
-
-error1:
-    SDL_DestroyWindow(win);
-error0:
-    SDL_Quit();
-
-    return(EXIT_SUCCESS);
-}
-#endif

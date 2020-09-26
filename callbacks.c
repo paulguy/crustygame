@@ -246,11 +246,11 @@ int gfx_set_tilemap_map(void *priv,
                                    (unsigned int *)(state->buffer)));
 }
 
-int gfx_set_tilemap_attrs(void *priv,
-                          CrustyType type,
-                          unsigned int size,
-                          void *ptr,
-                          unsigned int index) {
+int gfx_set_tilemap_attr_flags(void *priv,
+                               CrustyType type,
+                               unsigned int size,
+                               void *ptr,
+                               unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
     int x, y, pitch, w, h;
 
@@ -273,12 +273,47 @@ int gfx_set_tilemap_attrs(void *priv,
         return(-1);
     }
 
-    return(tilemap_set_tilemap_attrs(state->ll,
-                                     index,
-                                     x, y,
-                                     pitch,
-                                     w, h,
-                                     (unsigned int *)(state->buffer)));
+    return(tilemap_set_tilemap_attr_flags(state->ll,
+                                          index,
+                                          x, y,
+                                          pitch,
+                                          w, h,
+                                          (unsigned int *)(state->buffer)));
+}
+
+int gfx_set_tilemap_attr_colormod(void *priv,
+                                  CrustyType type,
+                                  unsigned int size,
+                                  void *ptr,
+                                  unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int x, y, pitch, w, h;
+
+    if(type != CRUSTY_TYPE_INT || size < 5) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    int *buf = (int *)ptr;
+    x = buf[0]; y = buf[1]; pitch = buf[2];
+    w = buf[3]; h = buf[4];
+
+    if(x < 0 || y < 0 || pitch < 0 || w < 0 || h < 0) {
+        fprintf(stderr, "Value out of range.\n");
+        return(-1);
+    }
+
+    if(((h - 1) * pitch) + w < state->size / sizeof(unsigned int)) {
+        fprintf(stderr, "Buffer too small to hold tilemap.\n");
+        return(-1);
+    }
+
+    return(tilemap_set_tilemap_attr_colormod(state->ll,
+                                             index,
+                                             x, y,
+                                             pitch,
+                                             w, h,
+                                             (unsigned int *)(state->buffer)));
 }
 
 int gfx_update_tilemap(void *priv,
@@ -962,10 +997,16 @@ CrustyCallback cb[] = {
         .write = gfx_set_tilemap_map, .writepriv = &state
     },
     {
-        .name = "gfx_set_tilemap_attrs", .length = INT_MAX,
+        .name = "gfx_set_tilemap_attr_flags", .length = INT_MAX,
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
-        .write = gfx_set_tilemap_attrs, .writepriv = &state
+        .write = gfx_set_tilemap_attr_flags, .writepriv = &state
+    },
+    {
+        .name = "gfx_set_tilemap_attr_colormod", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = gfx_set_tilemap_attr_colormod, .writepriv = &state
     },
     {
         .name = "gfx_update_tilemap", .length = INT_MAX,
