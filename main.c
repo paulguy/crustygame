@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <time.h>
 #include <SDL.h>
 
 #include "crustygame.h"
@@ -357,6 +358,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to create layerlist.\n");
         goto error_sdl;
     }
+
+    /* seed random */
+    srand(time(NULL));
 
     /* call program init */
     result = crustyvm_run(cvm, "init");

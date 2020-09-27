@@ -717,7 +717,7 @@ static int tokenize(CrustyVM *cvm,
                                        0,
                                        NULL);
                 if(tokenstart < 0) {
-                    LOG_PRINTF_TOK(cvm, "Couldn't allocate memory for token.\n");
+                    LOG_PRINTF_TOK(cvm, "Couldn't create token.\n");
                     return(-1);
                 }
                 cvm->line[cvm->lines].offset[cvm->line[cvm->lines].tokencount] =
@@ -736,7 +736,7 @@ static int tokenize(CrustyVM *cvm,
                                            1, /* quoted */
                                            &(LINE));
                     if(tokenstart < 0) {
-                        LOG_PRINTF_TOK(cvm, "Couldn't allocate memory for token.\n");
+                        LOG_PRINTF_TOK(cvm, "Couldn't create token.\n");
                         return(-1);
                     }
                     cvm->line[cvm->lines].offset[cvm->line[cvm->lines].tokencount] =
@@ -3268,8 +3268,11 @@ static int populate_var(CrustyVM *cvm,
             *flags |= MOVE_FLAG_VAR;
             *index = strtol(vararray, &end, 0);
             if(end != vararray && *end == '\0') {
-                /* array with immediate index */
-                if(*index < 0 || *index > (int)(varObj->length) - 1) {
+                /* array with immediate index, if length is 0, it's a local
+                 * variable and we can't know until runtime. */
+                if(*index < 0 ||
+                   ((int)(varObj->length) > 0 &&
+                    *index > (int)(varObj->length) - 1)) {
                     LOG_PRINTF_LINE(cvm, "Immediate index out of array size.\n");
                     goto failure;
                 }
@@ -4727,13 +4730,6 @@ static int call(CrustyVM *cvm, unsigned int procindex, unsigned int argsindex) {
 
     callee = &(cvm->proc[procindex]);
 
-    /* push return and procedure to be called on to the stack */
-    cvm->csp++;
-    /* make the return ip start at the next instruction */
-    cvm->cstack[cvm->csp - 1].ip =
-        argsindex + (cvm->proc[procindex].args * CALL_ARG_SIZE);
-    cvm->cstack[cvm->csp - 1].proc = procindex;
-
     newsp = cvm->sp + cvm->proc[procindex].stackneeded;
 
     /* set up procedure arguments */
@@ -4769,6 +4765,13 @@ static int call(CrustyVM *cvm, unsigned int procindex, unsigned int argsindex) {
                    callee->var[i]->length * sizeof(int));
         } /* other possibilities will have already been checked before */
     }
+
+    /* push return and procedure to be called on to the stack */
+    cvm->csp++;
+    /* make the return ip start at the next instruction */
+    cvm->cstack[cvm->csp - 1].ip =
+        argsindex + (cvm->proc[procindex].args * CALL_ARG_SIZE);
+    cvm->cstack[cvm->csp - 1].proc = procindex;
 
     cvm->sp = newsp;
     cvm->ip = callee->instruction;
@@ -5491,6 +5494,7 @@ CrustyStatus crustyvm_step(CrustyVM *cvm) {
                 break;
             }
 
+            //crustyvm_debugtrace(cvm, 0);
             /* no need to update ip */
             break;
         case CRUSTY_INSTRUCTION_TYPE_RET:

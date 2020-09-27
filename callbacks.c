@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <SDL.h>
 
 #include "crustygame.h"
@@ -243,7 +244,8 @@ int gfx_set_tilemap_map(void *priv,
                                    x, y,
                                    pitch,
                                    w, h,
-                                   (unsigned int *)(state->buffer)));
+                                   (unsigned int *)(state->buffer),
+                                   state->size));
 }
 
 int gfx_set_tilemap_attr_flags(void *priv,
@@ -268,17 +270,13 @@ int gfx_set_tilemap_attr_flags(void *priv,
         return(-1);
     }
 
-    if(((h - 1) * pitch) + w < state->size / sizeof(unsigned int)) {
-        fprintf(stderr, "Buffer too small to hold tilemap.\n");
-        return(-1);
-    }
-
     return(tilemap_set_tilemap_attr_flags(state->ll,
                                           index,
                                           x, y,
                                           pitch,
                                           w, h,
-                                          (unsigned int *)(state->buffer)));
+                                          (unsigned int *)(state->buffer),
+                                          state->size));
 }
 
 int gfx_set_tilemap_attr_colormod(void *priv,
@@ -303,17 +301,13 @@ int gfx_set_tilemap_attr_colormod(void *priv,
         return(-1);
     }
 
-    if(((h - 1) * pitch) + w < state->size / sizeof(unsigned int)) {
-        fprintf(stderr, "Buffer too small to hold tilemap.\n");
-        return(-1);
-    }
-
     return(tilemap_set_tilemap_attr_colormod(state->ll,
                                              index,
                                              x, y,
                                              pitch,
                                              w, h,
-                                             (unsigned int *)(state->buffer)));
+                                             (unsigned int *)(state->buffer),
+                                             state->size));
 }
 
 int gfx_update_tilemap(void *priv,
@@ -642,6 +636,12 @@ int set_running(void *priv,
     }
 
     state->running = *(int *)ptr;
+
+    return(0);
+}
+
+int get_random(void *priv, void *val, unsigned int index) {
+    *(int *)val = rand();
 
     return(0);
 }
@@ -1103,6 +1103,12 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = set_running, .writepriv = &state
+    },
+    {
+        .name = "get_random", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = get_random, .readpriv = NULL,
+        .write = NULL, .writepriv = NULL
     },
     {
         .name = "event_get_type", .length = 1,

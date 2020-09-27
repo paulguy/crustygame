@@ -61,7 +61,8 @@ int tilemap_set_tilemap_map(LayerList *ll,
                             unsigned int pitch,
                             unsigned int w,
                             unsigned int h,
-                            unsigned int *value);
+                            unsigned int *value,
+                            unsigned int size);
 int tilemap_set_tilemap_attr_flags(LayerList *ll,
                               unsigned int index,
                               unsigned int x,
@@ -69,7 +70,8 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
                               unsigned int pitch,
                               unsigned int w,
                               unsigned int h,
-                              unsigned int *value);
+                              unsigned int *value,
+                              unsigned int size);
 int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       unsigned int index,
                                       unsigned int x,
@@ -77,7 +79,8 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       unsigned int pitch,
                                       unsigned int w,
                                       unsigned int h,
-                                      unsigned int *value);
+                                      unsigned int *value,
+                                      unsigned int size);
 int tilemap_update_tilemap(LayerList *ll,
                            unsigned int index,
                            unsigned int x,

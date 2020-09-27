@@ -442,13 +442,29 @@ int tilemap_set_tilemap_map(LayerList *ll,
                             unsigned int pitch,
                             unsigned int w,
                             unsigned int h,
-                            unsigned int *value) {
+                            unsigned int *value,
+                            unsigned int size) {
     unsigned int i;
 
     /* make sure index is a valid tilemap */
     if(index >= ll->tilemapsmem ||
        ll->tilemap[index].map == NULL) {
         LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
+        return(-1);
+    }
+    /* Allow passing in 0s to be filled in for the whole map size */
+    if(pitch == 0) {
+        pitch = ll->tilemap[index].w;
+    }
+    if(w == 0) {
+        w = ll->tilemap[index].w;
+    }
+    if(h == 0) {
+        h = ll->tilemap[index].h;
+    }
+
+    if(((h - 1) * pitch) + w < size / sizeof(unsigned int)) {
+        LOG_PRINTF(ll, "Buffer too small to hold tilemap.\n");
         return(-1);
     }
 
@@ -479,13 +495,29 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
                                    unsigned int pitch,
                                    unsigned int w,
                                    unsigned int h,
-                                   unsigned int *value) {
+                                   unsigned int *value,
+                                   unsigned int size) {
     unsigned int i;
 
     /* make sure index is a valid tilemap */
     if(index >= ll->tilemapsmem ||
        ll->tilemap[index].map == NULL) {
         LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
+        return(-1);
+    }
+    /* Allow passing in 0s to be filled in for the whole map size */
+    if(pitch == 0) {
+        pitch = ll->tilemap[index].w;
+    }
+    if(w == 0) {
+        w = ll->tilemap[index].w;
+    }
+    if(h == 0) {
+        h = ll->tilemap[index].h;
+    }
+
+    if(((h - 1) * pitch) + w < size / sizeof(unsigned int)) {
+        LOG_PRINTF(ll, "Buffer too small to hold tilemap.\n");
         return(-1);
     }
 
@@ -530,13 +562,29 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       unsigned int pitch,
                                       unsigned int w,
                                       unsigned int h,
-                                      unsigned int *value) {
+                                      unsigned int *value,
+                                      unsigned int size) {
     unsigned int i;
 
     /* make sure index is a valid tilemap */
     if(index >= ll->tilemapsmem ||
        ll->tilemap[index].map == NULL) {
         LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
+        return(-1);
+    }
+    /* Allow passing in 0s to be filled in for the whole map size */
+    if(pitch == 0) {
+        pitch = ll->tilemap[index].w;
+    }
+    if(w == 0) {
+        w = ll->tilemap[index].w;
+    }
+    if(h == 0) {
+        h = ll->tilemap[index].h;
+    }
+
+    if(((h - 1) * pitch) + w < size / sizeof(unsigned int)) {
+        LOG_PRINTF(ll, "Buffer too small to hold tilemap.\n");
         return(-1);
     }
 
@@ -596,6 +644,13 @@ int tilemap_update_tilemap(LayerList *ll,
         return(-1);
     }
     tilemap = &(ll->tilemap[index]);
+    /* Allow passing in 0s to be filled in for the whole map size */
+    if(w == 0) {
+        w = ll->tilemap[index].w;
+    }
+    if(h == 0) {
+        h = ll->tilemap[index].h;
+    }
 
     /* make sure there's a tileset referenced */
     if(tilemap->tileset < 0) {
@@ -895,6 +950,13 @@ int tilemap_set_layer_window(LayerList *ll, unsigned int index, int w, int h) {
     tileset = &(ll->tileset[tilemap->tileset]);
     tmw = tilemap->w * tileset->tw;
     tmh = tilemap->h * tileset->th;
+    /* Allow passing in 0s to be reset to full size */
+    if(w == 0) {
+        w = tmw;
+    }
+    if(h == 0) {
+        h = tmh;
+    }
 
     if(w < 0 || h < 0 ||
        w > tmw || h > tmh) {
