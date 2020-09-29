@@ -554,7 +554,6 @@ int gfx_set_video_mode(void *priv,
 
     memcpy(mode, (char *)ptr, size);
     mode[size] = '\0';
-    fprintf(stderr, "%s\n", mode);
 
     if(strcmp("fullscreen", mode) == 0) {
         if(SDL_SetWindowFullscreen(state->win,

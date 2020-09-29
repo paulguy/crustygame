@@ -2,6 +2,17 @@ include crustygame.inc
 binclude gfx ints "tetris.crsg"
 expr TILE_SIDE 16
 
+expr SCREEN_WIDTH 640
+expr SCREEN_HEIGHT 480
+expr SCREEN_TILES_WIDTH "SCREEN_WIDTH / TILE_SIDE"
+expr SCREEN_TILES_HEIGHT "SCREEN_HEIGHT / TILE_SIDE"
+macro RESCALE_POS XPOS YPOS
+    mul XPOS global_scale
+    mul YPOS global_scale
+    add XPOS global_offset:0
+    add YPOS global_offset:1
+endmacro RESCALE_POS
+
 static NL string "\n"
 static SPC string " "
 
@@ -61,6 +72,7 @@ expr PIECEINFO_HEIGHT 2
 expr PIECEINFO_SIZE   3
 expr PIECEINFO_PIECE_SIZE "PIECEINFO_SIZE * PIECEINFO_ROTATIONS"
 static pieceinfo ints "\
+  0 0 0    0 0 0    0 0 0    0 0 0 \
   0 3 2    6 2 3   12 3 2   18 2 3 \
  24 3 2   30 2 3   36 3 2   42 2 3 \
  48 3 2   54 2 3   48 3 2   54 2 3 \
@@ -73,6 +85,21 @@ expr PIT_WIDTH 10
 expr PIT_HEIGHT 20
 expr PIT_SIZE "PIT_WIDTH * PIT_HEIGHT"
 static pit ints PIT_SIZE
+static pit_map0_tiles ints PIT_SIZE
+static pit_map1_tiles ints PIT_SIZE
+static pit_map2_tiles ints PIT_SIZE
+static pit_map0_colormod ints PIT_SIZE
+static pit_map1_colormod ints PIT_SIZE
+static pit_map2_colormod ints PIT_SIZE
+expr PIT_BG_WIDTH  "PIT_WIDTH + 2"
+expr PIT_BG_HEIGHT "PIT_HEIGHT + 2"
+expr PIT_BG_SIZE   "PIT_BG_WIDTH * PIT_BG_HEIGHT"
+expr PIT_TILE_CORNER 4
+expr PIT_TILE_EDGE   5
+expr PIT_TILE_FILL   3
+; C_PIT_FILL
+TILEMAP_COLOR PIT_FILL 160 160 160 127
+expr CLEAR_TILE      15
 
 macro GET_PIT RESULT XPOS YPOS
     move RESULT YPOS
@@ -88,14 +115,14 @@ macro PUT_PIT TEMP VALUE XPOS YPOS
     move pit:TEMP VALUE
 endmacro PUT_PIT
 
-static TILEMAP ints "0 1 2 0 \
-                     0 1 2 0 \
-                     0 1 2 0 \
-                     0 1 2 0 \
-                     0 1 2 0 \
-                     0 1 2 0 \
-                     0 1 2 0 \
-                     0 0 0 0"
+static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
+                           0 1 2 0 \
+                           0 1 2 0 \
+                           0 1 2 0 \
+                           0 1 2 0 \
+                           0 1 2 0 \
+                           0 1 2 0 \
+                           0 1 2 0"
 ; Probably should be power of two
 static TILEMAP_WIDTH 4
 static TILEMAP_HEIGHT 8
@@ -114,17 +141,15 @@ TILEMAP_COLOR LR 255  85  85 255
 TILEMAP_COLOR LB  85  85 255 255
 TILEMAP_COLOR LO 255 170  85 255
 TILEMAP_COLOR  W 255 255 255 255
-static TILEMAP_COLORMOD ints "C_C C_LC C_W 0 \
-                              C_Y C_LY C_W 0 \
-                              C_P C_LP C_W 0 \
-                              C_G C_LG C_W 0 \
-                              C_R C_LR C_W 0 \
-                              C_B C_LB C_W 0 \
-                              C_O C_LO C_W 0 \
-                              0 0 0 0"
-static gfx_id
-static tilemap_id
-static block_layer_id
+; 0th is no block
+static PIECE_COLORMOD ints "0 0 0 0 \
+                            C_C C_LC C_W 0 \
+                            C_Y C_LY C_W 0 \
+                            C_P C_LP C_W 0 \
+                            C_G C_LG C_W 0 \
+                            C_R C_LR C_W 0 \
+                            C_B C_LB C_W 0 \
+                            C_O C_LO C_W 0"
 
 macro DRAW_BLOCK LAYERID POSITION WINDOW
     move gfx_set_layer_pos:LAYERID POSITION
@@ -139,46 +164,77 @@ macro DRAW_BLOCK LAYERID POSITION WINDOW
     move gfx_draw_layer LAYERID
 endmacro DRAW_BLOCK
 
-proc draw_pit layer_id x y
-    local pitx 0
-    local pity 0
-    local pitval
-    local window ints 2
-    local position ints 2
-
-    move position:1 y
-    label y
-        move position:0 x
-        label x
-            GET_PIT pitval pitx pity
-            cmp pitval 0
-            jumpz nodraw
-            sub pitval 1
-            mul pitval TILE_SIDE
-            move window:1 pitval
-
-            DRAW_BLOCK layer_id position window
-
-            label nodraw
-
-            add position:0 TILE_SIDE
-            add pitx 1
-            cmp pitx PIT_WIDTH
-        jumpn x
-        add position:1 TILE_SIDE
-        move pitx 0
-        add pity 1
-        cmp pity PIT_HEIGHT
-    jumpn y
-ret
-
 proc populate_piece_values piece pos width height
     move pos    piece:PIECEINFO_OFFSET
     move width  piece:PIECEINFO_WIDTH
     move height piece:PIECEINFO_HEIGHT
 ret
-    
+ 
+proc piece_would_collide piece rotation x y
+ret
+
+proc update_pit_map piece rotation x y
+ret
+
+proc update_pit_tilemaps x y w h
+    local i
+    local j
+    local startptr
+    local ptr
+    local pitval0
+    local pitval1
+    local pitval2
+
+    move startptr y
+    mul  startptr PIT_WIDTH
+    add  startptr x
+
+    move j h
+    label y
+        move i w
+        label x
+            move pitval0 pit:ptr
+            mul  pitval0 TILEMAP_WIDTH
+            move pitval1 pitval0
+            add  pitval1 1
+            move pitval2 pitval0
+            add  pitval2 2
+            move pit_map0_tiles:ptr PIECE_TILEMAP:pitval0
+            move pit_map0_colormod:ptr PIECE_COLORMOD:pitval0
+            move pit_map1_tiles:ptr PIECE_TILEMAP:pitval1
+            move pit_map1_colormod:ptr PIECE_COLORMOD:pitval1
+            move pit_map2_tiles:ptr PIECE_TILEMAP:pitval2
+            move pit_map2_colormod:ptr PIECE_COLORMOD:pitval2
+
+            add ptr 1
+            sub i 1
+        jumpg x
+        sub ptr w
+        add ptr PIT_WIDTH
+        sub j 1
+    jumpg y
+
+    ; set tiles and attributes then update
+    call gfx_set_tilemap_map3 pit_tilemap_id0 pit_map0_tiles:startptr x y PIT_WIDTH w h
+    call gfx_set_tilemap_attr_colormod3 pit_tilemap_id0 pit_map0_colormod:startptr x y PIT_WIDTH w h
+    call gfx_update_tilemap2 pit_tilemap_id0 x y w h
+    call gfx_set_tilemap_map3 pit_tilemap_id1 pit_map1_tiles:startptr x y PIT_WIDTH w h
+    call gfx_set_tilemap_attr_colormod3 pit_tilemap_id1 pit_map1_colormod:startptr x y PIT_WIDTH w h
+    call gfx_update_tilemap2 pit_tilemap_id1 x y w h
+    call gfx_set_tilemap_map3 pit_tilemap_id2 pit_map2_tiles:startptr x y PIT_WIDTH w h
+    call gfx_set_tilemap_attr_colormod3 pit_tilemap_id2 pit_map2_colormod:startptr x y PIT_WIDTH w h
+    call gfx_update_tilemap2 pit_tilemap_id2 x y w h
+ret
+
+proc draw_pit
+    move gfx_draw_layer pit_background_layer_id
+    move gfx_draw_layer pit_layer_id0
+    move gfx_draw_layer pit_layer_id1
+    move gfx_draw_layer pit_layer_id2
+ret
+
 proc draw_piece layer_id piece rotation x y
+    local scaledx
     local pieceptr
     local rotationptr
     local piecex
@@ -187,6 +243,7 @@ proc draw_piece layer_id piece rotation x y
     local height
     local window ints 2
     local position ints 2
+    local scaled_tile
     ; copy values to locals to not mutate caller variables
     move pieceptr piece
     mul  pieceptr PIECEINFO_PIECE_SIZE
@@ -198,9 +255,15 @@ proc draw_piece layer_id piece rotation x y
     move window:1 piece
     mul  window:1 TILE_SIDE 
 
+    move scaled_tile TILE_SIDE
+    mul  scaled_tile global_scale
+    move scaledx x
+    mul  scaledx global_scale
+
     move position:1 y
+    mul  position:1 global_scale
     label y
-        move position:0 x
+        move position:0 scaledx
         move piecex width
         label x
             cmp pieces:pos 0
@@ -211,69 +274,251 @@ proc draw_piece layer_id piece rotation x y
             label nodraw
 
             add pos 1
-            add position:0 TILE_SIDE
+            add position:0 scaled_tile
             sub piecex 1
         jumpg x
-        add position:1 TILE_SIDE
+        add position:1 scaled_tile
         sub height 1
     jumpg y 
 ret
 
-proc init
+proc fill buffer w h stride val
+    local ptr 0
+    local x 0
+    local y
+
+    move y h
+    label y
+        move x w
+        label x
+            move buffer:ptr val
+            add ptr 1
+            sub x 1
+        jumpg x
+        sub ptr w
+        add ptr stride
+        sub y 1
+    jumpg y
+ret
+
+proc fill_with_border buffer width height stride topleft top topright left center right bottomleft bottom bottomright
+    local temp
+    local innerWidth
+    local innerHeight
+    ; make a border and filled background
+    move innerWidth width
+    sub  innerWidth 2
+    move innerHeight height
+    sub  innerHeight 2
+
+    ; top row
+    move buffer:0 topleft
+    call fill buffer:1 innerWidth 1 innerWidth top
+    move temp width
+    sub  temp 1
+    move buffer:temp topright
+    ; left edge
+    call fill buffer:stride 1 innerHeight stride left
+    ; fill
+    move temp stride
+    add  temp 2
+    call fill buffer:temp innerWidth innerHeight stride center
+    ; right edge
+    move temp stride
+    mul  temp 2
+    sub  temp 1
+    call fill buffer:temp 1 innerHeight stride right
+    ; bottom row
+    move temp stride
+    mul  temp innerHeight
+    add  temp stride
+    move buffer:temp bottomleft
+    add  temp 1
+    call fill buffer:temp innerWidth 1 innerWidth bottom
+    add  temp innerWidth
+    move buffer:temp bottomright
+ret
+
+static gfx_id
+static block_tilemap_id
+static block_layer_id
+static pit_tilemap_id0
+static pit_tilemap_id1
+static pit_tilemap_id2
+static pit_layer_id0
+static pit_layer_id1
+static pit_layer_id2
+static pit_background_id
+static pit_background_layer_id
+static window_background_id
+static window_background_layer_id
+static global_scale floats "0.0 0.0"
+static global_offset ints 2
+static videomode string "1024x768"
+static fullscreenstr string "fullscreen"
+
+proc update_scale
+    local tempf floats "0.0 0.0 0.0 0.0"
     local temp ints 2
+
+    move tempf:0 gfx_get_width
+    move tempf:1 gfx_get_height
+    div  tempf:0 SCREEN_WIDTH
+    div  tempf:1 SCREEN_HEIGHT
+    cmp  tempf:0 tempf:1
+    jumpl scale_taller
+    jumpg scale_wider
+    ; scale equal, keep offset 0
+    move global_scale:0 tempf:0
+    move global_scale:1 tempf:0
+    label scale_taller
+    ; center vertically
+    move global_scale:0 tempf:0
+    move global_scale:1 tempf:0
+    mul  tempf:0 SCREEN_HEIGHT
+    move global_offset:1 gfx_get_height
+    sub  global_offset:1 tempf:0
+    div  global_offset:1 2
+    move global_offset:0 0
+    jump scale_done
+    label scale_wider
+    ; center horizontally
+    move global_scale:0 tempf:1
+    move global_scale:1 tempf:1
+    mul  tempf:1 SCREEN_WIDTH
+    move global_offset:0 gfx_get_width
+    sub  global_offset:0 tempf:1
+    div  global_offset:0 2
+    move global_offset:1 0
+    label scale_done
+
+    move gfx_set_layer_scale:block_layer_id global_scale
+    move tempf:0 SCREEN_WIDTH
+    move tempf:2 PIT_WIDTH
+    mul  tempf:2 TILE_SIDE
+    sub  tempf:0 tempf:2
+    div  tempf:0 2
+    move tempf:1 SCREEN_HEIGHT
+    move tempf:2 PIT_HEIGHT
+    mul  tempf:2 TILE_SIDE
+    sub  tempf:1 tempf:2
+    div  tempf:1 2
+    move tempf:2 tempf:0
+    move tempf:3 tempf:1
+    sub  tempf:2 TILE_SIDE
+    sub  tempf:3 TILE_SIDE
+    RESCALE_POS tempf:0 tempf:1
+    RESCALE_POS tempf:2 tempf:3
+    move temp:0 tempf:0
+    move temp:1 tempf:1
+    move gfx_set_layer_pos:pit_layer_id0 temp
+    move gfx_set_layer_pos:pit_layer_id1 temp
+    move gfx_set_layer_pos:pit_layer_id2 temp
+    move temp:0 tempf:2
+    move temp:1 tempf:3
+    move gfx_set_layer_pos:pit_background_id temp
+    move gfx_set_layer_scale:pit_layer_id0 global_scale
+    move gfx_set_layer_scale:pit_layer_id1 global_scale
+    move gfx_set_layer_scale:pit_layer_id2 global_scale
+    move gfx_set_layer_scale:pit_background_id global_scale
+ret
+
+proc init
+    local temp ints 4
+    local tempf floats "0.0 0.0"
+    local pitbg ints PIT_BG_SIZE 
+    local pitflags ints PIT_BG_SIZE 
+    local pitcolormod ints PIT_BG_SIZE
+
+    move gfx_set_video_mode videomode
 
     move temp:0 gfx:CRSG_OFFSET_WIDTH
     mul  temp:0 TILEMAP_PIXEL_BYTES
     call gfx_add_tileset gfx:CRSG_OFFSET_DATA gfx:CRSG_OFFSET_WIDTH gfx:CRSG_OFFSET_HEIGHT temp:0 TILE_SIDE TILE_SIDE gfx_id
-    call gfx_add_tilemap TILEMAP_WIDTH TILEMAP_HEIGHT tilemap_id
-    move gfx_set_tilemap_tileset:tilemap_id gfx_id
-    call gfx_set_tilemap_map tilemap_id TILEMAP
-    call gfx_set_tilemap_attr_colormod tilemap_id TILEMAP_COLORMOD
-    call gfx_update_tilemap tilemap_id
-    call gfx_add_layer tilemap_id block_layer_id
+
+    call gfx_add_tilemap TILEMAP_WIDTH TILEMAP_HEIGHT block_tilemap_id
+    move gfx_set_tilemap_tileset:block_tilemap_id gfx_id
+    call gfx_set_tilemap_map block_tilemap_id PIECE_TILEMAP
+    call gfx_set_tilemap_attr_colormod block_tilemap_id PIECE_COLORMOD
+    call gfx_update_tilemap block_tilemap_id
+    call gfx_add_layer block_tilemap_id block_layer_id
     move temp:0 TILE_SIDE
     move temp:1 TILE_SIDE
     move gfx_set_layer_window:block_layer_id temp
+    move temp:0 PIT_BG_WIDTH
+    move temp:1 PIT_BG_HEIGHT
+    call gfx_add_tilemap temp:0 temp:1 pit_background_id
+    move gfx_set_tilemap_tileset:pit_background_id gfx_id
+    call gfx_add_layer pit_background_layer_id pit_background_id
+
+    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
+    move gfx_set_tilemap_tileset:pit_tilemap_id0 gfx_id
+    call gfx_add_layer pit_tilemap_id0 pit_layer_id0
+    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id1
+    move gfx_set_tilemap_tileset:pit_tilemap_id1 gfx_id
+    call gfx_add_layer pit_tilemap_id1 pit_layer_id1
+    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id2
+    move gfx_set_tilemap_tileset:pit_tilemap_id2 gfx_id
+    call gfx_add_layer pit_tilemap_id2 pit_layer_id2
+  
+    ; don't really care that pit* aren't static because the background is only
+    ; set up once and it doesn't matter if the pointer becomes invalid.
+    call fill_with_border pitbg PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_FILL PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER
+    call gfx_set_tilemap_map pit_background_id pitbg
+    call fill_with_border pitflags PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH 0 0 TILEMAP_HFLIP_MASK TILEMAP_ROTATE_90 0 TILEMAP_ROTATE_90 TILEMAP_VFLIP_MASK 0 TILEMAP_BFLIP_MASK
+    call gfx_set_tilemap_attr_flags pit_background_id pitflags
+    call fill_with_border pitcolormod PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH C_W C_W C_W C_W C_PIT_FILL C_W C_W C_W C_W
+    call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
+    call gfx_update_tilemap pit_background_id
+    
     move xpos 0
     move ypos 0
 
     move temp PIT_SIZE
     sub  temp 1
+    move temp:2 PIECEINFO_PIECES
+    add  temp:2 1
     label pitfill
         move temp:1 get_random
-        mod  temp:1 PIECEINFO_PIECES
-        add  temp:1 1
+        mod  temp:1 temp:2
         move pit:temp temp:1
         
         sub temp 1
     jumpg pitfill
     jumpz pitfill
+
+    ; update the whole pit
+    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
+
+    call update_scale
 ret
 
-expr CHANGE_RATE 500
-static curpiece 0
+expr   INITIAL_CHANGE_RATE 500
+static change_rate INITIAL_CHANGE_RATE
+static curpiece 1
 static currotation 0
-static nextTick CHANGE_RATE
+static nextTick INITIAL_CHANGE_RATE
 static xpos
 static ypos
 
 proc frame
     local curTick
 
-    call draw_pit block_layer_id 200 0
+    call draw_pit
     call draw_piece block_layer_id curpiece currotation 100 100
 
     move curTick get_ticks
-    div  curTick CHANGE_RATE
-    mul  curTick CHANGE_RATE
+    div  curTick change_rate
+    mul  curTick change_rate
     cmp  curTick nextTick
     jumpl end
     move nextTick curTick
-    add  nextTick CHANGE_RATE
+    add  nextTick change_rate
     add  curpiece 1
     cmp  curpiece PIECEINFO_PIECES
     jumpl end
-    move curpiece 0
+    jumpz end
+    move curpiece 1
     add  currotation 1
     cmp  currotation PIECEINFO_ROTATIONS
     jumpl end
@@ -282,6 +527,33 @@ proc frame
     label end
 ret
 
+static fullscreen 0
+
 proc event
+    cmp event_get_type INPUT_TYPE_KEYDOWN
+    jumpn end
+    cmp event_get_button INPUT_KEY_f
+    jumpz toggle_fullscreen
+    cmp event_get_button INPUT_KEY_q
+    jumpz quit
+    jump end
+
+    label toggle_fullscreen
+    cmp fullscreen 0
+    jumpz fullscreen
+    move gfx_set_video_mode videomode
+    move fullscreen 0
+    jump videoend
+    label fullscreen
+    move gfx_set_video_mode fullscreenstr
+    move fullscreen 1
+    label videoend
+    call update_scale
+    jump end
+
+    label quit
+    move set_running 0
+
+    label end
 ret
 
