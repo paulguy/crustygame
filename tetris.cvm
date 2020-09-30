@@ -1,5 +1,21 @@
 include crustygame.inc
+include fills.inc
+include videomode.inc
 binclude gfx ints "tetris.crsg"
+
+macro SET_VIDEO_MODE
+    static videomode string VIDEOMODE
+    expr VIDEO_MODE_SET 1
+endmacro SET_VIDEO_MODE
+
+macro SET_DEFAULT_VIDEO_MODE
+    static videomode string "640x480"
+endmacro SET_DEFAULT_VIDEO_MODE
+
+if VIDEOMODE SET_VIDEO_MODE
+expr VIDEO_MODE_NOT_SET "VIDEO_MODE_SET ^ 1"
+if VIDEO_MODE_NOT_SET SET_DEFAULT_VIDEO_MODE
+
 expr TILE_SIDE 16
 
 expr SCREEN_WIDTH 640
@@ -12,9 +28,6 @@ macro RESCALE_POS XPOS YPOS
     add XPOS global_offset:0
     add YPOS global_offset:1
 endmacro RESCALE_POS
-
-static NL string "\n"
-static SPC string " "
 
 static pieces ints "\
 1 1 1 \
@@ -152,19 +165,6 @@ static PIECE_COLORMOD ints "0 0 0 0 \
                             C_B C_LB C_W 0 \
                             C_O C_LO C_W 0"
 
-macro DRAW_BLOCK LAYERID POSITION WINDOW
-    move gfx_set_layer_pos:LAYERID POSITION
-    move WINDOW:0 0
-    move gfx_set_layer_scroll_pos:LAYERID WINDOW
-    move gfx_draw_layer LAYERID
-    add  WINDOW:0 TILE_SIDE
-    move gfx_set_layer_scroll_pos:LAYERID WINDOW
-    move gfx_draw_layer LAYERID
-    add  WINDOW:0 TILE_SIDE
-    move gfx_set_layer_scroll_pos:LAYERID WINDOW
-    move gfx_draw_layer LAYERID
-endmacro DRAW_BLOCK
-
 proc populate_piece_values piece pos width height
     move pos    piece:PIECEINFO_OFFSET
     move width  piece:PIECEINFO_WIDTH
@@ -175,6 +175,46 @@ proc piece_would_collide piece rotation x y
 ret
 
 proc update_pit_map piece rotation x y
+    local pieceptr
+    local rotationptr
+    local piecex
+    local pos
+    local width
+    local height
+    local pitpos
+
+    ; copy values to locals to not mutate caller variables
+    move pieceptr piece
+    mul  pieceptr PIECEINFO_PIECE_SIZE
+    move rotationptr rotation
+    mul  rotationptr PIECEINFO_SIZE
+    add  pieceptr rotationptr
+    call populate_piece_values pieceinfo:pieceptr pos width height
+
+    ; initial pit position
+    move pitpos y
+    mul  pitpos PIT_WIDTH
+    add  pitpos x
+
+    label y
+        move piecex width
+
+        label x
+            cmp pieces:pos 0
+            jumpz no_update
+                move pit:pitpos piece
+            label no_update
+
+            add pos 1
+            add pitpos 1
+            sub piecex 1
+        jumpg x
+
+        ; advance to the next row of the pit
+        sub pitpos width
+        add pitpos PIT_WIDTH
+        sub height 1
+    jumpg y
 ret
 
 proc update_pit_tilemaps x y w h
@@ -182,30 +222,28 @@ proc update_pit_tilemaps x y w h
     local j
     local startptr
     local ptr
-    local pitval0
-    local pitval1
-    local pitval2
+    local pitval
 
     move startptr y
     mul  startptr PIT_WIDTH
     add  startptr x
 
+    move ptr startptr
     move j h
     label y
         move i w
         label x
-            move pitval0 pit:ptr
-            mul  pitval0 TILEMAP_WIDTH
-            move pitval1 pitval0
-            add  pitval1 1
-            move pitval2 pitval0
-            add  pitval2 2
-            move pit_map0_tiles:ptr PIECE_TILEMAP:pitval0
-            move pit_map0_colormod:ptr PIECE_COLORMOD:pitval0
-            move pit_map1_tiles:ptr PIECE_TILEMAP:pitval1
-            move pit_map1_colormod:ptr PIECE_COLORMOD:pitval1
-            move pit_map2_tiles:ptr PIECE_TILEMAP:pitval2
-            move pit_map2_colormod:ptr PIECE_COLORMOD:pitval2
+            move pitval pit:ptr
+            mul  pitval TILEMAP_WIDTH
+            move pit_map0_tiles:ptr PIECE_TILEMAP:pitval
+            move pit_map0_colormod:ptr PIECE_COLORMOD:pitval
+            add  pitval 1
+            move pit_map1_tiles:ptr PIECE_TILEMAP:pitval
+            move pit_map1_colormod:ptr PIECE_COLORMOD:pitval
+            add  pitval 1
+            move pit_map2_tiles:ptr PIECE_TILEMAP:pitval
+            move pit_map2_colormod:ptr PIECE_COLORMOD:pitval
+            sub  pitval 2
 
             add ptr 1
             sub i 1
@@ -227,24 +265,13 @@ proc update_pit_tilemaps x y w h
     call gfx_update_tilemap2 pit_tilemap_id2 x y w h
 ret
 
-proc draw_pit
-    move gfx_draw_layer pit_background_layer_id
-    move gfx_draw_layer pit_layer_id0
-    move gfx_draw_layer pit_layer_id1
-    move gfx_draw_layer pit_layer_id2
-ret
-
-proc draw_piece layer_id piece rotation x y
-    local scaledx
+proc update_pit_tilemaps_from_piece piece rotation x y
     local pieceptr
     local rotationptr
-    local piecex
     local pos
     local width
     local height
-    local window ints 2
-    local position ints 2
-    local scaled_tile
+
     ; copy values to locals to not mutate caller variables
     move pieceptr piece
     mul  pieceptr PIECEINFO_PIECE_SIZE
@@ -253,93 +280,98 @@ proc draw_piece layer_id piece rotation x y
     add  pieceptr rotationptr
     call populate_piece_values pieceinfo:pieceptr pos width height
 
+    call update_pit_tilemaps x y width height
+ret
+
+proc draw_pit
+    move gfx_draw_layer pit_background_layer_id
+    move gfx_draw_layer pit_layer_id0
+    move gfx_draw_layer pit_layer_id1
+    move gfx_draw_layer pit_layer_id2
+ret
+
+macro DRAW_BLOCK LAYERID POSITION WINDOW
+    move gfx_set_layer_pos:LAYERID POSITION
+    move WINDOW:0 0
+    move gfx_set_layer_scroll_pos:LAYERID WINDOW
+    move gfx_draw_layer LAYERID
+    add  WINDOW:0 TILE_SIDE
+    move gfx_set_layer_scroll_pos:LAYERID WINDOW
+    move gfx_draw_layer LAYERID
+    add  WINDOW:0 TILE_SIDE
+    move gfx_set_layer_scroll_pos:LAYERID WINDOW
+    move gfx_draw_layer LAYERID
+endmacro DRAW_BLOCK
+
+proc draw_piece layer_id piece rotation x y
+    local scaledx
+    local scaledy
+    local pieceptr
+    local rotationptr
+    local piecex
+    local pos
+    local width
+    local height
+    local window ints 2
+    local position floats "0.0 0.0"
+    local intPosition ints 2
+    local scaled_tile floats 0.0
+
+    ; copy values to locals to not mutate caller variables
+    move pieceptr piece
+    mul  pieceptr PIECEINFO_PIECE_SIZE
+    move rotationptr rotation
+    mul  rotationptr PIECEINFO_SIZE
+    add  pieceptr rotationptr
+    call populate_piece_values pieceinfo:pieceptr pos width height
+
+    ; initial tilemap position
     move window:1 piece
     mul  window:1 TILE_SIDE 
 
+    ; size of a tile in float which will be used to accumulate location
     move scaled_tile TILE_SIDE
     mul  scaled_tile global_scale
+
+    ; get the starting scaled position
     move scaledx x
     mul  scaledx global_scale
     add  scaledx global_offset:0
+    move scaledy y
+    mul  scaledy global_scale
+    add  scaledy global_offset:1
 
-    move position:1 y
-    mul  position:1 global_scale
-    add  position:1 global_offset:1
+    ; get initial y position
+    move position:1 scaledy
+ 
     label y
+        ; copy in to a storage useful by gfx
+        move intPosition:1 position:1
+
+        ; get initial x position
         move position:0 scaledx
         move piecex width
         label x
             cmp pieces:pos 0
             jumpz nodraw
 
-            DRAW_BLOCK layer_id position window
+            ; copy to an int to be useful by gfx
+            move intPosition:0 position:0
+            DRAW_BLOCK layer_id intPosition window
 
             label nodraw
 
+            ; advance table pointer
             add pos 1
+            ; calculate next x position
             add position:0 scaled_tile
             sub piecex 1
         jumpg x
+
+        ; calculate next y position
         add position:1 scaled_tile
         sub height 1
     jumpg y 
-ret
-
-proc fill buffer w h stride val
-    local ptr 0
-    local x 0
-    local y
-
-    move y h
-    label y
-        move x w
-        label x
-            move buffer:ptr val
-            add ptr 1
-            sub x 1
-        jumpg x
-        sub ptr w
-        add ptr stride
-        sub y 1
-    jumpg y
-ret
-
-proc fill_with_border buffer width height stride topleft top topright left center right bottomleft bottom bottomright
-    local temp
-    local innerWidth
-    local innerHeight
-    ; make a border and filled background
-    move innerWidth width
-    sub  innerWidth 2
-    move innerHeight height
-    sub  innerHeight 2
-
-    ; top row
-    move buffer:0 topleft
-    call fill buffer:1 innerWidth 1 innerWidth top
-    move temp width
-    sub  temp 1
-    move buffer:temp topright
-    ; left edge
-    call fill buffer:stride 1 innerHeight stride left
-    ; fill
-    move temp stride
-    add  temp 1
-    call fill buffer:temp innerWidth innerHeight stride center
-    ; right edge
-    move temp stride
-    mul  temp 2
-    sub  temp 1
-    call fill buffer:temp 1 innerHeight stride right
-    ; bottom row
-    move temp stride
-    mul  temp innerHeight
-    add  temp stride
-    move buffer:temp bottomleft
-    add  temp 1
-    call fill buffer:temp innerWidth 1 innerWidth bottom
-    add  temp innerWidth
-    move buffer:temp bottomright
 ret
 
 static gfx_id
@@ -357,20 +389,6 @@ static window_background_id
 static window_background_layer_id
 static global_scale floats "0.0 0.0"
 static global_offset ints 2
-static fullscreenstr string "fullscreen"
-
-macro SET_VIDEO_MODE
-    static videomode string VIDEOMODE
-    expr VIDEO_MODE_SET 1
-endmacro SET_VIDEO_MODE
-
-macro SET_DEFAULT_VIDEO_MODE
-    static videomode string "640x480"
-endmacro SET_DEFAULT_VIDEO_MODE
-
-if VIDEOMODE SET_VIDEO_MODE
-expr VIDEO_MODE_NOT_SET "VIDEO_MODE_SET ^ 1"
-if VIDEO_MODE_NOT_SET SET_DEFAULT_VIDEO_MODE
 
 expr OBJ_ID   0
 expr OBJ_X    1
@@ -503,7 +521,7 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local rowcolormod ints SCREEN_TILES_WIDTH
 
-    move gfx_set_video_mode videomode
+    call set_video_mode videomode
 
     move temp:0 gfx:CRSG_OFFSET_WIDTH
     mul  temp:0 TILEMAP_PIXEL_BYTES
@@ -565,19 +583,6 @@ proc init
     move xpos 0
     move ypos 0
 
-    move temp PIT_SIZE
-    sub  temp 1
-    move temp:2 PIECEINFO_PIECES
-    add  temp:2 1
-    label pitfill
-        move temp:1 get_random
-        mod  temp:1 temp:2
-        move pit:temp temp:1
-        
-        sub temp 1
-    jumpg pitfill
-    jumpz pitfill
-
     ; update the whole pit
     call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
 
@@ -589,11 +594,62 @@ static change_rate INITIAL_CHANGE_RATE
 static curpiece 1
 static currotation 0
 static nextTick INITIAL_CHANGE_RATE
+static nextSecond 0
+static fps
 static xpos
 static ypos
 
 proc frame
     local curTick
+    local piece
+    local rotation
+    local pieceptr
+    local rotationptr
+    local width
+    local height
+    local pos
+    local maxx
+    local maxy
+    local x
+    local y
+
+    cmp get_ticks nextSecond
+    jumpl fps_continue
+    move nextSecond get_ticks
+    add  nextSecond 1000    
+    move out fps
+    move out NL
+    move fps 0
+
+    label fps_continue
+    add fps 1
+
+    move piece get_random
+    mod  piece PIECEINFO_PIECES
+    add  piece 1
+    move rotation get_random
+    mod  rotation PIECEINFO_ROTATIONS
+
+    move pieceptr piece
+    mul  pieceptr PIECEINFO_PIECE_SIZE
+    move rotationptr rotation
+    mul  rotationptr PIECEINFO_SIZE
+    add  pieceptr rotationptr
+    call populate_piece_values pieceinfo:pieceptr pos width height
+
+    move maxx PIT_WIDTH
+    sub  maxx width
+    add  maxx 1
+    move maxy PIT_HEIGHT
+    sub  maxy height
+    add  maxy 1
+    move x get_random
+    mod  x maxx
+    move y get_random
+    mod  y maxy
+
+    call update_pit_map piece rotation x y
+    call update_pit_tilemaps_from_piece piece rotation x y
 
     move gfx_draw_layer window_background_layer_id
     call draw_pit
@@ -619,8 +675,6 @@ proc frame
     label end
 ret
 
-static fullscreen 0
-
 proc event
     cmp event_get_type INPUT_TYPE_KEYDOWN
     jumpn end
@@ -631,15 +685,7 @@ proc event
     jump end
 
     label toggle_fullscreen
-    cmp fullscreen 0
-    jumpz fullscreen
-    move gfx_set_video_mode videomode
-    move fullscreen 0
-    jump videoend
-    label fullscreen
-    move gfx_set_video_mode fullscreenstr
-    move fullscreen 1
-    label videoend
+    call toggle_fullscreen
     call update_scale
     jump end
 

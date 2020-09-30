@@ -464,7 +464,7 @@ int tilemap_set_tilemap_map(LayerList *ll,
         h = ll->tilemap[index].h;
     }
 
-    if(((h - 1) * pitch) + w < size / sizeof(unsigned int)) {
+    if((((h - 1) * pitch) + w) > size) {
         LOG_PRINTF(ll, "Buffer too small to hold tilemap.\n");
         return(-1);
     }
@@ -480,8 +480,8 @@ int tilemap_set_tilemap_map(LayerList *ll,
         return(-1);
     }
 
-    for(i = y; i < y + h; i++) {
-        memcpy(&(ll->tilemap[index].map[ll->tilemap[index].w * i + x]),
+    for(i = 0; i < h; i++) {
+        memcpy(&(ll->tilemap[index].map[ll->tilemap[index].w * (y + i) + x]),
                &(value[(pitch * i)]),
                sizeof(unsigned int) * w); 
     }
@@ -518,7 +518,7 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
         h = ll->tilemap[index].h;
     }
 
-    if(((h - 1) * pitch) + w < size / sizeof(unsigned int)) {
+    if(((h - 1) * pitch) + w > size) {
         LOG_PRINTF(ll, "Buffer too small to hold tilemap.\n");
         return(-1);
     }
@@ -548,8 +548,8 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
                sizeof(unsigned int) * w * h);
     }
  
-    for(i = y; i < y + h; i++) {
-        memcpy(&(ll->tilemap[index].attr_flags[ll->tilemap[index].w * i + x]),
+    for(i = 0; i < h; i++) {
+        memcpy(&(ll->tilemap[index].attr_flags[ll->tilemap[index].w * (y + i) + x]),
                &(value[(pitch * i)]),
                sizeof(unsigned int) * w); 
     }
@@ -586,7 +586,7 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
         h = ll->tilemap[index].h;
     }
 
-    if(((h - 1) * pitch) + w < size / sizeof(unsigned int)) {
+    if(((h - 1) * pitch) + w > size) {
         LOG_PRINTF(ll, "Buffer too small to hold tilemap.\n");
         return(-1);
     }
@@ -616,8 +616,8 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                sizeof(unsigned int) * w * h);
     }
  
-    for(i = y; i < y + h; i++) {
-        memcpy(&(ll->tilemap[index].attr_colormod[ll->tilemap[index].w * i + x]),
+    for(i = 0; i < h; i++) {
+        memcpy(&(ll->tilemap[index].attr_colormod[ll->tilemap[index].w * (y + i) + x]),
                &(value[(pitch * i)]),
                sizeof(unsigned int) * w); 
     }
@@ -699,7 +699,7 @@ int tilemap_update_tilemap(LayerList *ll,
         LOG_PRINTF(ll, "Failed to set render draw color.\n");
         return(-1);
     }
-    dest.x = x; dest.y = y;
+    dest.x = x * tileset->tw; dest.y = y * tileset->th;
     dest.w = w * tileset->tw; dest.h = h * tileset->th;
     if(SDL_RenderFillRect(ll->renderer, &dest) < 0) {
         LOG_PRINTF(ll, "Failed to clear region.\n");
@@ -716,7 +716,7 @@ int tilemap_update_tilemap(LayerList *ll,
             src.x = tilemap->map[tilemap->w * j + i];
             /* check to see if index is within tileset */
             if(src.x > tileset->max) {
-                LOG_PRINTF(ll, "Tilemap index beyond tileset.\n");
+                LOG_PRINTF(ll, "Tilemap index beyond tileset: %u\n", src.x);
                 return(-1);
             }
             /* calculate the source texture coords and render */

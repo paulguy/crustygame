@@ -234,18 +234,13 @@ int gfx_set_tilemap_map(void *priv,
         return(-1);
     }
 
-    if(((h - 1) * pitch) + w > state->size / sizeof(unsigned int)) {
-        fprintf(stderr, "Buffer too small to hold tilemap.\n");
-        return(-1);
-    }
-
     return(tilemap_set_tilemap_map(state->ll,
                                    index,
                                    x, y,
                                    pitch,
                                    w, h,
                                    (unsigned int *)(state->buffer),
-                                   state->size));
+                                   state->size / sizeof(unsigned int)));
 }
 
 int gfx_set_tilemap_attr_flags(void *priv,
@@ -276,7 +271,7 @@ int gfx_set_tilemap_attr_flags(void *priv,
                                           pitch,
                                           w, h,
                                           (unsigned int *)(state->buffer),
-                                          state->size));
+                                          state->size / sizeof(unsigned int)));
 }
 
 int gfx_set_tilemap_attr_colormod(void *priv,
@@ -307,7 +302,7 @@ int gfx_set_tilemap_attr_colormod(void *priv,
                                              pitch,
                                              w, h,
                                              (unsigned int *)(state->buffer),
-                                             state->size));
+                                             state->size / sizeof(unsigned int)));
 }
 
 int gfx_update_tilemap(void *priv,

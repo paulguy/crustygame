@@ -1,3 +1,7 @@
+; useful for printing debug/error strings
+static SPC string " "
+static NL  string "\n"
+
 expr TILEMAP_PIXEL_BYTES 4
 
 expr TILEMAP_BMASK  0xFF000000
