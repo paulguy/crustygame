@@ -439,9 +439,9 @@ int tilemap_set_tilemap_map(LayerList *ll,
                             unsigned int index,
                             unsigned int x,
                             unsigned int y,
-                            unsigned int pitch,
-                            unsigned int w,
-                            unsigned int h,
+                            int pitch,
+                            int w,
+                            int h,
                             unsigned int *value,
                             unsigned int size) {
     unsigned int i;
@@ -452,14 +452,15 @@ int tilemap_set_tilemap_map(LayerList *ll,
         LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
         return(-1);
     }
-    /* Allow passing in 0s to be filled in for the whole map size */
-    if(pitch == 0) {
+    /* Allow passing in 0s to be filled in for the whole map size, allow a
+     * 0 pitch to be specified to copy the same row over each line */
+    if(pitch < 0) {
         pitch = ll->tilemap[index].w;
     }
-    if(w == 0) {
+    if(w <= 0) {
         w = ll->tilemap[index].w;
     }
-    if(h == 0) {
+    if(h <= 0) {
         h = ll->tilemap[index].h;
     }
 
@@ -481,7 +482,7 @@ int tilemap_set_tilemap_map(LayerList *ll,
 
     for(i = y; i < y + h; i++) {
         memcpy(&(ll->tilemap[index].map[ll->tilemap[index].w * i + x]),
-               &(value[(pitch * i) + x]),
+               &(value[(pitch * i)]),
                sizeof(unsigned int) * w); 
     }
 
@@ -492,9 +493,9 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
                                    unsigned int index,
                                    unsigned int x,
                                    unsigned int y,
-                                   unsigned int pitch,
-                                   unsigned int w,
-                                   unsigned int h,
+                                   int pitch,
+                                   int w,
+                                   int h,
                                    unsigned int *value,
                                    unsigned int size) {
     unsigned int i;
@@ -505,14 +506,15 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
         LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
         return(-1);
     }
-    /* Allow passing in 0s to be filled in for the whole map size */
-    if(pitch == 0) {
+    /* Allow passing in 0s to be filled in for the whole map size, allow a
+     * 0 pitch to be specified to copy the same row over each line */
+    if(pitch < 0) {
         pitch = ll->tilemap[index].w;
     }
-    if(w == 0) {
+    if(w <= 0) {
         w = ll->tilemap[index].w;
     }
-    if(h == 0) {
+    if(h <= 0) {
         h = ll->tilemap[index].h;
     }
 
@@ -548,7 +550,7 @@ int tilemap_set_tilemap_attr_flags(LayerList *ll,
  
     for(i = y; i < y + h; i++) {
         memcpy(&(ll->tilemap[index].attr_flags[ll->tilemap[index].w * i + x]),
-               &(value[(pitch * i) + x]),
+               &(value[(pitch * i)]),
                sizeof(unsigned int) * w); 
     }
 
@@ -559,9 +561,9 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       unsigned int index,
                                       unsigned int x,
                                       unsigned int y,
-                                      unsigned int pitch,
-                                      unsigned int w,
-                                      unsigned int h,
+                                      int pitch,
+                                      int w,
+                                      int h,
                                       unsigned int *value,
                                       unsigned int size) {
     unsigned int i;
@@ -572,14 +574,15 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
         LOG_PRINTF(ll, "Invalid tilemap index %u.\n", index);
         return(-1);
     }
-    /* Allow passing in 0s to be filled in for the whole map size */
-    if(pitch == 0) {
+    /* Allow passing in 0s to be filled in for the whole map size, allow a
+     * 0 pitch to be specified to copy the same row over each line */
+    if(pitch < 0) {
         pitch = ll->tilemap[index].w;
     }
-    if(w == 0) {
+    if(w <= 0) {
         w = ll->tilemap[index].w;
     }
-    if(h == 0) {
+    if(h <= 0) {
         h = ll->tilemap[index].h;
     }
 
@@ -615,7 +618,7 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
  
     for(i = y; i < y + h; i++) {
         memcpy(&(ll->tilemap[index].attr_colormod[ll->tilemap[index].w * i + x]),
-               &(value[(pitch * i) + x]),
+               &(value[(pitch * i)]),
                sizeof(unsigned int) * w); 
     }
 

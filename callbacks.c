@@ -36,7 +36,7 @@ int write_to(void *priv,
             fprintf(out, "%d", *(int *)ptr);
             break;
         case CRUSTY_TYPE_FLOAT:
-            fprintf(out, "%g", *(float *)ptr);
+            fprintf(out, "%g", *(double *)ptr);
             break;
         default:
             fprintf(stderr, "Unknown type for printing.\n");
@@ -229,7 +229,7 @@ int gfx_set_tilemap_map(void *priv,
     x = buf[0]; y = buf[1]; pitch = buf[2];
     w = buf[3]; h = buf[4];
 
-    if(x < 0 || y < 0 || pitch < 0 || w < 0 || h < 0) {
+    if(x < 0 || y < 0) {
         fprintf(stderr, "Value out of range.\n");
         return(-1);
     }
@@ -265,7 +265,7 @@ int gfx_set_tilemap_attr_flags(void *priv,
     x = buf[0]; y = buf[1]; pitch = buf[2];
     w = buf[3]; h = buf[4];
 
-    if(x < 0 || y < 0 || pitch < 0 || w < 0 || h < 0) {
+    if(x < 0 || y < 0) {
         fprintf(stderr, "Value out of range.\n");
         return(-1);
     }
@@ -296,7 +296,7 @@ int gfx_set_tilemap_attr_colormod(void *priv,
     x = buf[0]; y = buf[1]; pitch = buf[2];
     w = buf[3]; h = buf[4];
 
-    if(x < 0 || y < 0 || pitch < 0 || w < 0 || h < 0) {
+    if(x < 0 || y < 0) {
         fprintf(stderr, "Value out of range.\n");
         return(-1);
     }
