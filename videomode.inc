@@ -4,9 +4,11 @@ static _videomodestrptr
 static _fullscreen 0
 static _videomode_error string "Video mode string too large: "
 
-proc set_video_mode videomode
+proc set_video_mode mode_ok videomode
     local i 0
     local ptr
+    
+    move mode_ok 1
 
     ; find pointer and determine if it's too big to store
     move ptr _videomode:
@@ -29,6 +31,7 @@ proc set_video_mode videomode
 
     jump end
     label too_large
+    move mode_ok 0
     move string_out _videomode_error
     move string_out videomode
     move out NL

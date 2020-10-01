@@ -1,7 +1,12 @@
 include crustygame.inc
 include fills.inc
 include videomode.inc
+include timers.inc
 binclude gfx ints "tetris.crsg"
+
+expr INITIAL_CHANGE_RATE 500
+expr INPUT_RATE 50
+expr TAP_DELAY 2
 
 macro SET_VIDEO_MODE
     static videomode string VIDEOMODE
@@ -29,54 +34,55 @@ macro RESCALE_POS XPOS YPOS
     add YPOS global_offset:1
 endmacro RESCALE_POS
 
+; assure collision masking works.
 static pieces ints "\
-1 1 1 \
-0 1 0 \
-0 1 \
-1 1 \
-0 1 \
-0 1 0 \
-1 1 1 \
-1 0 \
-1 1 \
-1 0 \
-1 1 1 \
-0 0 1 \
-0 1 \
-0 1 \
-1 1 \
-1 0 0 \
-1 1 1 \
-1 1 \
-1 0 \
-1 0 \
-1 1 0 \
-0 1 1 \
-0 1 \
-1 1 \
-1 0 \
-1 1 \
-1 1 \
-0 1 1 \
-1 1 0 \
-1 0 \
-1 1 \
-0 1 \
-1 1 1 \
-1 0 0 \
-1 1 \
-0 1 \
-0 1 \
-0 0 1 \
-1 1 1 \
-1 0 \
-1 0 \
-1 1 \
-1 \
-1 \
-1 \
-1 \
-1 1 1 1"
+255 255 255 \
+0   255 0 \
+0   255 \
+255 255 \
+0   255 \
+0   255 0 \
+255 255 255 \
+255 0 \
+255 255 \
+255 0 \
+255 255 255 \
+0   0   255 \
+0   255 \
+0   255 \
+255 255 \
+255 0   0 \
+255 255 255 \
+255 255 \
+255 0 \
+255 0 \
+255 255 0 \
+0   255 255 \
+0   255 \
+255 255 \
+255 0 \
+255 255 \
+255 255 \
+0   255 255 \
+255 255 0 \
+255 0 \
+255 255 \
+0   255 \
+255 255 255 \
+255 0   0 \
+255 255 \
+0   255 \
+0   255 \
+0   0   255 \
+255 255 255 \
+255 0 \
+255 0 \
+255 255 \
+255 \
+255 \
+255 \
+255 \
+255 255 255 255"
 expr PIECEINFO_PIECES    7
 expr PIECEINFO_ROTATIONS 4
 expr PIECEINFO_OFFSET 0
@@ -114,20 +120,6 @@ expr PIT_TILE_FILL   3
 TILEMAP_COLOR PIT_FILL 160 160 160 127
 expr CLEAR_TILE      15
 expr SOLID_TILE      0
-
-macro GET_PIT RESULT XPOS YPOS
-    move RESULT YPOS
-    mul  RESULT PIT_WIDTH
-    add  RESULT XPOS
-    move RESULT pit:RESULT
-endmacro GET_PIT
-
-macro PUT_PIT TEMP VALUE XPOS YPOS
-    move TEMP XPOS
-    mul  TEMP PIT_WIDTH
-    add  TEMP YPOS
-    move pit:TEMP VALUE
-endmacro PUT_PIT
 
 static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
                            0 1 2 0 \
@@ -170,18 +162,10 @@ proc populate_piece_values piece pos width height
     move width  piece:PIECEINFO_WIDTH
     move height piece:PIECEINFO_HEIGHT
 ret
- 
-proc piece_would_collide piece rotation x y
-ret
 
-proc update_pit_map piece rotation x y
+proc populate_piece_values2 piece rotation pos width height
     local pieceptr
     local rotationptr
-    local piecex
-    local pos
-    local width
-    local height
-    local pitpos
 
     ; copy values to locals to not mutate caller variables
     move pieceptr piece
@@ -190,6 +174,71 @@ proc update_pit_map piece rotation x y
     mul  rotationptr PIECEINFO_SIZE
     add  pieceptr rotationptr
     call populate_piece_values pieceinfo:pieceptr pos width height
+ret
+ 
+proc piece_would_collide collided piece rotation x y
+    local piecex
+    local pos
+    local width
+    local height
+    local pitpos
+    local block
+    local maxx
+    local maxy
+
+    call populate_piece_values2 piece rotation pos width height
+
+    move collided 1
+    cmp x 0
+    jumpl collision
+    move maxx PIT_WIDTH
+    sub  maxx width
+    cmp  x    maxx
+    jumpg collision
+    move maxy PIT_HEIGHT
+    sub  maxy height
+    cmp  y    maxy
+    jumpg collision
+    move collided 0
+
+    ; initial pit position
+    move pitpos y
+    mul  pitpos PIT_WIDTH
+    add  pitpos x
+
+    label y
+        move piecex width
+
+        label x
+            move block pieces:pos
+            move collided pit:pitpos
+            and  collided block
+            jumpz no_collision
+            ; collided will be non-zero
+            jump collision
+            label no_collision
+
+            add pos 1
+            add pitpos 1
+            sub piecex 1
+        jumpg x
+
+        sub pitpos width
+        add pitpos PIT_WIDTH
+        sub height 1
+    jumpg y
+
+    label collision
+ret
+
+proc update_pit_map piece rotation x y
+    local piecex
+    local pos
+    local width
+    local height
+    local pitpos
+
+    call populate_piece_values2 piece rotation pos width height
 
     ; initial pit position
     move pitpos y
@@ -266,20 +315,11 @@ proc update_pit_tilemaps x y w h
 ret
 
 proc update_pit_tilemaps_from_piece piece rotation x y
-    local pieceptr
-    local rotationptr
     local pos
     local width
     local height
 
-    ; copy values to locals to not mutate caller variables
-    move pieceptr piece
-    mul  pieceptr PIECEINFO_PIECE_SIZE
-    move rotationptr rotation
-    mul  rotationptr PIECEINFO_SIZE
-    add  pieceptr rotationptr
-    call populate_piece_values pieceinfo:pieceptr pos width height
-
+    call populate_piece_values2 piece rotation pos width height
     call update_pit_tilemaps x y width height
 ret
 
@@ -290,24 +330,9 @@ proc draw_pit
     move gfx_draw_layer pit_layer_id2
 ret
 
-macro DRAW_BLOCK LAYERID POSITION WINDOW
-    move gfx_set_layer_pos:LAYERID POSITION
-    move WINDOW:0 0
-    move gfx_set_layer_scroll_pos:LAYERID WINDOW
-    move gfx_draw_layer LAYERID
-    add  WINDOW:0 TILE_SIDE
-    move gfx_set_layer_scroll_pos:LAYERID WINDOW
-    move gfx_draw_layer LAYERID
-    add  WINDOW:0 TILE_SIDE
-    move gfx_set_layer_scroll_pos:LAYERID WINDOW
-    move gfx_draw_layer LAYERID
-endmacro DRAW_BLOCK
-
 proc draw_piece layer_id piece rotation x y
     local scaledx
     local scaledy
-    local pieceptr
-    local rotationptr
     local piecex
     local pos
     local width
@@ -317,13 +342,7 @@ proc draw_piece layer_id piece rotation x y
     local intPosition ints 2
     local scaled_tile floats 0.0
 
-    ; copy values to locals to not mutate caller variables
-    move pieceptr piece
-    mul  pieceptr PIECEINFO_PIECE_SIZE
-    move rotationptr rotation
-    mul  rotationptr PIECEINFO_SIZE
-    add  pieceptr rotationptr
-    call populate_piece_values pieceinfo:pieceptr pos width height
+    call populate_piece_values2 piece rotation pos width height
 
     ; initial tilemap position
     move window:1 piece
@@ -357,8 +376,16 @@ proc draw_piece layer_id piece rotation x y
 
             ; copy to an int to be useful by gfx
             move intPosition:0 position:0
-            DRAW_BLOCK layer_id intPosition window
-
+            move gfx_set_layer_pos:layer_id intPosition
+            move window:0 0
+            move gfx_set_layer_scroll_pos:layer_id window
+            move gfx_draw_layer layer_id
+            add  window:0 TILE_SIDE
+            move gfx_set_layer_scroll_pos:layer_id window
+            move gfx_draw_layer layer_id
+            add  window:0 TILE_SIDE
+            move gfx_set_layer_scroll_pos:layer_id window
+            move gfx_draw_layer layer_id
             label nodraw
 
             ; advance table pointer
@@ -448,7 +475,11 @@ proc update_obj_scales
         call do_update_obj_scale objects:objptr
         sub objptr OBJ_SIZE
     jumpg loop
+    jumpz loop
 ret
+
+static pitxpos
+static pitypos
 
 proc update_scale
     local tempf floats "0.0 0.0 0.0 0.0"
@@ -500,17 +531,22 @@ proc update_scale
     move tempf:3 tempf:1
     sub  tempf:2 TILE_SIDE
     sub  tempf:3 TILE_SIDE
-    move temp:0 tempf:0
-    move temp:1 tempf:1
-    call set_obj_pos PIT0_OBJ temp:0 temp:1
-    call set_obj_pos PIT1_OBJ temp:0 temp:1
-    call set_obj_pos PIT2_OBJ temp:0 temp:1
+    move pitxpos tempf:0
+    move pitypos tempf:1
+    call set_obj_pos PIT0_OBJ pitxpos pitypos
+    call set_obj_pos PIT1_OBJ pitxpos pitypos
+    call set_obj_pos PIT2_OBJ pitxpos pitypos
     move temp:0 tempf:2
     move temp:1 tempf:3
     call set_obj_pos PIT_BG_OBJ temp:0 temp:1
 
     call update_obj_scales
 ret
+
+static change_rate INITIAL_CHANGE_RATE
+expr FPS_TIMER_ID 0
+expr PIECE_TIMER_ID 1
+expr INPUT_TIMER_ID 2
 
 proc init
     local temp ints 4
@@ -521,7 +557,12 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local rowcolormod ints SCREEN_TILES_WIDTH
 
-    call set_video_mode videomode
+    call set_video_mode temp videomode
+    cmp temp 0
+    jumpn mode_ok
+    move set_running 0
+    jump end
+    label mode_ok
 
     move temp:0 gfx:CRSG_OFFSET_WIDTH
     mul  temp:0 TILEMAP_PIXEL_BYTES
@@ -537,11 +578,9 @@ proc init
     move temp:0 TILE_SIDE
     move temp:1 TILE_SIDE
     move gfx_set_layer_window:block_layer_id temp
-    move temp:0 PIT_BG_WIDTH
-    move temp:1 PIT_BG_HEIGHT
-    call gfx_add_tilemap temp:0 temp:1 pit_background_id
+    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_background_id
     move gfx_set_tilemap_tileset:pit_background_id gfx_id
-    call gfx_add_layer pit_background_layer_id pit_background_id
+    call gfx_add_layer pit_background_id pit_background_layer_id
     call set_obj_id PIT_BG_OBJ pit_background_layer_id
 
     call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
@@ -562,9 +601,9 @@ proc init
     call fill_with_border pitbg PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_FILL PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER
     call gfx_set_tilemap_map pit_background_id pitbg
     call fill_with_border pitflags PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH 0 0 TILEMAP_HFLIP_MASK TILEMAP_ROTATE_90 0 TILEMAP_ROTATE_90 TILEMAP_VFLIP_MASK 0 TILEMAP_BFLIP_MASK
-    ;call gfx_set_tilemap_attr_flags pit_background_id pitflags
+    call gfx_set_tilemap_attr_flags pit_background_id pitflags
     call fill_with_border pitcolormod PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH C_W C_W C_W C_W C_PIT_FILL C_W C_W C_W C_W
-    ;call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
+    call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
     call gfx_update_tilemap pit_background_id
     
     call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
@@ -580,31 +619,36 @@ proc init
     call gfx_set_tilemap_attr_colormod3 window_background_id rowcolormod 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
     call gfx_update_tilemap window_background_id
     
-    move xpos 0
-    move ypos 0
-
     ; update the whole pit
     call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
 
     call update_scale
+
+    call set_timer_rate FPS_TIMER_ID 1000
+    call set_timer_rate PIECE_TIMER_ID change_rate
+    call set_timer_rate INPUT_TIMER_ID INPUT_RATE
+    label end
 ret
 
-expr   INITIAL_CHANGE_RATE 500
-static change_rate INITIAL_CHANGE_RATE
-static curpiece 1
-static currotation 0
-static nextTick INITIAL_CHANGE_RATE
-static nextSecond 0
 static fps
-static xpos
-static ypos
 
-proc frame
-    local curTick
+proc count_fps
+    local elapsed
+
+    call check_timer elapsed FPS_TIMER_ID
+    cmp elapsed 0
+    jumpz fps_continue
+    move err fps
+    move err NL
+    move fps 0
+
+    label fps_continue
+    add fps 1
+ret
+
+proc pit_effect
     local piece
     local rotation
-    local pieceptr
-    local rotationptr
     local width
     local height
     local pos
@@ -613,29 +657,13 @@ proc frame
     local x
     local y
 
-    cmp get_ticks nextSecond
-    jumpl fps_continue
-    move nextSecond get_ticks
-    add  nextSecond 1000    
-    move out fps
-    move out NL
-    move fps 0
-
-    label fps_continue
-    add fps 1
-
     move piece get_random
     mod  piece PIECEINFO_PIECES
     add  piece 1
     move rotation get_random
     mod  rotation PIECEINFO_ROTATIONS
 
-    move pieceptr piece
-    mul  pieceptr PIECEINFO_PIECE_SIZE
-    move rotationptr rotation
-    mul  rotationptr PIECEINFO_SIZE
-    add  pieceptr rotationptr
-    call populate_piece_values pieceinfo:pieceptr pos width height
+    call populate_piece_values2 piece rotation pos width height
 
     move maxx PIT_WIDTH
     sub  maxx width
@@ -650,48 +678,226 @@ proc frame
 
     call update_pit_map piece rotation x y
     call update_pit_tilemaps_from_piece piece rotation x y
+ret
 
-    move gfx_draw_layer window_background_layer_id
-    call draw_pit
-    call draw_piece block_layer_id curpiece currotation 100 100
+static curpiece 0
+static currotation
+static xpos 0
+static ypos 0
+static move 0
+static tapped 0
+static held 0
+static fall 0
 
-    move curTick get_ticks
-    div  curTick change_rate
-    mul  curTick change_rate
-    cmp  curTick nextTick
-    jumpl end
-    move nextTick curTick
-    add  nextTick change_rate
-    add  curpiece 1
-    cmp  curpiece PIECEINFO_PIECES
-    jumpl end
-    jumpz end
-    move curpiece 1
-    add  currotation 1
-    cmp  currotation PIECEINFO_ROTATIONS
-    jumpl end
-    move currotation 0
+proc frame
+    local curTick
+    local width
+    local height
+    local pos
+    local x
+    local y
+    local collided
+    local elapsed
+    local do_fall 0
+    local do_move 0
+
+;    call count_fps
+
+    cmp curpiece 0
+    jumpn have_piece
+        move curpiece get_random
+        mod  curpiece PIECEINFO_PIECES
+        add  curpiece 1
+        move currotation 0
+        move ypos 0
+        call populate_piece_values2 curpiece currotation pos width height
+        move xpos PIT_WIDTH
+        sub  xpos width
+        div  xpos 2
+    label have_piece
+
+    call check_timer elapsed PIECE_TIMER_ID
+    cmp elapsed 0
+    jumpz check_input
+    move do_fall 1
+
+    label check_input
+    call check_timer elapsed INPUT_TIMER_ID
+    cmp elapsed 0
+    jumpz check_do_fall
+
+    cmp move 0
+    jumpl tap_left
+    jumpg tap_right
+    jump check_held
+
+    label tap_left
+        move do_move -1
+        move tapped TAP_DELAY
+        add move 1
+    jump check_fall
+
+    label tap_right
+        move do_move 1
+        move tapped TAP_DELAY
+        sub move 1
+    jump check_fall
+
+    label check_held
+        cmp tapped 0
+        jumpn tapped
+        move do_move held
+    jump check_fall
+
+    label tapped
+        sub tapped 1
+
+    label check_fall
+        cmp fall 0
+        jumpz check_movement
+        move do_fall 1
+
+    label check_movement
+        cmp do_move 0
+        jumpl move_left
+        jumpg move_right
+    jump check_do_fall
+
+    label move_left
+        move x xpos
+        sub  x 1
+        call piece_would_collide collided curpiece currotation x ypos
+        cmp collided 0
+        jumpn check_do_fall
+        move xpos x
+    jump check_do_fall
+
+    label move_right
+        move x xpos
+        add  x 1
+        call piece_would_collide collided curpiece currotation x ypos
+        cmp collided 0
+        jumpn check_do_fall
+        move xpos x
+ 
+    label check_do_fall
+        cmp do_fall 0
+    jumpz done_update
+
+        move y ypos
+        add  y 1
+        call piece_would_collide collided curpiece currotation xpos y
+        cmp collided 0
+    jumpn collision
+        move ypos y
+        call reset_timer PIECE_TIMER_ID
+    jump done_update
+
+    label collision
+        call update_pit_map curpiece currotation xpos ypos
+        call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
+        ; signal piece reset
+        move curpiece 0
+
+    label done_update
+        move gfx_draw_layer window_background_layer_id
+        call draw_pit
+        move x xpos
+        mul  x TILE_SIDE
+        add  x pitxpos
+        move y ypos
+        mul  y TILE_SIDE
+        add  y pitypos
+        call draw_piece block_layer_id curpiece currotation x y
 
     label end
 ret
 
 proc event
+    local x
+    local collided
+
     cmp event_get_type INPUT_TYPE_KEYDOWN
-    jumpn end
+    jumpn keyup
     cmp event_get_button INPUT_KEY_f
     jumpz toggle_fullscreen
-    cmp event_get_button INPUT_KEY_q
+    cmp event_get_button INPUT_KEY_ESCAPE
     jumpz quit
+    cmp event_get_button INPUT_KEY_a
+    jumpz move_left
+    cmp event_get_button INPUT_KEY_d
+    jumpz move_right
+    cmp event_get_button INPUT_KEY_w
+    jumpz rotate
+    cmp event_get_button INPUT_KEY_s
+    jumpz fall
     jump end
 
     label toggle_fullscreen
-    call toggle_fullscreen
-    call update_scale
+        call toggle_fullscreen
+        call update_scale
     jump end
 
     label quit
-    move set_running 0
+        move set_running 0
+    jump end
 
+    label move_left
+        cmp move 0
+        jumpg end
+        sub move 1
+        move held -1
+    jump end
+
+    label move_right
+        cmp move 0
+        jumpl end
+        add move 1
+        move held 1
+    jump end
+
+    label rotate
+        move x currotation
+        add  x 1
+        cmp  x 4
+        jumpl nowrap
+            move x 0
+        label nowrap
+        call piece_would_collide collided curpiece x xpos ypos
+        jumpn end
+        move currotation x
+    jump end
+
+    label fall
+        move fall 1
+    jump end
+
+    label keyup
+    cmp event_get_type INPUT_TYPE_KEYUP
+    jumpn end
+    cmp event_get_button INPUT_KEY_a
+    jumpz no_move_left
+    cmp event_get_button INPUT_KEY_d
+    jumpz no_move_right
+    cmp event_get_button INPUT_KEY_s
+    jumpz nofall
+    jump end
+
+    label no_move_left
+        cmp held 0
+        jumpg end
+        move held 0
+    jump end
+
+    label no_move_right
+        cmp held 0
+        jumpl end
+        move held 0
+    jump end
+
+    label nofall
+        move fall 0
+    jump end
+ 
     label end
 ret
-

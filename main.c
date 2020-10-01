@@ -362,6 +362,8 @@ int main(int argc, char **argv) {
     /* seed random */
     srand(time(NULL));
 
+    /* init may flag program quit due to error */
+    state.running = 1;
     /* call program init */
     result = crustyvm_run(cvm, "init");
     if(result < 0) {
@@ -372,7 +374,6 @@ int main(int argc, char **argv) {
         goto error_ll;
     }
 
-    state.running = 1;
     while(state.running) {
         if(SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
@@ -392,7 +393,7 @@ int main(int argc, char **argv) {
             goto error_ll;
         } 
 
-        while(SDL_PollEvent(&(state.lastEvent))) {
+        while(SDL_PollEvent(&(state.lastEvent)) && state.running) {
             /* allow the user to press CTRL+F10 (like DOSBOX) to uncapture a
              * captured mouse, and also enforce disallowing recapture until
              * reallowed by pressing the same combo again. */
@@ -433,6 +434,9 @@ int main(int argc, char **argv) {
                     continue;
                 case SDL_KEYDOWN:
                 case SDL_KEYUP:
+                    if(((SDL_KeyboardEvent *)&(state.lastEvent))->repeat) {
+                        continue;
+                    }
                 case SDL_MOUSEMOTION:
                 case SDL_MOUSEBUTTONDOWN:
                 case SDL_MOUSEBUTTONUP:

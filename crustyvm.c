@@ -2039,9 +2039,6 @@ static int preprocess(CrustyVM *cvm,
                     LOG_PRINTF_TOK(cvm, "Expression evaluation failed.\n");
                     goto failure;
                 }
-                if(strcmp(GET_ACTIVE(1), "VIDEO_MODE_SET") == 0) {
-                    LOG_PRINTF_TOK(cvm, "%s\n", &(cvm->tokenmem[values[varcount]]));
-                }
                 varcount++;
 
                 goto skip_copy;
