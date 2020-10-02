@@ -2,7 +2,7 @@ include crustygame.inc
 include fills.inc
 include videomode.inc
 include timers.inc
-binclude gfx ints "tetris.crsg"
+binclude gfx ints "crustris.crsg"
 
 expr INITIAL_CHANGE_RATE 500
 expr INPUT_RATE 50
@@ -118,17 +118,17 @@ expr PIT_TILE_EDGE   5
 expr PIT_TILE_FILL   3
 ; C_PIT_FILL
 TILEMAP_COLOR PIT_FILL 160 160 160 127
-expr CLEAR_TILE      15
+expr CLEAR_TILE      1
 expr SOLID_TILE      0
 
 static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
-                           0 1 2 0 \
-                           0 1 2 0 \
-                           0 1 2 0 \
-                           0 1 2 0 \
-                           0 1 2 0 \
-                           0 1 2 0 \
-                           0 1 2 0"
+                           0  6  7 0 \
+                           0  8  9 0 \
+                           0 10 11 0 \
+                           0 12 13 0 \
+                           0 14 15 0 \
+                           0 16 17 0 \
+                           0 18 19 0"
 ; Probably should be power of two
 static TILEMAP_WIDTH 4
 static TILEMAP_HEIGHT 8
@@ -862,6 +862,7 @@ proc event
         move held 1
     jump end
 
+    ; TODO allow kicking off of piece or the wall
     label rotate
         move newrotation currotation
         add  newrotation 1
