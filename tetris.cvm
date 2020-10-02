@@ -814,7 +814,13 @@ proc frame
 ret
 
 proc event
+    local pos
+    local width
+    local height
+    local oldheight
+    local newrotation
     local x
+    local y
     local collided
 
     cmp event_get_type INPUT_TYPE_KEYDOWN
@@ -857,15 +863,41 @@ proc event
     jump end
 
     label rotate
-        move x currotation
-        add  x 1
-        cmp  x 4
+        move newrotation currotation
+        add  newrotation 1
+        cmp  newrotation 4
         jumpl nowrap
-            move x 0
+            move newrotation 0
         label nowrap
-        call piece_would_collide collided curpiece x xpos ypos
-        jumpn end
-        move currotation x
+        call populate_piece_values2 curpiece currotation pos width oldheight
+        call populate_piece_values2 curpiece newrotation pos width height
+        sub oldheight height
+        ; oldheight will be the negative growth in height
+        move y ypos
+        move x xpos
+        add width xpos
+        cmp width PIT_WIDTH
+        jumpl no_fix_width
+        jumpz no_fix_width
+        move x     PIT_WIDTH
+        sub  width xpos
+        sub  x     width
+        label no_fix_width
+        call piece_would_collide collided curpiece newrotation x y
+        cmp collided 0
+        jumpn check_height
+        jump copy_new
+        label check_height
+        sub y 1
+        ; don't check y < 0
+        jumpl end
+        add oldheight 1
+        jumpg end
+        jump no_fix_width
+        label copy_new
+        move currotation newrotation
+        move xpos x
+        move ypos y
     jump end
 
     label fall
