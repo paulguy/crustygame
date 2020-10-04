@@ -69,6 +69,8 @@ typedef struct LayerList_t {
 
     Layer *layer;
     unsigned int layersmem;
+
+    int blendWarned;
 } LayerList;
 
 static int debug_show_texture(LayerList *ll,
@@ -140,6 +142,7 @@ LayerList *layerlist_new(SDL_Renderer *renderer,
     ll->tilesetsmem = 0;
     ll->tilemapsmem = 0;
     ll->layersmem = 0;
+    ll->blendWarned = 0;
 
     return(ll);
 }
@@ -1125,8 +1128,13 @@ int tilemap_draw_layer(LayerList *ll, unsigned int index) {
         return(-1);
     }
     if(SDL_SetTextureBlendMode(tilemap->tex, layer->blendMode) < 0) {
-        fprintf(stderr, "Failed to set layer blend mode.\n");
-        return(-1);
+        if(ll->blendWarned == 0) {
+            fprintf(stderr, "Failed to set layer blend mode, falling back to "
+                            "SDL_BLENDMODE_BLEND, some things may appear "
+                            "wrong. This warning will appear only once.\n");
+            ll->blendWarned = 1;
+        }
+        SDL_SetTextureBlendMode(tilemap->tex, SDL_BLENDMODE_BLEND);
     }
     tileset = &(ll->tileset[tilemap->tileset]);
     tmw = tilemap->w * tileset->tw;
