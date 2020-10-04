@@ -54,3 +54,59 @@ proc fill_with_border buffer width height stride topleft top topright left cente
     add  temp innerWidth
     move buffer:temp bottomright
 ret
+
+proc fill_with_pattern outbuffer outwidth outheight outstride inbuffer inwidth inheight instride
+    local inptr 0
+    local outptr 0
+    local inx
+    local iny
+    local outx
+    local outy
+
+    move inx inwidth
+    move iny inheight
+
+    move outy outheight
+    label y
+        move outx outwidth
+        label x
+            move outbuffer:outptr inbuffer:inptr
+
+            sub inx 1
+            jumpz wrap_x
+            add inptr 1
+            jump no_wrap_x
+            label wrap_x
+            sub inptr inwidth
+            add inptr 1
+            move inx inwidth
+            label no_wrap_x
+
+            add outptr 1
+            sub outx 1
+        jumpg x
+
+        sub iny 1
+        jumpz wrap_y
+        ; return the pointer to the start of the row
+        cmp inx inwidth
+        jumpz no_return
+        sub inptr inx
+        label no_return
+        ; advance to next row
+        add inptr instride
+        jump no_wrap_y
+        label wrap_y
+        ; restart at the top
+        move inptr 0
+        move iny inheight
+        label no_wrap_y
+
+        ; reset inx to copy the whole row
+        move inx inwidth
+
+        sub outptr outwidth
+        add outptr outstride
+        sub outy 1
+    jumpg y
+ret

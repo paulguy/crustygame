@@ -1762,6 +1762,7 @@ static int valid_instruction(const char *name) {
 #define GET_VALUE(VAL) (&(cvm->tokenmem[values[VAL]]))
 #define GET_MACRO_STACK_NAME(PTR) (&(cvm->tokenmem[macrostack[PTR]->nameOffset]))
 
+/* TODO Fix macro names being processed during macro evaluation (endmacro?) */
 static int preprocess(CrustyVM *cvm,
                       const unsigned long *inVar,
                       const unsigned long *inValue,
@@ -1808,31 +1809,38 @@ static int preprocess(CrustyVM *cvm,
             LOG_PRINTF_TOK(cvm, "Failed to allocate memory for active token arguments.");
             goto failure;
         }
+
+#ifdef CRUSTY_TEST
+        LOG_PRINTF_TOK(cvm, " Original: ");
+        if(macrostackptr >= 0) {
+            LOG_PRINTF_BARE(cvm, "%s ", &(cvm->tokenmem[macrostack[macrostackptr]->nameOffset]));
+        }
+        for(i = 0; i < cvm->line[cvm->logline].tokencount; i++) {
+            LOG_PRINTF_BARE(cvm, "%s ", &(cvm->tokenmem[cvm->line[cvm->logline].offset[i]]));
+        }
+        LOG_PRINTF_BARE(cvm, "\n");
+#endif
+
         /* make mutable active line */
         active.tokencount = cvm->line[cvm->logline].tokencount;
         active.moduleOffset = cvm->line[cvm->logline].moduleOffset;
         active.line = cvm->line[cvm->logline].line;
-        /* don't mutate the endmacro line while processing a macro, since it
-           could replace substrings causing the macro to never end */
-        if(curmacro != NULL &&
-           strcmp(GET_TOKEN(cvm->logline, 0), "endmacro") == 0) {
-            if(active.tokencount != 2) {
-                LOG_PRINTF_TOK(cvm, "endmacro takes a macro name to end.\n");
-                goto failure;
-            }
-            if(strcmp(GET_TOKEN(cvm->logline, 1), &(cvm->tokenmem[curmacro->nameOffset])) == 0) {
-                for(i = 0; i < active.tokencount; i++) {
-                    active.offset[i] = cvm->line[cvm->logline].offset[i];
-                }
-            }
-        } else {
-            /* replace any tokens with tokens containing any possible macro
-               replacement values */
-            for(i = 0; i < active.tokencount; i++) {
-                active.offset[i] = cvm->line[cvm->logline].offset[i];
+
+        /* replace any tokens with tokens containing any possible macro
+           replacement values */
+        for(i = 0; i < active.tokencount; i++) {
+            active.offset[i] = cvm->line[cvm->logline].offset[i];
+            /* don't rewrite the line at all if it's ending the current
+             * macro. */
+            if(!(macrostackptr >= 0 &&
+                 strcmp(GET_ACTIVE(0), "endmacro") == 0 &&
+                 strcmp(GET_ACTIVE(1), 
+                        &(cvm->tokenmem[macrostack[macrostackptr]->nameOffset])) == 0)) {
                 for(j = 0; j < inVars; j++) {
                     /* first part of a hack to prevent a -D parameter
-                     * on the command line becoming "undefined" */
+                     * on the command line becoming "undefined".
+                     * Also avoid rewriting the macro name of the current
+                     * macro. */
                     if(i == 1 &&
                        strcmp(GET_ACTIVE(0), "if") == 0 &&
                        strcmp(GET_ACTIVE(1),
@@ -1879,7 +1887,7 @@ static int preprocess(CrustyVM *cvm,
         }
 
 #ifdef CRUSTY_TEST
-        LOG_PRINTF_TOK(cvm, "");
+        LOG_PRINTF_TOK(cvm, "Rewritten: ");
         for(i = 0; i < active.tokencount; i++) {
             LOG_PRINTF_BARE(cvm, "%s ", GET_ACTIVE(i));
         }
@@ -1894,10 +1902,9 @@ static int preprocess(CrustyVM *cvm,
                     goto failure;
                 }
 
-                curmacro = find_macro(cvm, macro, macrocount, GET_ACTIVE(1));
-
                 /* if the macro wasn't found, allocate space for it, otherwise
                    override previous declaration */
+                curmacro = find_macro(cvm, macro, macrocount, GET_ACTIVE(1));
                 if(curmacro == NULL) {
                     curmacro = realloc(macro, sizeof(CrustyMacro) * (macrocount + 1));
                     if(curmacro == NULL) {
@@ -2013,38 +2020,38 @@ static int preprocess(CrustyVM *cvm,
         } else if(strcmp(GET_ACTIVE(0), "expr") == 0) {
            if(curmacro == NULL) { /* don't evaluate any macros which may be
                                       within other macros. */
-                if(active.tokencount != 3) {
-                    LOG_PRINTF_TOK(cvm,
-                        "expr takes a variable name and an expression.\n");
-                    goto failure;
-                }
+               if(active.tokencount != 3) {
+                   LOG_PRINTF_TOK(cvm,
+                       "expr takes a variable name and an expression.\n");
+                   goto failure;
+               }
 
-                temp = realloc(vars, sizeof(long) * (varcount + 1));
-                if(temp == NULL) {
-                    LOG_PRINTF_TOK(cvm, "Failed to allocate memory for expr var.\n");
-                    goto failure;
-                }
-                vars = (long *)temp;
+               temp = realloc(vars, sizeof(long) * (varcount + 1));
+               if(temp == NULL) {
+                   LOG_PRINTF_TOK(cvm, "Failed to allocate memory for expr var.\n");
+                   goto failure;
+               }
+               vars = (long *)temp;
 
-                temp = realloc(values, sizeof(long) * (varcount + 1));
-                if(temp == NULL) {
-                    LOG_PRINTF_TOK(cvm, "Failed to allocate memory for expr value.\n");
-                    goto failure;
-                }
-                values = (long *)temp;
+               temp = realloc(values, sizeof(long) * (varcount + 1));
+               if(temp == NULL) {
+                   LOG_PRINTF_TOK(cvm, "Failed to allocate memory for expr value.\n");
+                   goto failure;
+               }
+               values = (long *)temp;
 
-                vars[varcount] = active.offset[1];
-                values[varcount] = evaluate_expr(cvm, GET_ACTIVE(2));
-                if(values[varcount] < 0) {
-                    LOG_PRINTF_TOK(cvm, "Expression evaluation failed.\n");
-                    goto failure;
-                }
-                varcount++;
+               vars[varcount] = active.offset[1];
+               values[varcount] = evaluate_expr(cvm, GET_ACTIVE(2));
+               if(values[varcount] < 0) {
+                   LOG_PRINTF_TOK(cvm, "Expression evaluation failed.\n");
+                   goto failure;
+               }
+               varcount++;
 
-                goto skip_copy;
-            } else {
-                foundmacro = 1;
-            }
+               goto skip_copy;
+           } else {
+               foundmacro = 1;
+           }
         } else if(!valid_instruction(GET_ACTIVE(0))) {
             /* don't evaluate macro calls while reading in a macro, only
                while writing out */
@@ -2129,6 +2136,14 @@ skip_copy:
         cvm->logline++;
     }
 
+    if(curmacro != NULL) {
+        LOG_PRINTF(cvm, "Macro without endmacro: %s@%s:%u.\n",
+                        &(cvm->tokenmem[curmacro->nameOffset]),
+                        &(cvm->tokenmem[cvm->line[curmacro->start].moduleOffset]),
+                        cvm->line[curmacro->start].line);
+        goto failure;
+    }
+
     for(i = 0; i < cvm->lines; i++) {
         free(cvm->line[i].offset);
     }
@@ -2154,12 +2169,6 @@ skip_copy:
     }
     if(values != NULL) {
         free(values);
-    }
-
-    if(curmacro != NULL) {
-        LOG_PRINTF(cvm, "Macro without endmacro: %s.\n",
-                   &(cvm->tokenmem[curmacro->nameOffset]));
-        return(-1);
     }
 
     return(foundmacro);

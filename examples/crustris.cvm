@@ -7,6 +7,9 @@ binclude gfx ints "crustris.crsg"
 expr INITIAL_CHANGE_RATE 500
 expr INPUT_RATE 50
 expr TAP_DELAY 2
+TILEMAP_COLOR BG   244 169 213 255
+TILEMAP_COLOR BG_D  27  80 173 255 
+expr BACKGROUND_PATTERN_SHADOW_STRENGTH 48
 
 macro SET_VIDEO_MODE
     static videomode string VIDEOMODE
@@ -46,6 +49,7 @@ static pieces ints "\
 255 0 \
 255 255 \
 255 0 \
+\
 255 255 255 \
 0   0   255 \
 0   255 \
@@ -56,18 +60,22 @@ static pieces ints "\
 255 255 \
 255 0 \
 255 0 \
+\
 255 255 0 \
 0   255 255 \
 0   255 \
 255 255 \
 255 0 \
+\
 255 255 \
 255 255 \
+\
 0   255 255 \
 255 255 0 \
 255 0 \
 255 255 \
 0   255 \
+\
 255 255 255 \
 255 0   0 \
 255 255 \
@@ -78,27 +86,67 @@ static pieces ints "\
 255 0 \
 255 0 \
 255 255 \
+\
 255 \
 255 \
 255 \
 255 \
 255 255 255 255"
+; all arrays refering to pieces have a null 0th index since 0 means no piece
+; and pieces index starting at 1
 expr PIECEINFO_PIECES    7
 expr PIECEINFO_ROTATIONS 4
-expr PIECEINFO_OFFSET 0
-expr PIECEINFO_WIDTH  1
-expr PIECEINFO_HEIGHT 2
-expr PIECEINFO_SIZE   3
-expr PIECEINFO_PIECE_SIZE "PIECEINFO_SIZE * PIECEINFO_ROTATIONS"
-static pieceinfo ints "\
-  0 0 0    0 0 0    0 0 0    0 0 0 \
-  0 3 2    6 2 3   12 3 2   18 2 3 \
- 24 3 2   30 2 3   36 3 2   42 2 3 \
- 48 3 2   54 2 3   48 3 2   54 2 3 \
- 60 2 2   60 2 2   60 2 2   60 2 2 \
- 64 3 2   70 2 3   64 3 2   70 2 3 \
- 76 3 2   82 2 3   88 3 2   94 2 3 \
-100 1 4  104 4 1  100 1 4  104 4 1"
+static PIECEINFO_POS ints "\
+      0   0   0   0 \
+      0   6  12  18 \
+     24  30  36  42 \
+     48  54  48  54 \
+     60  60  60  60 \
+     64  70  64  70 \
+     76  82  88  94 \
+    100 104 100 104"
+static PIECEINFO_WIDTH ints "\
+    0 0 0 0 \
+    3 2 3 2 \
+    3 2 3 2 \
+    3 2 3 2 \
+    2 2 2 2 \
+    3 2 3 2 \
+    3 2 3 2 \
+    1 4 1 4"
+static PIECEINFO_HEIGHT ints "\
+    0 0 0 0 \
+    2 3 2 3 \
+    2 3 2 3 \
+    2 3 2 3 \
+    2 2 2 2 \
+    2 3 2 3 \
+    2 3 2 3 \
+    4 1 4 1"
+; left side is starting at transition from rotation 0 to rotation 1 then the
+; far right column is the transition from rotation 3 back to 0.
+; that is, the rotation transitioned from is the column that should be read
+; from.
+; for counter-clockwise rotation, the column for the rotation transitioned to
+; should be read, then negated.
+static ROTATION_X_BIAS ints "\
+     0  0  0  0 \
+     0  0  1 -1 \
+     0  0  1 -1 \
+     1 -1  0  0 \
+     0  0  0  0 \
+     1 -1  0  0 \
+     0  0  1 -1 \
+    -2  1 -1  2"
+static ROTATION_Y_BIAS ints "\
+     0  0  0  0 \
+    -1  0  0  1 \
+    -1  0  0  1 \
+     0  1 -1  0 \
+     0  0  0  0 \
+     0  1 -1  0 \
+    -1  0  0  1 \
+     2 -2  1 -1"
 
 expr PIT_WIDTH 10
 expr PIT_HEIGHT 20
@@ -120,6 +168,7 @@ expr PIT_TILE_FILL   3
 TILEMAP_COLOR PIT_FILL 160 160 160 127
 expr CLEAR_TILE      1
 expr SOLID_TILE      0
+expr BACKGROUND_TILE 2
 
 static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
                            0  6  7 0 \
@@ -132,6 +181,7 @@ static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
 ; Probably should be power of two
 static TILEMAP_WIDTH 4
 static TILEMAP_HEIGHT 8
+TILEMAP_COLOR BL   0   0   0 255
 TILEMAP_COLOR  C   0 170 170 255
 TILEMAP_COLOR  Y 170 170   0 255
 TILEMAP_COLOR  P 170   0 170 255
@@ -147,6 +197,7 @@ TILEMAP_COLOR LR 255  85  85 255
 TILEMAP_COLOR LB  85  85 255 255
 TILEMAP_COLOR LO 255 170  85 255
 TILEMAP_COLOR  W 255 255 255 255
+
 ; 0th is no block
 static PIECE_COLORMOD ints "0 0 0 0 \
                             C_C C_LC C_W 0 \
@@ -157,23 +208,36 @@ static PIECE_COLORMOD ints "0 0 0 0 \
                             C_B C_LB C_W 0 \
                             C_O C_LO C_W 0"
 
-proc populate_piece_values piece pos width height
-    move pos    piece:PIECEINFO_OFFSET
-    move width  piece:PIECEINFO_WIDTH
-    move height piece:PIECEINFO_HEIGHT
-ret
+static BACKGROUND_PATTERN ints "\
+    BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE \
+    CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
+    CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
+    CLEAR_TILE CLEAR_TILE CLEAR_TILE BACKGROUND_TILE \
+    CLEAR_TILE CLEAR_TILE CLEAR_TILE BACKGROUND_TILE \
+    CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
+    CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
+    BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE"
+expr BACKGROUND_PATTERN_WIDTH  4
+expr BACKGROUND_PATTERN_HEIGHT 4
+expr BACKGROUND_PATTERN_SIZE   "BACKGROUND_PATTERN_WIDTH * \
+                                BACKGROUND_PATTERN_HEIGHT"
+expr BACKGROUND_WIDTH  "SCREEN_TILES_WIDTH + 4"
+expr BACKGROUND_HEIGHT "SCREEN_TILES_HEIGHT + 4"
+expr BACKGROUND_SIZE   "BACKGROUND_WIDTH * BACKGROUND_HEIGHT"
+expr PIT_PATTERN_WIDTH  "PIT_BG_WIDTH + 4"
+expr PIT_PATTERN_HEIGHT "PIT_BG_HEIGHT + 4"
 
-proc populate_piece_values2 piece rotation pos width height
+proc populate_piece_values piece rotation pos width height
     local pieceptr
-    local rotationptr
 
     ; copy values to locals to not mutate caller variables
     move pieceptr piece
-    mul  pieceptr PIECEINFO_PIECE_SIZE
-    move rotationptr rotation
-    mul  rotationptr PIECEINFO_SIZE
-    add  pieceptr rotationptr
-    call populate_piece_values pieceinfo:pieceptr pos width height
+    mul  pieceptr PIECEINFO_ROTATIONS
+    add  pieceptr rotation
+
+    move pos PIECEINFO_POS:pieceptr
+    move width PIECEINFO_WIDTH:pieceptr
+    move height PIECEINFO_HEIGHT:pieceptr
 ret
  
 proc piece_would_collide collided piece rotation x y
@@ -186,7 +250,7 @@ proc piece_would_collide collided piece rotation x y
     local maxx
     local maxy
 
-    call populate_piece_values2 piece rotation pos width height
+    call populate_piece_values piece rotation pos width height
 
     move collided 1
     cmp x 0
@@ -238,7 +302,7 @@ proc update_pit_map piece rotation x y
     local height
     local pitpos
 
-    call populate_piece_values2 piece rotation pos width height
+    call populate_piece_values piece rotation pos width height
 
     ; initial pit position
     move pitpos y
@@ -319,11 +383,14 @@ proc update_pit_tilemaps_from_piece piece rotation x y
     local width
     local height
 
-    call populate_piece_values2 piece rotation pos width height
+    call populate_piece_values piece rotation pos width height
     call update_pit_tilemaps x y width height
 ret
 
 proc draw_pit
+    move gfx_draw_layer pit_shadow_layer_id
+    move gfx_draw_layer pit_pattern1_layer_id
+    move gfx_draw_layer pit_pattern0_layer_id
     move gfx_draw_layer pit_background_layer_id
     move gfx_draw_layer pit_layer_id0
     move gfx_draw_layer pit_layer_id1
@@ -342,7 +409,7 @@ proc draw_piece layer_id piece rotation x y
     local intPosition ints 2
     local scaled_tile floats 0.0
 
-    call populate_piece_values2 piece rotation pos width height
+    call populate_piece_values piece rotation pos width height
 
     ; initial tilemap position
     move window:1 piece
@@ -414,66 +481,64 @@ static pit_background_id
 static pit_background_layer_id
 static window_background_id
 static window_background_layer_id
+static window_pattern0_id
+static window_pattern0_layer_id
+static window_pattern1_id
+static window_pattern1_layer_id
+static pit_shadow_id
+static pit_shadow_layer_id
+static pit_pattern0_id
+static pit_pattern1_id
+static pit_pattern0_layer_id
+static pit_pattern1_layer_id
 static global_scale floats "0.0 0.0"
 static global_offset ints 2
 
-expr OBJ_ID   0
-expr OBJ_X    1
-expr OBJ_Y    2
-expr OBJ_SIZE 3
-expr BLOCK_OBJ  0
-expr PIT0_OBJ   1
-expr PIT1_OBJ   2
-expr PIT2_OBJ   3
-expr PIT_BG_OBJ 4
-expr WIN_BG_OBJ 5
-expr TOTAL_OBJ  6
-expr OBJ_MEM "TOTAL_OBJ * OBJ_SIZE"
-static objects ints OBJ_MEM
+expr BLOCK_OBJ    0
+expr PIT0_OBJ     1
+expr PIT1_OBJ     2
+expr PIT2_OBJ     3
+expr PIT_BG_OBJ   4
+expr WIN_BG_OBJ   5
+expr PIT_SH_OBJ   6
+expr WIN_PAT0_OBJ 7
+expr WIN_PAT1_OBJ 8
+expr PIT_PAT0_OBJ 9
+expr PIT_PAT1_OBJ 10
+expr TOTAL_OBJ    11
+static objects_id ints TOTAL_OBJ
+static objects_x  ints TOTAL_OBJ
+static objects_y  ints TOTAL_OBJ
 
-proc set_obj_id obj id
-    local objptr
+macro SET_OBJ_ID OBJ ID
+    move objects_id:OBJ ID
+endmacro SET_OBJ_ID
 
-    move objptr obj
-    mul  objptr OBJ_SIZE
+macro SET_OBJ_POS OBJ X Y
+    move objects_x:OBJ X
+    move objects_y:OBJ Y
+endmacro SET_OBJ_POS
 
-    ; avoid another call because OBJ_ID is already 0
-    move objects:objptr id
-ret
-
-proc do_obj_pos ptr x y
-    move ptr:OBJ_X x
-    move ptr:OBJ_Y y
-ret
-
-proc set_obj_pos obj x y
-    local objptr
-
-    move objptr obj
-    mul  objptr OBJ_SIZE
-
-    call do_obj_pos objects:objptr x y
-ret
-
-proc do_update_obj_scale ptr
+proc update_obj_scale obj
     local pos ints 2
     local id
 
-    move pos:0 ptr:OBJ_X
-    move pos:1 ptr:OBJ_Y
+    move pos:0 objects_x:obj
+    move pos:1 objects_y:obj
     RESCALE_POS pos:0 pos:1
-    move id    ptr:OBJ_ID
-    move gfx_set_layer_pos:id pos
+    move id    objects_id:obj
+
+    move gfx_set_layer_pos:id   pos
     move gfx_set_layer_scale:id global_scale
 ret
-    
+
 proc update_obj_scales
-    local objptr  OBJ_MEM
-    sub   objptr  OBJ_SIZE
+    local obj TOTAL_OBJ
+    sub   obj 1
 
     label loop
-        call do_update_obj_scale objects:objptr
-        sub objptr OBJ_SIZE
+        call update_obj_scale obj
+        sub obj 1
     jumpg loop
     jumpz loop
 ret
@@ -533,12 +598,15 @@ proc update_scale
     sub  tempf:3 TILE_SIDE
     move pitxpos tempf:0
     move pitypos tempf:1
-    call set_obj_pos PIT0_OBJ pitxpos pitypos
-    call set_obj_pos PIT1_OBJ pitxpos pitypos
-    call set_obj_pos PIT2_OBJ pitxpos pitypos
+    SET_OBJ_POS PIT0_OBJ pitxpos pitypos
+    SET_OBJ_POS PIT1_OBJ pitxpos pitypos
+    SET_OBJ_POS PIT2_OBJ pitxpos pitypos
     move temp:0 tempf:2
     move temp:1 tempf:3
-    call set_obj_pos PIT_BG_OBJ temp:0 temp:1
+    SET_OBJ_POS PIT_BG_OBJ temp:0 temp:1
+    SET_OBJ_POS PIT_SH_OBJ pitxpos pitypos
+    SET_OBJ_POS PIT_PAT0_OBJ pitxpos pitypos
+    SET_OBJ_POS PIT_PAT1_OBJ pitxpos pitypos
 
     call update_obj_scales
 ret
@@ -556,6 +624,7 @@ proc init
     local pitcolormod ints PIT_BG_SIZE
     local row ints SCREEN_TILES_WIDTH
     local rowcolormod ints SCREEN_TILES_WIDTH
+    local background_pattern ints BACKGROUND_SIZE
 
     call set_video_mode temp videomode
     cmp temp 0
@@ -574,27 +643,27 @@ proc init
     call gfx_set_tilemap_attr_colormod block_tilemap_id PIECE_COLORMOD
     call gfx_update_tilemap block_tilemap_id
     call gfx_add_layer block_tilemap_id block_layer_id
-    call set_obj_id BLOCK_OBJ block_layer_id
+    SET_OBJ_ID BLOCK_OBJ block_layer_id
     move temp:0 TILE_SIDE
     move temp:1 TILE_SIDE
     move gfx_set_layer_window:block_layer_id temp
     call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_background_id
     move gfx_set_tilemap_tileset:pit_background_id gfx_id
     call gfx_add_layer pit_background_id pit_background_layer_id
-    call set_obj_id PIT_BG_OBJ pit_background_layer_id
+    SET_OBJ_ID PIT_BG_OBJ pit_background_layer_id
 
     call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
     move gfx_set_tilemap_tileset:pit_tilemap_id0 gfx_id
     call gfx_add_layer pit_tilemap_id0 pit_layer_id0
-    call set_obj_id PIT0_OBJ pit_layer_id0
+    SET_OBJ_ID PIT0_OBJ pit_layer_id0
     call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id1
     move gfx_set_tilemap_tileset:pit_tilemap_id1 gfx_id
     call gfx_add_layer pit_tilemap_id1 pit_layer_id1
-    call set_obj_id PIT1_OBJ pit_layer_id1
+    SET_OBJ_ID PIT1_OBJ pit_layer_id1
     call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id2
     move gfx_set_tilemap_tileset:pit_tilemap_id2 gfx_id
     call gfx_add_layer pit_tilemap_id2 pit_layer_id2
-    call set_obj_id PIT2_OBJ pit_layer_id2
+    SET_OBJ_ID PIT2_OBJ pit_layer_id2
   
     ; don't really care that pit* aren't static because the background is only
     ; set up once and it doesn't matter if the pointer becomes invalid.
@@ -606,19 +675,90 @@ proc init
     call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
     call gfx_update_tilemap pit_background_id
     
+    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_shadow_id
+    move gfx_set_tilemap_tileset:pit_shadow_id gfx_id
+    call gfx_add_layer pit_shadow_id pit_shadow_layer_id
+    SET_OBJ_ID PIT_SH_OBJ pit_shadow_id
+    call fill row PIT_BG_WIDTH 1 PIT_BG_WIDTH SOLID_TILE
+    call gfx_set_tilemap_map3 pit_shadow_id row 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
+    call fill rowcolormod PIT_BG_WIDTH 1 PIT_BG_WIDTH C_BG_D
+    call gfx_set_tilemap_attr_colormod3 pit_shadow_id rowcolormod 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
+    call gfx_update_tilemap pit_shadow_id
+
     call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
     move gfx_set_tilemap_tileset:window_background_id gfx_id
     call gfx_add_layer window_background_id window_background_layer_id
-    call set_obj_id WIN_BG_OBJ window_background_layer_id
-    call set_obj_pos WIN_BG_OBJ 0 0
-
+    SET_OBJ_ID WIN_BG_OBJ window_background_layer_id
+    SET_OBJ_POS WIN_BG_OBJ 0 0
     call fill row SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH SOLID_TILE
     ; pitch = 0 so the same row is copied for each row
     call gfx_set_tilemap_map3 window_background_id row 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
-    call fill rowcolormod SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH C_B
+    call fill rowcolormod SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH C_BG
     call gfx_set_tilemap_attr_colormod3 window_background_id rowcolormod 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
     call gfx_update_tilemap window_background_id
-    
+
+    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_WIDTH BACKGROUND_PATTERN_HEIGHT BACKGROUND_PATTERN_WIDTH
+
+    call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern0_id
+    call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern1_id
+    move gfx_set_tilemap_tileset:window_pattern0_id gfx_id
+    move gfx_set_tilemap_tileset:window_pattern1_id gfx_id
+    call gfx_add_layer window_pattern0_id window_pattern0_layer_id
+    call gfx_add_layer window_pattern1_id window_pattern1_layer_id
+    call gfx_set_tilemap_map window_pattern0_id background_pattern
+    call gfx_update_tilemap window_pattern0_id
+    call gfx_set_tilemap_map window_pattern1_id background_pattern
+    call gfx_update_tilemap window_pattern1_id
+    move temp:0 SCREEN_TILES_WIDTH
+    mul  temp:0 TILE_SIDE
+    move temp:1 SCREEN_TILES_HEIGHT
+    mul  temp:1 TILE_SIDE
+    move gfx_set_layer_window:window_pattern0_layer_id temp
+    move gfx_set_layer_window:window_pattern1_layer_id temp
+    move temp:0 BACKGROUND_PATTERN_WIDTH
+    mul  temp:0 TILE_SIDE
+    sub  temp:0 1
+    move temp:1 BACKGROUND_PATTERN_HEIGHT
+    mul  temp:1 TILE_SIDE
+    sub  temp:1 1
+    move gfx_set_layer_scroll_pos:window_pattern1_layer_id temp
+    move gfx_set_layer_blendmode:window_pattern1_layer_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_alphamod:window_pattern1_layer_id BACKGROUND_PATTERN_SHADOW_STRENGTH
+    SET_OBJ_ID WIN_PAT0_OBJ window_pattern0_layer_id
+    SET_OBJ_POS WIN_PAT0_OBJ 0 0
+    SET_OBJ_ID WIN_PAT1_OBJ window_pattern1_layer_id
+    SET_OBJ_POS WIN_PAT1_OBJ 0 0
+
+    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN:BACKGROUND_PATTERN_SIZE BACKGROUND_PATTERN_WIDTH BACKGROUND_PATTERN_HEIGHT BACKGROUND_PATTERN_WIDTH
+
+    call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern0_id
+    call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern1_id
+    move gfx_set_tilemap_tileset:pit_pattern0_id gfx_id
+    move gfx_set_tilemap_tileset:pit_pattern1_id gfx_id
+    call gfx_add_layer pit_pattern0_id pit_pattern0_layer_id
+    call gfx_add_layer pit_pattern1_id pit_pattern1_layer_id
+    call gfx_set_tilemap_map3 pit_pattern0_id background_pattern 0 0 BACKGROUND_WIDTH PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT
+    call gfx_update_tilemap pit_pattern0_id
+    call gfx_set_tilemap_map3 pit_pattern1_id background_pattern 0 0 BACKGROUND_WIDTH PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT
+    call gfx_update_tilemap pit_pattern1_id
+    move temp:0 PIT_BG_WIDTH
+    mul  temp:0 TILE_SIDE
+    move temp:1 PIT_BG_HEIGHT
+    mul  temp:1 TILE_SIDE
+    move gfx_set_layer_window:pit_pattern0_layer_id temp
+    move gfx_set_layer_window:pit_pattern1_layer_id temp
+    move temp:0 BACKGROUND_PATTERN_WIDTH
+    mul  temp:0 TILE_SIDE
+    sub  temp:0 1
+    move temp:1 BACKGROUND_PATTERN_HEIGHT
+    mul  temp:1 TILE_SIDE
+    sub  temp:1 1
+    move gfx_set_layer_scroll_pos:pit_pattern1_layer_id temp
+    move gfx_set_layer_blendmode:pit_pattern1_layer_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_alphamod:pit_pattern1_layer_id BACKGROUND_PATTERN_SHADOW_STRENGTH
+    SET_OBJ_ID PIT_PAT0_OBJ pit_pattern0_layer_id
+    SET_OBJ_ID PIT_PAT1_OBJ pit_pattern1_layer_id
+
     ; update the whole pit
     call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
 
@@ -663,7 +803,7 @@ proc pit_effect
     move rotation get_random
     mod  rotation PIECEINFO_ROTATIONS
 
-    call populate_piece_values2 piece rotation pos width height
+    call populate_piece_values piece rotation pos width height
 
     move maxx PIT_WIDTH
     sub  maxx width
@@ -710,7 +850,7 @@ proc frame
         add  curpiece 1
         move currotation 0
         move ypos 0
-        call populate_piece_values2 curpiece currotation pos width height
+        call populate_piece_values curpiece currotation pos width height
         move xpos PIT_WIDTH
         sub  xpos width
         div  xpos 2
@@ -801,6 +941,8 @@ proc frame
 
     label done_update
         move gfx_draw_layer window_background_layer_id
+        move gfx_draw_layer window_pattern1_layer_id
+        move gfx_draw_layer window_pattern0_layer_id
         call draw_pit
         move x xpos
         mul  x TILE_SIDE
@@ -870,8 +1012,8 @@ proc event
         jumpl nowrap
             move newrotation 0
         label nowrap
-        call populate_piece_values2 curpiece currotation pos width oldheight
-        call populate_piece_values2 curpiece newrotation pos width height
+        call populate_piece_values curpiece currotation pos width oldheight
+        call populate_piece_values curpiece newrotation pos width height
         sub oldheight height
         ; oldheight will be the negative growth in height
         move y ypos

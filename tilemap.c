@@ -4,10 +4,6 @@
 
 #include "tilemap.h"
 
-#define ALLOWED_BLENDMODES_MASK (SDL_BLENDMODE_BLEND | \
-                                 SDL_BLENDMODE_ADD | \
-                                 SDL_BLENDMODE_MOD | \
-                                 SDL_BLENDMODE_MUL)
 #define FUDGE (0.0001)
 
 #define LOG_PRINTF(LL, FMT, ...) \
@@ -56,7 +52,7 @@ typedef struct {
     Uint8 colormod_g;
     Uint8 colormod_b;
     Uint8 alphamod;
-    Uint8 blendMode;
+    SDL_BlendMode blendMode;
 } Layer;
 
 typedef struct LayerList_t {
@@ -1074,12 +1070,26 @@ int tilemap_set_layer_blendmode(LayerList *ll, unsigned int index, int blendMode
         return(-1);
     }
 
-    if(blendMode & ~ALLOWED_BLENDMODES_MASK) {
-        LOG_PRINTF(ll, "Invaled blendmodes mask.\n");
+    if(blendMode == TILEMAP_BLENDMODE_BLEND) {
+        ll->layer[index].blendMode = SDL_BLENDMODE_BLEND;
+    } else if(blendMode == TILEMAP_BLENDMODE_ADD) {
+        ll->layer[index].blendMode = SDL_BLENDMODE_ADD;
+    } else if(blendMode == TILEMAP_BLENDMODE_MOD) {
+        ll->layer[index].blendMode = SDL_BLENDMODE_MOD;
+    } else if(blendMode == TILEMAP_BLENDMODE_MUL) {
+        ll->layer[index].blendMode = SDL_BLENDMODE_MUL;
+    } else if(blendMode == TILEMAP_BLENDMODE_SUB) {
+        ll->layer[index].blendMode =
+            SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_SRC_ALPHA,
+                                       SDL_BLENDFACTOR_ONE,
+                                       SDL_BLENDOPERATION_REV_SUBTRACT,
+                                       SDL_BLENDFACTOR_ZERO,
+                                       SDL_BLENDFACTOR_ONE,
+                                       SDL_BLENDOPERATION_ADD);
+    } else {
+        LOG_PRINTF(ll, "Invalid blend mode: %d\n", blendMode);
         return(-1);
     }
-
-    ll->layer[index].blendMode = blendMode;
 
     return(0);
 }

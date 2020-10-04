@@ -11,6 +11,12 @@
 #define TILEMAP_ROTATE_180  (0x08)
 #define TILEMAP_ROTATE_270  (0x0C)
 
+#define TILEMAP_BLENDMODE_BLEND (0)
+#define TILEMAP_BLENDMODE_ADD   (1)
+#define TILEMAP_BLENDMODE_MOD   (2)
+#define TILEMAP_BLENDMODE_MUL   (3)
+#define TILEMAP_BLENDMODE_SUB   (4)
+
 /* not sure what to use..., opengl driver on here shows ARGB
  * as the texture format, and on little endian it should be
  * arranged as 0xBBGGRRAA.  No idea how much this differs

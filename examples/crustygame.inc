@@ -221,12 +221,13 @@ proc gfx_add_layer TILEMAPID OUTID
     move OUTID gfx_get_return
 ret
 
-expr GFX_BLENDMODE_BLEND    0x01
-expr GFX_BLENDMODE_ADD      0x02
-expr GFX_BLENDMODE_MOD      0x04
-expr GFX_BLENDMODE_MUL      0x08
-; Some values are moved around to prevent being rewritten
+expr GFX_BLENDMODE_BLEND    0
+expr GFX_BLENDMODE_ADD      1
+expr GFX_BLENDMODE_MOD      2
+expr GFX_BLENDMODE_MUL      3
+expr GFX_BLENDMODE_SUB      4
 
+; Some values are moved around to prevent being rewritten
 expr INPUT_TYPE_KEYDOWN              1
 expr INPUT_TYPE_KEYUP                2
 expr INPUT_TYPE_MOUSEMOTION          3

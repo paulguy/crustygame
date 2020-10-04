@@ -493,29 +493,13 @@ int gfx_set_layer_blendmode(void *priv,
                             void *ptr,
                             unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
-    int sdl_blendMode;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
 
-    int blendMode = *(int *)ptr;
-    sdl_blendMode = 0;
-    if(blendMode & CRUSTYGAME_BLENDMODE_BLEND) {
-        sdl_blendMode |= SDL_BLENDMODE_BLEND;
-    }
-    if(blendMode & CRUSTYGAME_BLENDMODE_ADD) {
-        sdl_blendMode |= SDL_BLENDMODE_ADD;
-    }
-    if(blendMode & CRUSTYGAME_BLENDMODE_MOD) {
-        sdl_blendMode |= SDL_BLENDMODE_MOD;
-    }
-    if(blendMode & CRUSTYGAME_BLENDMODE_MUL) {
-        sdl_blendMode |= SDL_BLENDMODE_MUL;
-    }
-
-    return(tilemap_set_layer_blendmode(state->ll, index, sdl_blendMode));
+    return(tilemap_set_layer_blendmode(state->ll, index, *(int *)ptr));
 }
 
 int gfx_draw_layer(void *priv,
