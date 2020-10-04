@@ -5,11 +5,12 @@ include timers.inc
 binclude gfx ints "crustris.crsg"
 
 expr INITIAL_CHANGE_RATE 500
-expr INPUT_RATE 50
+expr INPUT_DELAY 50
 expr TAP_DELAY 2
 TILEMAP_COLOR BG   244 169 213 255
 TILEMAP_COLOR BG_D  27  80 173 255 
 expr BACKGROUND_PATTERN_SHADOW_STRENGTH 48
+expr BGSCROLL_DELAY "1000 / 60"
 
 macro SET_VIDEO_MODE
     static videomode string VIDEOMODE
@@ -217,10 +218,10 @@ static BACKGROUND_PATTERN ints "\
     CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
     CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
     BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE"
-expr BACKGROUND_PATTERN_WIDTH  4
-expr BACKGROUND_PATTERN_HEIGHT 4
-expr BACKGROUND_PATTERN_SIZE   "BACKGROUND_PATTERN_WIDTH * \
-                                BACKGROUND_PATTERN_HEIGHT"
+expr BACKGROUND_PATTERN_SIDE 4
+expr BACKGROUND_PATTERN_SIZE "BACKGROUND_PATTERN_SIDE * \
+                              BACKGROUND_PATTERN_SIDE"
+expr BACKGROUND_PATTERN_PXSIDE "BACKGROUND_PATTERN_SIDE * TILE_SIDE"
 expr BACKGROUND_WIDTH  "SCREEN_TILES_WIDTH + 4"
 expr BACKGROUND_HEIGHT "SCREEN_TILES_HEIGHT + 4"
 expr BACKGROUND_SIZE   "BACKGROUND_WIDTH * BACKGROUND_HEIGHT"
@@ -615,6 +616,12 @@ static change_rate INITIAL_CHANGE_RATE
 expr FPS_TIMER_ID 0
 expr PIECE_TIMER_ID 1
 expr INPUT_TIMER_ID 2
+expr BGSCROLL_TIMER_ID 3
+
+static bgscroll0 ints 2
+static bgscroll1 ints 2
+static bgscroll2 ints 2
+static bgscroll3 ints 2
 
 proc init
     local temp ints 4
@@ -697,7 +704,7 @@ proc init
     call gfx_set_tilemap_attr_colormod3 window_background_id rowcolormod 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
     call gfx_update_tilemap window_background_id
 
-    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_WIDTH BACKGROUND_PATTERN_HEIGHT BACKGROUND_PATTERN_WIDTH
+    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
 
     call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern0_id
     call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern1_id
@@ -715,13 +722,6 @@ proc init
     mul  temp:1 TILE_SIDE
     move gfx_set_layer_window:window_pattern0_layer_id temp
     move gfx_set_layer_window:window_pattern1_layer_id temp
-    move temp:0 BACKGROUND_PATTERN_WIDTH
-    mul  temp:0 TILE_SIDE
-    sub  temp:0 1
-    move temp:1 BACKGROUND_PATTERN_HEIGHT
-    mul  temp:1 TILE_SIDE
-    sub  temp:1 1
-    move gfx_set_layer_scroll_pos:window_pattern1_layer_id temp
     move gfx_set_layer_blendmode:window_pattern1_layer_id GFX_BLENDMODE_SUB
     move gfx_set_layer_alphamod:window_pattern1_layer_id BACKGROUND_PATTERN_SHADOW_STRENGTH
     SET_OBJ_ID WIN_PAT0_OBJ window_pattern0_layer_id
@@ -729,7 +729,7 @@ proc init
     SET_OBJ_ID WIN_PAT1_OBJ window_pattern1_layer_id
     SET_OBJ_POS WIN_PAT1_OBJ 0 0
 
-    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN:BACKGROUND_PATTERN_SIZE BACKGROUND_PATTERN_WIDTH BACKGROUND_PATTERN_HEIGHT BACKGROUND_PATTERN_WIDTH
+    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN:BACKGROUND_PATTERN_SIZE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
 
     call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern0_id
     call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern1_id
@@ -747,13 +747,6 @@ proc init
     mul  temp:1 TILE_SIDE
     move gfx_set_layer_window:pit_pattern0_layer_id temp
     move gfx_set_layer_window:pit_pattern1_layer_id temp
-    move temp:0 BACKGROUND_PATTERN_WIDTH
-    mul  temp:0 TILE_SIDE
-    sub  temp:0 1
-    move temp:1 BACKGROUND_PATTERN_HEIGHT
-    mul  temp:1 TILE_SIDE
-    sub  temp:1 1
-    move gfx_set_layer_scroll_pos:pit_pattern1_layer_id temp
     move gfx_set_layer_blendmode:pit_pattern1_layer_id GFX_BLENDMODE_SUB
     move gfx_set_layer_alphamod:pit_pattern1_layer_id BACKGROUND_PATTERN_SHADOW_STRENGTH
     SET_OBJ_ID PIT_PAT0_OBJ pit_pattern0_layer_id
@@ -766,7 +759,26 @@ proc init
 
     call set_timer_rate FPS_TIMER_ID 1000
     call set_timer_rate PIECE_TIMER_ID change_rate
-    call set_timer_rate INPUT_TIMER_ID INPUT_RATE
+    call set_timer_rate INPUT_TIMER_ID INPUT_DELAY
+    call set_timer_rate BGSCROLL_TIMER_ID BGSCROLL_DELAY
+
+    move bgscroll0:0 0
+    move bgscroll0:1 0
+    move bgscroll1:0 BACKGROUND_PATTERN_PXSIDE
+    sub  bgscroll1:0 1
+    move bgscroll1:1 BACKGROUND_PATTERN_PXSIDE
+    sub  bgscroll1:1 1
+    move bgscroll2:0 0
+    move bgscroll2:1 0
+    move bgscroll3:0 BACKGROUND_PATTERN_PXSIDE
+    sub  bgscroll3:0 1
+    move bgscroll3:1 BACKGROUND_PATTERN_PXSIDE
+    sub  bgscroll3:1 1
+    move gfx_set_layer_scroll_pos:window_pattern0_layer_id bgscroll0
+    move gfx_set_layer_scroll_pos:window_pattern1_layer_id bgscroll1
+    move gfx_set_layer_scroll_pos:pit_pattern0_layer_id bgscroll2
+    move gfx_set_layer_scroll_pos:pit_pattern1_layer_id bgscroll3
+
     label end
 ret
 
@@ -819,6 +831,22 @@ proc pit_effect
     call update_pit_map piece rotation x y
     call update_pit_tilemaps_from_piece piece rotation x y
 ret
+
+macro ADVANCE_BGSCROLL VAR DIR MAX
+    add VAR DIR
+    cmp VAR MAX
+    jumpz wrap_VAR_0
+    cmp VAR 0
+    jumpl wrap_VAR_max
+    jump wrap_VAR_done
+    label wrap_VAR_0
+    move VAR 0
+    jump wrap_VAR_done
+    label wrap_VAR_max
+    move VAR MAX
+    sub  VAR 1
+    label wrap_VAR_done
+endmacro ADVANCE_BGSCROLL
 
 static curpiece 0
 static currotation
@@ -940,6 +968,22 @@ proc frame
         move curpiece 0
 
     label done_update
+        call check_timer elapsed BGSCROLL_TIMER_ID
+        jumpz no_bgscroll
+        ADVANCE_BGSCROLL bgscroll0:0 1  BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll0:1 -1 BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll1:0 1  BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll1:1 -1 BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll2:0 1 BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll2:1 1 BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll3:0 1 BACKGROUND_PATTERN_PXSIDE
+        ADVANCE_BGSCROLL bgscroll3:1 1 BACKGROUND_PATTERN_PXSIDE
+
+        move gfx_set_layer_scroll_pos:window_pattern0_layer_id bgscroll0
+        move gfx_set_layer_scroll_pos:window_pattern1_layer_id bgscroll1
+        move gfx_set_layer_scroll_pos:pit_pattern0_layer_id bgscroll2
+        move gfx_set_layer_scroll_pos:pit_pattern1_layer_id bgscroll3
+        label no_bgscroll
         move gfx_draw_layer window_background_layer_id
         move gfx_draw_layer window_pattern1_layer_id
         move gfx_draw_layer window_pattern0_layer_id

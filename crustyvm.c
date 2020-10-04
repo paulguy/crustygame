@@ -2695,6 +2695,15 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
 
+            for(i = 0; i < curProc->labels; i++) {
+                if(strcmp(GET_TOKEN(cvm->logline, 1),
+                          &(cvm->tokenmem[curProc->label[i].nameOffset])) == 0) {
+                    LOG_PRINTF_TOK(cvm, "Duplicate label: %s\n",
+                                        GET_TOKEN(cvm->logline, 1));
+                    goto failure;
+                }
+            }
+
             temp = realloc(curProc->label, sizeof(CrustyLabel) * (curProc->labels + 1));
             if(temp == NULL) {
                 LOG_PRINTF_TOK(cvm, "Failed to allocate memory for labels list.\n");
