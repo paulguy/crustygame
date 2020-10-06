@@ -3459,8 +3459,9 @@ static int codegen(CrustyVM *cvm) {
         } MATH_INSTRUCTION("shr", CRUSTY_INSTRUCTION_TYPE_SHR)
         } MATH_INSTRUCTION("shl", CRUSTY_INSTRUCTION_TYPE_SHL)
         } else if(strcmp(cvm->line[cvm->logline].token[0], "cmp") == 0) {
-            if(cvm->line[cvm->logline].tokencount != 3) {
-                LOG_PRINTF_LINE(cvm, "cmp takes two operands.\n");
+            if(cvm->line[cvm->logline].tokencount < 2 ||
+               cvm->line[cvm->logline].tokencount > 3) {
+                LOG_PRINTF_LINE(cvm, "cmp takes one or two operands.\n");
                 return(-1);
             }
 
@@ -3481,14 +3482,20 @@ static int codegen(CrustyVM *cvm) {
                 return(-1);
             }
 
-            if(populate_var(cvm,
-                            cvm->line[cvm->logline].token[2],
-                            curproc,
-                            1, 0,
-                            &(inst[MOVE_SRC_FLAGS]),
-                            &(inst[MOVE_SRC_VAL]),
-                            &(inst[MOVE_SRC_INDEX])) < 0) {
-                return(-1);
+            if(cvm->line[cvm->logline].tokencount == 3) {
+                if(populate_var(cvm,
+                                cvm->line[cvm->logline].token[2],
+                                curproc,
+                                1, 0,
+                                &(inst[MOVE_SRC_FLAGS]),
+                                &(inst[MOVE_SRC_VAL]),
+                                &(inst[MOVE_SRC_INDEX])) < 0) {
+                    return(-1);
+                }
+            } else {
+                inst[MOVE_SRC_FLAGS] = MOVE_FLAG_IMMEDIATE;
+                inst[MOVE_SRC_VAL] = 0;
+                inst[MOVE_SRC_INDEX] = 0; /* ignored but may as well */
             }
         } JUMP_INSTRUCTION("jump",  CRUSTY_INSTRUCTION_TYPE_JUMP )
         } JUMP_INSTRUCTION("jumpn", CRUSTY_INSTRUCTION_TYPE_JUMPN)

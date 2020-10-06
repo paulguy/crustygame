@@ -241,59 +241,448 @@ proc populate_piece_values piece rotation pos width height
     move height PIECEINFO_HEIGHT:pieceptr
 ret
  
-proc piece_would_collide collided piece rotation x y
+proc rotate x y piece rotation dir
+    local biasptr
+
+    cmp dir 0
+    jumpl rotate_ccw
+    jumpg rotate_cw
+    jump end
+
+    label rotate_ccw
+    sub rotation 1
+    jumpg no_wrap_max
+    jumpz no_wrap_max
+    move rotation 3
+    label no_wrap_max
+
+    ; for counter clockwise, the pointer is the rotation transitioned to
+    move biasptr piece
+    mul  biasptr PIECEINFO_ROTATIONS
+    add  biasptr rotation
+
+    ; for counter clockwise, the bias is subtracted (undone)
+    sub x ROTATION_X_BIAS:biasptr
+    sub y ROTATION_Y_BIAS:biasptr
+    jump end
+
+    label rotate_cw
+    ; for clockwise, the pointer is the rotation transitioned from
+    move biasptr piece
+    mul  biasptr PIECEINFO_ROTATIONS
+    add  biasptr rotation
+
+    add rotation 1
+    cmp rotation 4
+    jumpl no_wrap_0
+    move rotation 0
+    label no_wrap_0
+
+    ; for clockwise, the bias is added
+    add x ROTATION_X_BIAS:biasptr
+    add y ROTATION_Y_BIAS:biasptr
+    
+    label end
+ret
+
+expr COLLIDED_LEFT   1
+expr COLLIDED_RIGHT  2
+expr COLLIDED_TOP    4
+expr COLLIDED_BOTTOM 8
+
+proc check_collision collided x y pos width height
     local piecex
-    local pos
-    local width
-    local height
+    local piecey
     local pitpos
-    local block
-    local maxx
-    local maxy
+    local piecepos
+    local pieceval
+    local halfwidth
+    local halfheight
+    local leftx
+    local rightx
+    local topy
+    local bottomy
 
-    call populate_piece_values piece rotation pos width height
-
-    move collided 1
-    cmp x 0
-    jumpl collision
-    move maxx PIT_WIDTH
-    sub  maxx width
-    cmp  x    maxx
-    jumpg collision
-    move maxy PIT_HEIGHT
-    sub  maxy height
-    cmp  y    maxy
-    jumpg collision
     move collided 0
+    ; determine ranges where a collision is determined to be to a particular
+    ; side. this could be made smaller but it wouldn't necessarily be faster
+    ; and would be more difficult to understand when it's already janky
+    move halfwidth width
+    mod  halfwidth 2
+    jumpz split_width
+    ; odd number.  be greedy here and count the center piece outwards for both
+    ; sides.  a bottom collision could result in both being flagged but that
+    ; isn't important
+    ; assume that integer divisions will be floored down
+    move leftx width
+    div  leftx 2
+    move rightx leftx
+    add  leftx 1
+    jump find_halfheight
+    label split_width
+    move leftx width
+    div  leftx 2
+    move rightx leftx
+    label find_halfheight
+    move halfheight height
+    mod  halfheight 2
+    jumpz split_height
+    ; as above
+    move topy height
+    div  topy 2
+    move bottomy topy
+    add  topy 1
+    jump done_halves
+    label split_height
+    move topy height
+    div  topy 2
+    move bottomy topy
+    label done_halves
 
+    ; check collisions with pit boundaries
+    ; check top
+    cmp y 0
+    jumpg check_pit_bottom
+    jumpz check_pit_bottom
+    or collided COLLIDED_TOP
+    jump end
+
+    label check_pit_bottom
+    move piecey y
+    add  piecey height
+    cmp  piecey PIT_HEIGHT
+    jumpl check_pit_left
+    jumpz check_pit_left
+    or collided COLLIDED_BOTTOM
+    jump end
+
+    label check_pit_left
+    cmp x 0
+    jumpg check_pit_right
+    jumpz check_pit_right
+    or collided COLLIDED_LEFT
+    jump end
+
+    label check_pit_right
+    move piecex x
+    add  piecex width
+    cmp  piecex PIT_WIDTH
+    jumpl check_pit
+    jumpz check_pit
+    or collided COLLIDED_RIGHT
+    jump end
+
+    label check_pit
     ; initial pit position
     move pitpos y
     mul  pitpos PIT_WIDTH
     add  pitpos x
 
+    move piecepos pos
+    move piecey 0
     label y
-        move piecex width
+        move piecex 0
 
         label x
-            move block pieces:pos
-            move collided pit:pitpos
-            and  collided block
+            move pieceval pieces:piecepos
+            and  pieceval pit:pitpos
             jumpz no_collision
-            ; collided will be non-zero
-            jump collision
+
+            ; determine what halves a collision happened on
+            ; left side
+            cmp piecex leftx
+            jumpg check_right
+            jumpz check_right
+            or collided COLLIDED_LEFT
+            label check_right
+            cmp piecex rightx
+            jumpl check_top
+            or collided COLLIDED_RIGHT
+            label check_top
+            cmp piecey topy
+            jumpg check_bottom
+            jumpz check_bottom
+            or collided COLLIDED_TOP
+            label check_bottom
+            cmp piecey bottomy
+            jumpl no_collision
+            or collided COLLIDED_BOTTOM
             label no_collision
 
-            add pos 1
+            add piecepos 1
             add pitpos 1
-            sub piecex 1
-        jumpg x
+            add piecex 1
+            cmp piecex width
+        jumpl x
 
         sub pitpos width
         add pitpos PIT_WIDTH
-        sub height 1
-    jumpg y
+        add piecey 1
+        cmp piecey height
+    jumpl y
 
-    label collision
+    label end
+ret
+
+proc try_resolve_piece_movement piece rotation x y xmove ymove dir
+    local pos
+    local oldwidth
+    local oldheight
+    local width
+    local height
+    local xbias
+    local ybias
+    local newrotation
+    local widthdiff
+    local heightdiff
+    local leftgrowth
+    local rightgrowth
+    local topgrowth
+    local bottomgrowth
+    local checkx
+    local checky
+    local collided
+    local priority
+
+    ; get the current and desired new piece stats
+    call populate_piece_values piece rotation pos oldwidth oldheight
+    move newrotation rotation
+    call rotate xbias ybias piece newrotation dir
+    call populate_piece_values piece newrotation pos width height
+
+    ; try to do the full move
+    move checkx x
+    add  checkx xmove
+    add  checkx xbias
+    move checky y
+    add  checky ymove
+    add  checky ybias
+    call check_collision priority checkx checky pos width height
+    cmp priority
+    jumpz update_all
+
+    ; compare them to see if we need to check for left/right or up/down kicks,
+    ; there can only be one or the other or neither for the O piece or if no
+    ; rotation happened anyway
+    move widthdiff width
+    sub  widthdiff oldwidth
+    move heightdiff height
+    sub  heightdiff oldheight
+
+    cmp widthdiff 0
+    jumpg horz_kick
+    cmp heightdiff 0
+    jumpg vert_kick
+    ; no rotation occurred or the piece doesn't occupy additional space so it
+    ; doesn't need to kick, still update rotation anyway.
+    move rotation newrotation
+    jump no_kick
+
+    label horz_kick
+        ; determine growth in both directions and try all possibilities from
+        ; outside in
+
+        ; xbias will always be 0 or negative indicating the piece has to move
+        ; to grow in that direction
+        move leftgrowth xbias
+        mul  leftgrowth -1
+
+        ; start with the growth in the left direction, if any, find the width
+        ; past the 0 point, then subtract the original width
+        move rightgrowth xbias
+        add  rightgrowth width
+        sub  rightgrowth oldwidth
+
+        ; and finally apply the attempted movement
+        sub  leftgrowth  xmove
+        add  rightgrowth xmove
+
+        ; apply drop, if any
+        move checky y
+        add  checky ymove
+
+        ; try the largest of leftgrowth and rightgrowth (or the side that
+        ; collided if they are equal), decrement by one then repeat until 
+        ; they're both zero
+        label horz_kick_loop
+            cmp leftgrowth 0
+            jumpg horz_loop_continue
+            cmp rightgrowth 0
+            jumpg horz_loop_continue
+            ; all possibilities were tried and nothing was found, don't update
+            ; anything, but try to see if the piece will move without rotation
+            jump no_kick
+            label horz_loop_continue
+                cmp leftgrowth rightgrowth
+                jumpg try_left
+                jumpl try_right
+                and priority COLLIDED_LEFT
+                jump try_left
+
+            label try_right
+                ; actually try moving it to the left to _compensate_ for right
+                ; side growth
+                move checkx x
+                add  checkx xbias
+                sub  checkx rightgrowth
+
+                call check_collision collided checkx checky pos width height
+                ; subtract it now because if it collided it needs to be updated
+                ; anyway, otherwise it doesn't matter
+                sub rightgrowth 1
+                cmp collided
+                jumpn horz_kick_loop
+
+                ; found open spot, update values and finish
+                move x checkx
+                move y checky
+                move rotation newrotation
+            jump horz_loop_break
+            label try_left
+                ; same as above but moving right to compensate for left hand
+                ; growth
+                move checkx x
+                add  checkx xbias
+                add  checkx leftgrowth
+
+                call check_collision collided checkx checky pos width height
+                ; same as above
+                sub leftgrowth 1
+                cmp collided
+                jumpn horz_kick_loop
+
+                ; also as above 
+                move x checkx
+                move y checky
+                move rotation newrotation
+            ; break out here
+        label horz_loop_break
+    jump end
+
+    label vert_kick
+        ; should be pretty much like horz_kick just in a vertical direction
+
+        ; ybias will always be 0 or negative indicating the piece has to move
+        ; to grow in that direction
+        move topgrowth ybias
+        mul  topgrowth -1
+
+        ; start with the growth upwards, if any, find the height
+        ; past the 0 point, then subtract the original height
+        move bottomgrowth ybias
+        add  bottomgrowth height
+        sub  bottomgrowth oldheight
+
+        ; and finally apply the attempted movement
+        sub  topgrowth    ymove
+        add  bottomgrowth ymove
+
+        ; apply horizontal movement, if any
+        move checkx x
+        add  checkx xmove
+
+        ; try the largest of topgrowth and bottomgrowth (or the side that
+        ; collided if they are equal), decrement by one then repeat until 
+        ; they're both zero
+        label vert_kick_loop
+            cmp topgrowth 0
+            jumpg vert_loop_continue
+            cmp bottomgrowth 0
+            jumpg vert_loop_continue
+            ; all possibilities were tried and nothing was found, don't update
+            ; anything, but try to see if the piece will move without rotation
+            jump no_kick
+            label vert_loop_continue
+                cmp topgrowth bottomgrowth
+                jumpg try_up
+                jumpl try_down
+                cmp priority COLLIDED_TOP
+                jumpn try_up
+
+            label try_down
+                ; actually try moving it up to _compensate_ for bottom
+                ; growth
+                move checky y
+                add  checky ybias
+                sub  checky bottomgrowth
+
+                call check_collision collided checkx checky pos width height
+                ; subtract it now because if it collided it needs to be updated
+                ; anyway, otherwise it doesn't matter
+                sub bottomgrowth 1
+                cmp collided
+                jumpn vert_kick_loop
+
+                ; found open spot, update values and finish
+                move x checkx
+                move y checky
+                move rotation newrotation
+            jump vert_loop_break
+            label try_up
+                ; same as above but moving down to compensate for upward
+                ; growth
+                move checky y
+                add  checky ybias
+                add  checky topgrowth
+
+                call check_collision collided checkx checky pos width height
+                ; same as above
+                sub topgrowth 1
+                cmp collided
+                jumpn vert_kick_loop
+
+                ; also as above 
+                move x checkx
+                move y checky
+                move rotation newrotation
+            ; break out here
+        label vert_loop_break
+    jump end
+
+    label no_kick
+        ; try to move the piece in both requested directions
+        move checkx x
+        add  checkx xmove
+        move checky y
+        add  checky ymove
+        call check_collision collided checkx checky pos width height
+        cmp collided
+        jumpz update_pos
+        ; if either is 0, don't repeat an unnecessary test
+        cmp xmove 0
+        jumpz end
+        cmp ymove 0
+        jumpz end
+
+        ; try to move the piece down only
+        cmp ymove 0
+        jumpz no_down_only
+            move checkx x
+            move checky y
+            add  checky ymove
+            call check_collision collided checkx checky pos width height
+            cmp collided
+            jumpz update_pos
+        label no_down_only
+
+        ; try to move piece only laterally
+        cmp xmove 0
+        jumpz no_lateral_only
+            move checkx x
+            add  checkx xmove
+            move checky y
+            call check_collision collided checkx checky pos width height
+            cmp collided
+            jumpz update_pos
+       label no_lateral_only
+    jump end
+
+    label update_all
+        move rotation newrotation
+    label update_pos
+        move x checkx
+        move y checky
+    label end
 ret
 
 proc update_pit_map piece rotation x y
@@ -314,7 +703,7 @@ proc update_pit_map piece rotation x y
         move piecex width
 
         label x
-            cmp pieces:pos 0
+            cmp pieces:pos
             jumpz no_update
                 move pit:pitpos piece
             label no_update
@@ -439,7 +828,7 @@ proc draw_piece layer_id piece rotation x y
         move position:0 scaledx
         move piecex width
         label x
-            cmp pieces:pos 0
+            cmp pieces:pos
             jumpz nodraw
 
             ; copy to an int to be useful by gfx
@@ -634,7 +1023,7 @@ proc init
     local background_pattern ints BACKGROUND_SIZE
 
     call set_video_mode temp videomode
-    cmp temp 0
+    cmp temp
     jumpn mode_ok
     move set_running 0
     jump end
@@ -788,7 +1177,7 @@ proc count_fps
     local elapsed
 
     call check_timer elapsed FPS_TIMER_ID
-    cmp elapsed 0
+    cmp elapsed
     jumpz fps_continue
     move err fps
     move err NL
@@ -852,26 +1241,25 @@ static curpiece 0
 static currotation
 static xpos 0
 static ypos 0
+static lastmove 0
 static move 0
 static tapped 0
-static held 0
 static fall 0
+static rotate 0
 
 proc frame
     local curTick
     local width
     local height
     local pos
-    local x
-    local y
-    local collided
     local elapsed
-    local do_fall 0
-    local do_move 0
+    local xmove
+    local ymove
+    local collided
 
 ;    call count_fps
 
-    cmp curpiece 0
+    cmp curpiece
     jumpn have_piece
         move curpiece get_random
         mod  curpiece PIECEINFO_PIECES
@@ -884,84 +1272,92 @@ proc frame
         div  xpos 2
     label have_piece
 
-    call check_timer elapsed PIECE_TIMER_ID
-    cmp elapsed 0
-    jumpz check_input
-    move do_fall 1
-
-    label check_input
-    call check_timer elapsed INPUT_TIMER_ID
-    cmp elapsed 0
-    jumpz check_do_fall
+    ; nothing to do if lastmove and move are equal since there's no state to
+    ; transition to
+    cmp lastmove move
+    jumpz done_tap
 
     cmp move 0
     jumpl tap_left
     jumpg tap_right
-    jump check_held
+    ; transition to 0, rearm to allow more tapping.
+    move lastmove 0
+    jump done_tap
 
     label tap_left
-        move do_move -1
-        move tapped TAP_DELAY
-        add move 1
-    jump check_fall
+    cmp move lastmove
+    jumpz done_tap
+    ; transition to left, move left and set lastmove to move to make sure a
+    ; tap isn't signaled until lastmove has been reset back to 0 if the user
+    ; has indicated to stop.  initialize tapped to allow a delay before the
+    ; motion repeats.
+    move xmove -1
+    move lastmove move
+    move tapped TAP_DELAY
+    jump done_tap
 
     label tap_right
-        move do_move 1
-        move tapped TAP_DELAY
-        sub move 1
-    jump check_fall
+    cmp move lastmove
+    jumpz done_tap
+    ; same as above
+    move xmove 1
+    move lastmove move
+    move tapped TAP_DELAY
+    label done_tap
 
-    label check_held
-        cmp tapped 0
-        jumpn tapped
-        move do_move held
-    jump check_fall
+    call check_timer elapsed INPUT_TIMER_ID
+    cmp elapsed
+    jumpz done_repeat
 
-    label tapped
-        sub tapped 1
+    cmp fall
+    jumpz no_fall
+    move ymove 1
+    label no_fall
 
-    label check_fall
-        cmp fall 0
-        jumpz check_movement
-        move do_fall 1
-
-    label check_movement
-        cmp do_move 0
-        jumpl move_left
-        jumpg move_right
-    jump check_do_fall
+    ; the timer has elapsed, check to see if lastmove and move are equal,
+    ; tapped is 0 (and if not, decrease it), then figure out what to do with
+    ; move
+    cmp move lastmove
+    jumpn done_repeat
+    cmp tapped 0
+    jumpn dec_tapped
+    cmp move 0
+    jumpl move_left
+    jumpg move_right
+    jump done_repeat
 
     label move_left
-        move x xpos
-        sub  x 1
-        call piece_would_collide collided curpiece currotation x ypos
-        cmp collided 0
-        jumpn check_do_fall
-        move xpos x
-    jump check_do_fall
+    move xmove -1
+    jump done_repeat
 
     label move_right
-        move x xpos
-        add  x 1
-        call piece_would_collide collided curpiece currotation x ypos
-        cmp collided 0
-        jumpn check_do_fall
-        move xpos x
- 
-    label check_do_fall
-        cmp do_fall 0
-    jumpz done_update
+    move xmove 1
+    jump done_repeat
 
-        move y ypos
-        add  y 1
-        call piece_would_collide collided curpiece currotation xpos y
-        cmp collided 0
-    jumpn collision
-        move ypos y
-        call reset_timer PIECE_TIMER_ID
+    label dec_tapped
+    sub tapped 1
+    label done_repeat
+
+    call try_resolve_piece_movement curpiece currotation xpos ypos xmove ymove rotate
+    ; reset rotation so it only happens once
+    move rotate 0
+
+    call check_timer elapsed PIECE_TIMER_ID
+    cmp elapsed
+    jumpz done_update
+    move ymove ypos
+    add  ymove 1
+
+    ; repopulate because they may have changed
+    call populate_piece_values curpiece currotation pos width height
+    ; check to see if moving down would collide, and if so, plant the piece
+    call check_collision collided xpos ymove pos width height
+    cmp  collided
+    jumpn plant_piece
+    move ypos ymove
     jump done_update
 
-    label collision
+    label plant_piece
         call update_pit_map curpiece currotation xpos ypos
         call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
         ; signal piece reset
@@ -988,27 +1384,18 @@ proc frame
         move gfx_draw_layer window_pattern1_layer_id
         move gfx_draw_layer window_pattern0_layer_id
         call draw_pit
-        move x xpos
-        mul  x TILE_SIDE
-        add  x pitxpos
-        move y ypos
-        mul  y TILE_SIDE
-        add  y pitypos
-        call draw_piece block_layer_id curpiece currotation x y
+        move xmove xpos
+        mul  xmove TILE_SIDE
+        add  xmove pitxpos
+        move ymove ypos
+        mul  ymove TILE_SIDE
+        add  ymove pitypos
+        call draw_piece block_layer_id curpiece currotation xmove ymove
 
     label end
 ret
 
 proc event
-    local pos
-    local width
-    local height
-    local oldheight
-    local newrotation
-    local x
-    local y
-    local collided
-
     cmp event_get_type INPUT_TYPE_KEYDOWN
     jumpn keyup
     cmp event_get_button INPUT_KEY_f
@@ -1019,8 +1406,10 @@ proc event
     jumpz move_left
     cmp event_get_button INPUT_KEY_d
     jumpz move_right
-    cmp event_get_button INPUT_KEY_w
-    jumpz rotate
+    cmp event_get_button INPUT_KEY_q
+    jumpz rotate_left
+    cmp event_get_button INPUT_KEY_e
+    jumpz rotate_right
     cmp event_get_button INPUT_KEY_s
     jumpz fall
     jump end
@@ -1035,56 +1424,19 @@ proc event
     jump end
 
     label move_left
-        cmp move 0
-        jumpg end
-        sub move 1
-        move held -1
+        move move -1
     jump end
 
     label move_right
-        cmp move 0
-        jumpl end
-        add move 1
-        move held 1
+        move move 1
     jump end
 
-    ; TODO allow kicking off of piece or the wall
-    label rotate
-        move newrotation currotation
-        add  newrotation 1
-        cmp  newrotation 4
-        jumpl nowrap
-            move newrotation 0
-        label nowrap
-        call populate_piece_values curpiece currotation pos width oldheight
-        call populate_piece_values curpiece newrotation pos width height
-        sub oldheight height
-        ; oldheight will be the negative growth in height
-        move y ypos
-        move x xpos
-        add width xpos
-        cmp width PIT_WIDTH
-        jumpl no_fix_width
-        jumpz no_fix_width
-        move x     PIT_WIDTH
-        sub  width xpos
-        sub  x     width
-        label no_fix_width
-        call piece_would_collide collided curpiece newrotation x y
-        cmp collided 0
-        jumpn check_height
-        jump copy_new
-        label check_height
-        sub y 1
-        ; don't check y < 0
-        jumpl end
-        add oldheight 1
-        jumpg end
-        jump no_fix_width
-        label copy_new
-        move currotation newrotation
-        move xpos x
-        move ypos y
+    label rotate_left
+        move rotate -1
+    jump end
+
+    label rotate_right
+        move rotate 1
     jump end
 
     label fall
@@ -1103,15 +1455,15 @@ proc event
     jump end
 
     label no_move_left
-        cmp held 0
+        cmp move 0
         jumpg end
-        move held 0
+        move move 0
     jump end
 
     label no_move_right
-        cmp held 0
+        cmp move 0
         jumpl end
-        move held 0
+        move move 0
     jump end
 
     label nofall
