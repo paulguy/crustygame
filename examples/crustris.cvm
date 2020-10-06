@@ -38,6 +38,11 @@ macro RESCALE_POS XPOS YPOS
     add YPOS global_offset:1
 endmacro RESCALE_POS
 
+expr GAME_MODE_PLAYING 0
+expr GAME_MODE_ENDED   1
+
+static game_mode GAME_MODE_PLAYING
+
 ; assure collision masking works.
 static pieces ints "\
 255 255 255 \
@@ -777,6 +782,83 @@ proc update_pit_tilemaps_from_piece piece rotation x y
     call update_pit_tilemaps x y width height
 ret
 
+proc drop_line line
+    local block
+    local curline
+    local pitpos
+    local abovepitpos
+
+    move curline line
+
+    ; start at the end of the line
+    move pitpos line
+    mul  pitpos PIT_WIDTH
+    add  pitpos PIT_WIDTH
+    sub  pitpos 1
+    ; end of line above to copy from
+    move abovepitpos pitpos
+    sub  abovepitpos PIT_WIDTH
+
+    label line
+        move block PIT_WIDTH
+        label block
+            cmp abovepitpos 0
+            jumpl set_zero
+            move pit:pitpos pit:abovepitpos
+            jump done_set
+            label set_zero
+            move pit:pitpos 0
+            label done_set
+
+            sub pitpos 1
+            sub abovepitpos 1
+            sub block 1
+        jumpg block
+
+        sub curline 1
+    jumpg line
+    jumpz line
+ret
+
+proc check_lines lines y height
+    local pitpos
+    local line
+    local maxline
+    local block
+    local blocks
+
+    move lines 0
+
+    move maxline y
+    add  maxline height
+
+    move pitpos y
+    mul  pitpos PIT_WIDTH
+
+    move line y
+    label line
+        move block PIT_WIDTH
+        move blocks 0
+        label block
+            cmp pit:pitpos
+            jumpz noblock
+            add blocks 1
+            label noblock
+
+            add pitpos 1
+            sub block 1
+        jumpg block
+        cmp PIT_WIDTH blocks
+        jumpg noclear
+        call drop_line line
+        add lines 1
+        label noclear
+
+        add line 1
+        cmp line maxline
+    jumpl line
+ret
+
 proc draw_pit
     move gfx_draw_layer pit_shadow_layer_id
     move gfx_draw_layer pit_pattern1_layer_id
@@ -1256,8 +1338,12 @@ proc frame
     local xmove
     local ymove
     local collided
+    local lines
 
 ;    call count_fps
+
+    cmp game_mode GAME_MODE_ENDED
+    jumpz done_update
 
     cmp curpiece
     jumpn have_piece
@@ -1270,6 +1356,14 @@ proc frame
         move xpos PIT_WIDTH
         sub  xpos width
         div  xpos 2
+
+        call check_collision collided xpos ymove pos width height
+        cmp collided
+        jumpz have_piece
+        move game_mode GAME_MODE_ENDED
+        call update_pit_map curpiece currotation xpos ypos
+        call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
+        jump done_update
     label have_piece
 
     ; nothing to do if lastmove and move are equal since there's no state to
@@ -1359,7 +1453,16 @@ proc frame
 
     label plant_piece
         call update_pit_map curpiece currotation xpos ypos
+        call check_lines lines ypos height
+        cmp lines
+        jumpg update_pit_lines
         call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
+        jump done_pit_updates
+        label update_pit_lines
+        ; update the pit up to the line the piece fell to
+        add height ypos
+        call update_pit_tilemaps 0 0 PIT_WIDTH height
+        label done_pit_updates
         ; signal piece reset
         move curpiece 0
 
