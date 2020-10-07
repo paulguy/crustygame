@@ -81,6 +81,7 @@ typedef struct {
     long nameOffset;
     const char *name;
     CrustyType type;
+    int procIndex;
     struct CrustyProcedure_s *proc;
     unsigned int length; /* array length
                             0  if reference (local argument)
@@ -90,10 +91,6 @@ typedef struct {
                             position of value in local stack (from stack pointer) if local
                             position of reference in local stack if reference
                             position in global stack (from 0) if global */
-    /* runtime and function call initializers, only 1 must be not-NULL */
-    char *chrinit;
-    int *intinit;
-    double *floatinit;
 
     /* callbacks for IO, both NULL if not IO */
     CRUSTY_IO_READ_FUNC_DECL(read);
@@ -114,12 +111,14 @@ typedef struct CrustyProcedure_s {
     unsigned int start;
     unsigned int length;
     unsigned int args;
-    unsigned int stackneeded;
     unsigned int instruction;
 
     int *varIndex;
     CrustyVariable **var;
     unsigned int vars;
+
+    unsigned int stackneeded;
+    char *initializer;
 
     CrustyLabel *label;
     unsigned int labels;
@@ -206,6 +205,7 @@ typedef struct CrustyVM_s {
 
     unsigned int stacksize;
     unsigned int initialstack;
+    char *initializer;
 
     unsigned int callstacksize;
 
@@ -352,6 +352,8 @@ static CrustyVM *init() {
     cvm->insts = 0;
     cvm->stack = NULL;
     cvm->cstack = NULL;
+    cvm->initialstack = 0;
+    cvm->initializer = NULL;
 
     return(cvm);
 }
@@ -386,22 +388,14 @@ void crustyvm_free(CrustyVM *cvm) {
             if(cvm->proc[i].label != NULL) {
                 free(cvm->proc[i].label);
             }
+            if(cvm->proc[i].initializer != NULL) {
+                free(cvm->proc[i].initializer);
+            }
         }
         free(cvm->proc);
     }
 
     if(cvm->var != NULL) {
-        for(i = 0; i < cvm->vars; i++) {
-            if(cvm->var[i].chrinit != NULL) {
-                free(cvm->var[i].chrinit);
-            }
-            if(cvm->var[i].intinit != NULL) {
-                free(cvm->var[i].intinit);
-            }
-            if(cvm->var[i].floatinit != NULL) {
-                free(cvm->var[i].floatinit);
-            }
-        }
         free(cvm->var);
     }
 
@@ -415,6 +409,10 @@ void crustyvm_free(CrustyVM *cvm) {
 
     if(cvm->cstack != NULL) {
         free(cvm->cstack);
+    }
+
+    if(cvm->initializer != NULL) {
+        free(cvm->initializer);
     }
 
     free(cvm);
@@ -1832,7 +1830,7 @@ static int preprocess(CrustyVM *cvm,
             active.offset[i] = cvm->line[cvm->logline].offset[i];
             /* don't rewrite the line at all if it's ending the current
              * macro. */
-            if(!(macrostackptr >= 0 &&
+            if(!(macrostackptr >= 0 && i == 1 &&
                  strcmp(GET_ACTIVE(0), "endmacro") == 0 &&
                  strcmp(GET_ACTIVE(1), 
                         &(cvm->tokenmem[macrostack[macrostackptr]->nameOffset])) == 0)) {
@@ -2224,7 +2222,7 @@ static int find_procedure(CrustyVM *cvm,
 }
 
 static int variable_is_global(CrustyVariable *var) {
-    return(var->proc == NULL);
+    return(var->procIndex == -1);
 }
 
 static int variable_is_argument(CrustyVariable *var) {
@@ -2253,6 +2251,7 @@ static int find_variable(CrustyVM *cvm,
         }
     }
     /* scan global */
+
     for(i = 0; i < cvm->vars; i++) {
         if(variable_is_global(&(cvm->var[i]))) {
             if(strcmp(&(cvm->tokenmem[cvm->var[i].nameOffset]), name) == 0) {
@@ -2272,16 +2271,27 @@ static int new_variable(CrustyVM *cvm,
                         int *intinit,
                         double *floatinit,
                         const CrustyCallback *cb,
-                        CrustyProcedure *proc) {
+                        int procIndex) {
+    int varIndex;
     char *temp;
+    CrustyVariable *var;
+    CrustyProcedure *proc = NULL;
 
-    if(find_variable(cvm, proc, &(cvm->tokenmem[nameOffset])) >= 0) {
+    if(procIndex >= 0) {
+        proc = &(cvm->proc[procIndex]);
+    }
+
+    varIndex = find_variable(cvm, proc, &(cvm->tokenmem[nameOffset]));
+    if(varIndex >= 0) {
         if(cb != NULL) {
-            LOG_PRINTF(cvm, "Redeclaration of callback variable.\n");
+            LOG_PRINTF(cvm, "Redeclaration of callback variable: %s\n",
+                       &(cvm->tokenmem[cvm->var[varIndex].nameOffset]));
         } else if(proc == NULL) {
-            LOG_PRINTF(cvm, "Redeclaration of static variable.\n");
+            LOG_PRINTF(cvm, "Redeclaration of static variable: %s\n",
+                       &(cvm->tokenmem[cvm->var[varIndex].nameOffset]));
         } else {
-            LOG_PRINTF(cvm, "Redeclaration of local variable.\n");
+            LOG_PRINTF(cvm, "Redeclaration of local variable: %s\n",
+                       &(cvm->tokenmem[cvm->var[varIndex].nameOffset]));
         }
         return(-1);
     }
@@ -2292,28 +2302,18 @@ static int new_variable(CrustyVM *cvm,
         return(-1);
     }
     cvm->var = (CrustyVariable *)temp;
-    cvm->var[cvm->vars].nameOffset = nameOffset;
-    cvm->var[cvm->vars].length = length;
-    cvm->var[cvm->vars].type = type;
-    cvm->var[cvm->vars].chrinit = chrinit;
-    cvm->var[cvm->vars].intinit = intinit;
-    cvm->var[cvm->vars].floatinit = floatinit;
-    if(cb == NULL) {
-        cvm->var[cvm->vars].read = NULL;
-        cvm->var[cvm->vars].write = NULL;
-    } else {
-        cvm->var[cvm->vars].read = cb->read;
-        cvm->var[cvm->vars].write = cb->write;
-        cvm->var[cvm->vars].readpriv = cb->readpriv;
-        cvm->var[cvm->vars].writepriv = cb->writepriv;
-    }        
-    cvm->var[cvm->vars].proc = proc; /* this value will likely become invalid
-                                        as the procedure list grows, but it will
-                                        be updated again once everything is its
-                                        final size.  All that matters right now
-                                        is whether it's NULL or not. */
+    var = &(cvm->var[cvm->vars]);
 
+    var->nameOffset = nameOffset;
+    var->length = length;
+    var->type = type;
+    var->procIndex = procIndex;
+
+    /* local */
     if(proc != NULL) {
+        var->read = NULL;
+        var->write = NULL;
+
         temp = realloc(proc->varIndex, sizeof(int) * (proc->vars + 1));
         if(temp == NULL) {
             LOG_PRINTF(cvm, "Failed to allocate memory for local variable list.\n");
@@ -2322,6 +2322,139 @@ static int new_variable(CrustyVM *cvm,
         proc->varIndex = (int *)temp;
         proc->varIndex[proc->vars] = cvm->vars;
         proc->vars++;
+
+        /* local variable locations are updated first, then applied because
+         * the stack grows down for some reason, so the space needs to be
+         * "taken up" first for their location */
+        if(length == 0) {
+            proc->args++;
+            var->offset = proc->args;
+            proc->stackneeded += sizeof(CrustyStackArg);
+
+            temp = realloc(proc->initializer, proc->stackneeded);
+            if(temp == NULL) {
+                LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                return(-1);
+            }
+            proc->initializer = temp;
+ 
+            /* no need to initialize anything here, because these fields are
+             * filled in at runtime. */
+        } else if(type == CRUSTY_TYPE_INT) {
+            int lastSize = proc->stackneeded;
+
+            proc->stackneeded += (length * sizeof(int));
+            var->offset = proc->stackneeded;
+            /* make space for the new local variable and because i'm dumb and
+             * again, made the stack grow weird because i dunno, the data has
+             * to be moved towards the end of the stack. */
+            temp = realloc(proc->initializer, proc->stackneeded);
+            if(temp == NULL) {
+                LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                return(-1);
+            }
+            proc->initializer = temp;
+            /* use memmove() because the locations will overlap */
+            memmove(&(proc->initializer[length * sizeof(int)]),
+                    proc->initializer,
+                    lastSize);
+            memcpy(proc->initializer, intinit, length * sizeof(int));
+        } else if(type == CRUSTY_TYPE_FLOAT) {
+            int lastSize = proc->stackneeded;
+
+            proc->stackneeded += (length * sizeof(double));
+            var->offset = proc->stackneeded;
+            /* same as above */
+            temp = realloc(proc->initializer, proc->stackneeded);
+            if(temp == NULL) {
+                LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                return(-1);
+            }
+            proc->initializer = temp;
+
+            memmove(&(proc->initializer[length * sizeof(double)]),
+                    proc->initializer,
+                    lastSize);
+            memcpy(proc->initializer, floatinit, length * sizeof(double));
+        } else { /* CHAR */
+            int lastSize = proc->stackneeded;
+
+            proc->stackneeded += length;
+            if(proc->stackneeded % ALIGNMENT != 0) {
+                proc->stackneeded += (ALIGNMENT - (proc->stackneeded % ALIGNMENT));
+            }
+            var->offset = proc->stackneeded;
+            /* same as above */
+            temp = realloc(proc->initializer, proc->stackneeded);
+            if(temp == NULL) {
+                LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                return(-1);
+            }
+            proc->initializer = temp;
+
+            memmove(&(proc->initializer[var->offset - lastSize]),
+                    proc->initializer,
+                    lastSize);
+            memcpy(proc->initializer, chrinit, length);
+        }
+    } else { /* global */
+        if(cb == NULL) {
+            var->read = NULL;
+            var->write = NULL;
+ 
+            var->offset = cvm->initialstack;
+            if(type == CRUSTY_TYPE_INT) {
+                cvm->initialstack += (length * sizeof(int));
+                /* the initial stack isn't as silly and grows upwards, so less
+                 * special things to do. */
+                temp = realloc(cvm->initializer, cvm->initialstack);
+                if(temp == NULL) {
+                    LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                    return(-1);
+                }
+                cvm->initializer = temp;
+
+                memcpy(&(cvm->initializer[var->offset]),
+                       intinit,
+                       length * sizeof(int));
+            } else if(type == CRUSTY_TYPE_FLOAT) {
+                cvm->initialstack += (length * sizeof(double));
+
+                temp = realloc(cvm->initializer, cvm->initialstack);
+                if(temp == NULL) {
+                    LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                    return(-1);
+                }
+                cvm->initializer = temp;
+
+                memcpy(&(cvm->initializer[var->offset]),
+                       floatinit,
+                       length * sizeof(double));
+            } else { /* CHAR */
+                cvm->initialstack += length;
+                /* make things aligned */
+                if(cvm->initialstack % ALIGNMENT != 0) {
+                    cvm->initialstack += (ALIGNMENT -
+                                          (cvm->initialstack % ALIGNMENT));
+                }
+
+                temp = realloc(cvm->initializer, cvm->initialstack);
+                if(temp == NULL) {
+                    LOG_PRINTF(cvm, "Failed to expand procedure initializer.\n");
+                    return(-1);
+                }
+                cvm->initializer = temp;
+
+                memcpy(&(cvm->initializer[var->offset]),
+                       chrinit,
+                       length);
+            }
+        } else {
+            var->read = cb->read;
+            var->write = cb->write;
+            var->readpriv = cb->readpriv;
+            var->writepriv = cb->writepriv;
+        }
     }
 
     cvm->vars++;
@@ -2440,7 +2573,7 @@ static int number_list_floats(const char *list, double **buffer) {
 
 static int variable_declaration(CrustyVM *cvm,
                                 CrustyLine *line,
-                                CrustyProcedure *proc) {
+                                int procIndex) {
     int length;
     int *intinit = NULL;
     char *chrinit = NULL;
@@ -2515,17 +2648,7 @@ static int variable_declaration(CrustyVM *cvm,
         } else if(strcmp(&(cvm->tokenmem[line->offset[2]]), "string") == 0) {
             type = CRUSTY_TYPE_CHAR;
             length = strlen(&(cvm->tokenmem[line->offset[3]]));
-
-            chrinit = malloc(length + 1);
-            if(chrinit == NULL) {
-                LOG_PRINTF_TOK(cvm, "Failed to allocate memory for initializer.\n");
-                return(-1);
-            }
-
-            /* This line throws a warning in gcc 9.3.0 about the length argument
-               depending on the source argument but the same variable is used to
-               allocate the destination argument anyway. */
-            strncpy(chrinit, &(cvm->tokenmem[line->offset[3]]), length + 1);
+            chrinit = &(cvm->tokenmem[line->offset[3]]);
         } else {
             LOG_PRINTF_TOK(cvm, "variable declaration can be array or string.\n");
             return(-1);
@@ -2544,12 +2667,20 @@ static int variable_declaration(CrustyVM *cvm,
                     length,
                     chrinit, intinit, floatinit,
                     NULL,
-                    proc) < 0) {
+                    procIndex) < 0) {
         /* print an error so the user can get a line number. */
         LOG_PRINTF_TOK(cvm, "Error from new_variable().\n");
         return(-1);
     }
 
+    /* free memory which is copied in to the procedure/global initializer */
+    if(intinit != NULL) {
+        free(intinit);
+    } else if(floatinit != NULL) {
+        free(floatinit);
+    }
+    /* don't free chrinit since that's just copied from the token list */
+            
     return(0);
 }
 
@@ -2557,6 +2688,7 @@ static int symbols_scan(CrustyVM *cvm,
                         char *safepath) {
     unsigned int i, j;
     CrustyProcedure *curProc = NULL;
+    int curProcIndex = -1;
 
     CrustyLine *new = NULL;
     char *temp;
@@ -2599,34 +2731,34 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
             cvm->proc = curProc;
-            curProc = &(cvm->proc[cvm->procs]);
+            curProcIndex = cvm->procs;
+            curProc = &(cvm->proc[curProcIndex]);
             cvm->procs++;
 
             curProc->nameOffset = cvm->line[cvm->logline].offset[1];
             curProc->start = lines;
             curProc->length = 0;
             curProc->stackneeded = 0;
-            curProc->args = cvm->line[cvm->logline].tokencount - 2; 
+            curProc->initializer = NULL;
+            curProc->args = 0; 
             curProc->var = NULL;
             curProc->varIndex = NULL;
             curProc->vars = 0;
             curProc->label = NULL;
             curProc->labels = 0;
 
+            unsigned int args = cvm->line[cvm->logline].tokencount - 2;
             /* add arguments as local variables */
-            for(i = 0; i < curProc->args; i++) {
+            for(i = 0; i < args; i++) {
                 /* argument variables have 0 length and no initializers and no
                    read or write functions but obviously is a local variable */
-                /* make stack variables int by default because they may be
-                   referenced directly but only can exist as a single int with
-                   a length of 1. */
                 if(new_variable(cvm,
                                 cvm->line[cvm->logline].offset[i + 2],
-                                CRUSTY_TYPE_INT,
+                                CRUSTY_TYPE_NONE,
                                 0,
                                 NULL, NULL, NULL,
                                 NULL,
-                                curProc) < 0) {
+                                curProcIndex) < 0) {
                     /* reason will have already been printed */
                     goto failure;
                 }
@@ -2639,7 +2771,9 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
 
+            cvm->stacksize += curProc->stackneeded;
             curProc = NULL;
+            curProcIndex = -1;
 
             /* this is a real instruction, so it should be copied over */
         } else if(strcmp(GET_TOKEN(cvm->logline, 0), "static") == 0) {
@@ -2648,7 +2782,7 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
 
-            if(variable_declaration(cvm, &(cvm->line[cvm->logline]), NULL) < 0) {
+            if(variable_declaration(cvm, &(cvm->line[cvm->logline]), -1) < 0) {
                 goto failure;
             }
 
@@ -2664,7 +2798,7 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
 
-            if(variable_declaration(cvm, &(cvm->line[cvm->logline]), curProc) < 0) {
+            if(variable_declaration(cvm, &(cvm->line[cvm->logline]), curProcIndex) < 0) {
                 goto failure;
             }
 
@@ -2822,7 +2956,7 @@ static int symbols_scan(CrustyVM *cvm,
                                 fileLength,
                                 buf, NULL, NULL,
                                 NULL,
-                                NULL) < 0) {
+                                curProcIndex) < 0) {
                     free(buf);
                     goto failure;
                 }
@@ -2833,7 +2967,7 @@ static int symbols_scan(CrustyVM *cvm,
                                 fileLength / sizeof(int),
                                 NULL, (int *)buf, NULL,
                                 NULL,
-                                NULL) < 0) {
+                                curProcIndex) < 0) {
                     free(buf);
                     goto failure;
                 }
@@ -2844,7 +2978,7 @@ static int symbols_scan(CrustyVM *cvm,
                                 fileLength / sizeof(double),
                                 NULL, NULL, (double *)buf,
                                 NULL,
-                                NULL) < 0) {
+                                curProcIndex) < 0) {
                     free(buf);
                     goto failure;
                 }
@@ -2872,29 +3006,11 @@ static int symbols_scan(CrustyVM *cvm,
         goto failure;
     }
 
-    /* memory allocation stuff */
-
-    cvm->initialstack = 0;
+    /* point CrustyVariables in CrustyProcedures and vise versa */
     for(i = 0; i < cvm->vars; i++) {
-        if(variable_is_global(&(cvm->var[i])) &&
-           !variable_is_callback(&(cvm->var[i]))) {
-            cvm->var[i].offset = cvm->initialstack;
-            if(cvm->var[i].type == CRUSTY_TYPE_INT) {
-                cvm->initialstack += (cvm->var[i].length * sizeof(int));
-            } else if(cvm->var[i].type == CRUSTY_TYPE_FLOAT) {
-                cvm->initialstack += (cvm->var[i].length * sizeof(double));
-            } else { /* CHAR */
-                cvm->initialstack += cvm->var[i].length;
-            }
-            /* make things aligned */
-            if(cvm->initialstack % ALIGNMENT != 0) {
-                cvm->initialstack += (ALIGNMENT -
-                                      (cvm->initialstack % ALIGNMENT));
-            }
-        }
+        cvm->var[i].proc = NULL;
     }
 
-    cvm->stacksize = cvm->initialstack;
     for(i = 0; i < cvm->procs; i++) {
         cvm->proc[i].var = malloc(sizeof(CrustyVariable *) * cvm->proc[i].vars);
         if(cvm->proc[i].var == NULL) {
@@ -2902,39 +3018,11 @@ static int symbols_scan(CrustyVM *cvm,
             goto failure;
         }
 
-        cvm->proc[i].stackneeded = 0;
         for(j = 0; j < cvm->proc[i].vars; j++) {
-            /* point CrustyVariables in CrustyProcedures and vise versa */
             cvm->proc[i].var[j] = &(cvm->var[cvm->proc[i].varIndex[j]]);
             cvm->proc[i].var[j]->proc = &(cvm->proc[i]);
-
-            /* set up offsets in to local stack for each variable in a procedure */
-
-            if(variable_is_argument(cvm->proc[i].var[j])) {
-                cvm->proc[i].var[j]->offset = j + 1; /* store argument number */
-                cvm->proc[i].stackneeded += sizeof(CrustyStackArg);
-            } else if(cvm->proc[i].var[j]->type == CRUSTY_TYPE_INT) {
-                cvm->proc[i].stackneeded += (cvm->proc[i].var[j]->length * sizeof(int));
-                cvm->proc[i].var[j]->offset = cvm->proc[i].stackneeded;
-            } else if(cvm->proc[i].var[j]->type == CRUSTY_TYPE_FLOAT) {
-                cvm->proc[i].stackneeded += (cvm->proc[i].var[j]->length * sizeof(double));
-                cvm->proc[i].var[j]->offset = cvm->proc[i].stackneeded;
-            } else { /* CHAR */
-                cvm->proc[i].stackneeded += cvm->proc[i].var[j]->length;
-                /* make things aligned */
-                if(cvm->proc[i].stackneeded % ALIGNMENT != 0) {
-                    cvm->proc[i].stackneeded += (ALIGNMENT - 
-                                                 (cvm->proc[i].stackneeded % ALIGNMENT));
-                }
-                cvm->proc[i].var[j]->offset = cvm->proc[i].stackneeded;
-            }
         }
-        cvm->stacksize += cvm->proc[i].stackneeded;
     }
-
-    /* allow at least enough stack for each function to be called once as a
-       (hopefully) harmless convenience to the user, also set up offsets in the
-       global stack */
 
     temp = realloc(new, sizeof(CrustyLine) * lines);
     if(temp == NULL) {
@@ -2948,6 +3036,8 @@ static int symbols_scan(CrustyVM *cvm,
     free(cvm->line);
     cvm->line = (CrustyLine *)temp;
     cvm->lines = lines;
+
+    cvm->stacksize += cvm->initialstack;
 
     return(0);
 
@@ -2982,32 +3072,16 @@ static int symbols_verify(CrustyVM *cvm) {
             }
 
             if(cvm->var[i].read == NULL && cvm->var[i].write == NULL) {
-                if(cvm->var[i].intinit == NULL &&
-                   cvm->var[i].floatinit == NULL &&
-                   cvm->var[i].chrinit == NULL) {
-                    LOG_PRINTF(cvm, "Non-callback variable %s has no initializer.\n",
-                               cvm->var[i].name);
-                    ret = -1;
+                if(cvm->var[i].type != CRUSTY_TYPE_INT &&
+                   cvm->var[i].type != CRUSTY_TYPE_FLOAT &&
+                   cvm->var[i].type != CRUSTY_TYPE_CHAR) {
+                    LOG_PRINTF(cvm, "Non-callback variable with invalid type.\n");
+                    continue;
                 }
 
-                if((cvm->var[i].intinit != NULL && cvm->var[i].chrinit != NULL) ||
-                   (cvm->var[i].chrinit != NULL && cvm->var[i].floatinit != NULL) ||
-                   (cvm->var[i].floatinit != NULL && cvm->var[i].intinit != NULL)) {
-                    LOG_PRINTF(cvm, "Variable %s has multiple initializers set.\n",
-                               cvm->var[i].name);
-                    ret = -1;
-                }
-
-                if((cvm->var[i].type == CRUSTY_TYPE_INT && cvm->var[i].intinit == NULL) ||
-                   (cvm->var[i].type == CRUSTY_TYPE_FLOAT && cvm->var[i].floatinit == NULL) ||
-                   (cvm->var[i].type == CRUSTY_TYPE_CHAR && cvm->var[i].chrinit == NULL)) {
-                   LOG_PRINTF(cvm, "Variable %s has no initializer for type.\n",
-                              cvm->var[i].name);
-                }
-
-                if(cvm->var[i].intinit != NULL) {
+                if(cvm->var[i].type == CRUSTY_TYPE_INT) {
                     leni = cvm->var[i].length * sizeof(int);
-                } else if(cvm->var[i].floatinit != NULL) {
+                } else if(cvm->var[i].type == CRUSTY_TYPE_FLOAT) {
                     leni = cvm->var[i].length * sizeof(double);
                 } else {
                     leni = cvm->var[i].length;
@@ -3024,8 +3098,10 @@ static int symbols_verify(CrustyVM *cvm) {
                 }
                 for(j = i + 1; j < cvm->vars; j++) {
                     if(variable_is_global(&(cvm->var[j]))) {
-                        if(cvm->var[i].intinit != NULL) {
+                        if(cvm->var[i].type == CRUSTY_TYPE_INT) {
                             lenj = cvm->var[j].length * sizeof(int);
+                        } else if(cvm->var[i].type == CRUSTY_TYPE_FLOAT) {
+                            lenj = cvm->var[j].length * sizeof(double);
                         } else {
                             lenj = cvm->var[j].length;
                         }
@@ -3051,15 +3127,6 @@ static int symbols_verify(CrustyVM *cvm) {
                 ret = -1;
             }
 
-            if(cvm->var[i].length > 0 &&
-               cvm->var[i].chrinit != NULL &&
-               cvm->var[i].intinit != NULL &&
-               cvm->var[i].floatinit != NULL) {
-                LOG_PRINTF(cvm, "Local variable %s with length but NULL initializers.\n",
-                           cvm->var[i].name);
-                ret = -1;
-            }
-
             for(j = 0; j < cvm->var[i].proc->vars; j++) {
                 if(cvm->var[i].proc == cvm->var[i].proc->var[j]->proc) {
                     break;
@@ -3070,30 +3137,6 @@ static int symbols_verify(CrustyVM *cvm) {
                                 "referenced by variable %s.\n",
                            cvm->var[i].proc->name, cvm->var[i].name);
                 ret = -1;
-            }
-
-            if(variable_is_argument(&(cvm->var[i]))) {
-                if(cvm->var[i].intinit != NULL ||
-                   cvm->var[i].chrinit != NULL ||
-                   cvm->var[i].floatinit != NULL) {
-                    LOG_PRINTF(cvm, "Local argument variable %s with initializer set.\n",
-                               cvm->var[i].name);
-                }
-            } else {
-                if((cvm->var[i].intinit != NULL && cvm->var[i].chrinit != NULL) ||
-                   (cvm->var[i].chrinit != NULL && cvm->var[i].floatinit != NULL) ||
-                   (cvm->var[i].floatinit != NULL && cvm->var[i].intinit != NULL)) {
-                    LOG_PRINTF(cvm, "Local variable %s has multiple initializers set.\n",
-                               cvm->var[i].name);
-                    ret = -1;
-                }
-
-                if((cvm->var[i].type == CRUSTY_TYPE_INT && cvm->var[i].intinit == NULL) ||
-                   (cvm->var[i].type == CRUSTY_TYPE_FLOAT && cvm->var[i].floatinit == NULL) ||
-                   (cvm->var[i].type == CRUSTY_TYPE_CHAR && cvm->var[i].chrinit == NULL)) {
-                   LOG_PRINTF(cvm, "Local variable %s has no initializer for type.\n",
-                              cvm->var[i].name);
-                }
             }
         }
     }
@@ -3934,7 +3977,6 @@ static int codeverify(CrustyVM *cvm) {
 }
 
 int crustyvm_reset(CrustyVM *cvm) {
-    unsigned int i;
     const char *temp = cvm->stage;
 
     cvm->stage = "reset";
@@ -3942,25 +3984,7 @@ int crustyvm_reset(CrustyVM *cvm) {
     LOG_PRINTF(cvm, "Start\n");
 #endif
 
-    for(i = 0; i < cvm->vars; i++) {
-        if(variable_is_global(&(cvm->var[i])) &&
-           !variable_is_callback(&(cvm->var[i]))) {
-            /* one of these cases has been assured by this point */
-            if(cvm->var[i].type == CRUSTY_TYPE_INT) {
-                memcpy(&(cvm->stack[cvm->var[i].offset]),
-                       cvm->var[i].intinit,
-                       cvm->var[i].length * sizeof(int));
-            } else if(cvm->var[i].type == CRUSTY_TYPE_FLOAT) {
-                memcpy(&(cvm->stack[cvm->var[i].offset]),
-                       cvm->var[i].floatinit,
-                       cvm->var[i].length * sizeof(double));
-            } else { /* CHAR */
-                memcpy(&(cvm->stack[cvm->var[i].offset]),
-                       cvm->var[i].chrinit,
-                       cvm->var[i].length);
-            }
-        }
-    }
+    memcpy(cvm->stack, cvm->initializer, cvm->initialstack);
 
     cvm->status = CRUSTY_STATUS_READY;
     cvm->stage = temp;
@@ -4234,7 +4258,7 @@ CrustyVM *crustyvm_new(const char *name,
                         cb[i].length,
                         NULL, NULL, NULL,
                         &(cb[i]),
-                        NULL) < 0) {
+                        -1) < 0) {
             /* reason will have already been printed */
             crustyvm_free(cvm);
             return(NULL);
@@ -4311,23 +4335,26 @@ CrustyVM *crustyvm_new(const char *name,
             }
             LOG_PRINTF_BARE(cvm, "\n");
             if(cvm->var[i].length > 0) {
-                if(cvm->var[i].chrinit != NULL) {
+                if(cvm->var[i].type == CRUSTY_TYPE_CHAR) {
                     LOG_PRINTF(cvm, "  String initializer: \"");
                     for(j = 0; j < cvm->var[i].length; j++) {
-                        LOG_PRINTF_BARE(cvm, "%c", cvm->var[i].chrinit[j]);
+                        LOG_PRINTF_BARE(cvm, "%c",
+                            ((char *)&(cvm->initializer[cvm->var[i].offset]))[j]);
                     }
                     LOG_PRINTF_BARE(cvm, "\"");
                 }
-                if(cvm->var[i].intinit != NULL) {
+                if(cvm->var[i].type == CRUSTY_TYPE_INT) {
                     LOG_PRINTF(cvm, "  Integer initializer:");
                     for(j = 0; j < cvm->var[i].length; j++) {
-                        LOG_PRINTF_BARE(cvm, " %d", cvm->var[i].intinit[j]);
+                        LOG_PRINTF_BARE(cvm, " %d",
+                            ((int *)&(cvm->initializer[cvm->var[i].offset]))[j]);
                     }
                 }
-                if(cvm->var[i].floatinit != NULL) {
+                if(cvm->var[i].type == CRUSTY_TYPE_FLOAT) {
                     LOG_PRINTF(cvm, "  Float initializer:");
                     for(j = 0; j < cvm->var[i].length; j++) {
-                        LOG_PRINTF_BARE(cvm, " %g", cvm->var[i].floatinit[j]);
+                        LOG_PRINTF_BARE(cvm, " %g",
+                            ((double *)&(cvm->initializer[cvm->var[i].offset]))[j]);
                     }
                 }
                 LOG_PRINTF_BARE(cvm, "\n");
@@ -4349,23 +4376,26 @@ CrustyVM *crustyvm_new(const char *name,
                     LOG_PRINTF_BARE(cvm, "\n");
                 }
                 if(cvm->proc[i].var[j]->length > 0) {
-                    if(cvm->proc[i].var[j]->chrinit != NULL) {
+                    if(cvm->proc[i].var[j]->type == CRUSTY_TYPE_CHAR) {
                         LOG_PRINTF(cvm, "   String initializer: \"");
                         for(k = 0; k < cvm->proc[i].var[j]->length; k++) {
-                            LOG_PRINTF_BARE(cvm, "%c", cvm->proc[i].var[j]->chrinit[k]);
+                            LOG_PRINTF_BARE(cvm, "%c",
+                                ((char *)&(cvm->initializer[cvm->proc[i].var[j].offset]))[k]);
                         }
                         LOG_PRINTF_BARE(cvm, "\"");
                     }
-                    if(cvm->proc[i].var[j]->intinit != NULL) {
+                    if(cvm->proc[i].var[j]->type == CRUSTY_TYPE_INT) {
                         LOG_PRINTF(cvm, "   Integer initializer:");
                         for(k = 0; k < cvm->proc[i].var[j]->length; k++) {
-                            LOG_PRINTF_BARE(cvm, " %d", cvm->proc[i].var[j]->intinit[k]);
+                            LOG_PRINTF_BARE(cvm, "%c",
+                                ((int *)&(cvm->initializer[cvm->proc[i].var[j].offset]))[k]);
                         }
                     }
-                    if(cvm->proc[i].var[j]->floatinit != NULL) {
+                    if(cvm->proc[i].var[j]->type == CRUSTY_TYPE_FLOAT) {
                         LOG_PRINTF(cvm, "   Float initializer:");
                         for(k = 0; k < cvm->proc[i].var[j]->length; k++) {
-                            LOG_PRINTF_BARE(cvm, " %g", cvm->proc[i].var[j]->floatinit[k]);
+                            LOG_PRINTF_BARE(cvm, "%c",
+                                ((float *)&(cvm->initializer[cvm->proc[i].var[j].offset]))[k]);
                         }
                     }
                     LOG_PRINTF_BARE(cvm, "\n");
@@ -4730,14 +4760,18 @@ static int call(CrustyVM *cvm, unsigned int procindex, unsigned int argsindex) {
         return(-1);
     }
 
-    if(cvm->sp + cvm->proc[procindex].stackneeded > cvm->stacksize) {
+    callee = &(cvm->proc[procindex]);
+    newsp = cvm->sp + callee->stackneeded;
+
+    if(newsp > cvm->stacksize) {
         cvm->status = CRUSTY_STATUS_STACK_OVERFLOW;
         return(-1);
     }
 
-    callee = &(cvm->proc[procindex]);
-
-    newsp = cvm->sp + cvm->proc[procindex].stackneeded;
+    /* initialize local variables */
+    memcpy(&(cvm->stack[cvm->sp]),
+           callee->initializer,
+           callee->stackneeded);
 
     /* set up procedure arguments */
     for(i = 0; i < callee->args; i++) {
@@ -4754,23 +4788,6 @@ static int call(CrustyVM *cvm, unsigned int procindex, unsigned int argsindex) {
         STACK_ARG(newsp, i + 1)->val = val;
         STACK_ARG(newsp, i + 1)->index = index;
         STACK_ARG(newsp, i + 1)->ptr = ptr;
-    }
-
-    /* initialize local variables */
-    for(i = callee->args; i < callee->vars; i++) {
-        if(callee->var[i]->type == CRUSTY_TYPE_CHAR) {
-            memcpy(&(cvm->stack[newsp - callee->var[i]->offset]),
-                   callee->var[i]->chrinit,
-                   callee->var[i]->length);
-        } else if(callee->var[i]->type == CRUSTY_TYPE_FLOAT) {
-            memcpy(&(cvm->stack[newsp - callee->var[i]->offset]),
-                   callee->var[i]->floatinit,
-                   callee->var[i]->length * sizeof(double));
-        } else { /* INT */
-            memcpy(&(cvm->stack[newsp - callee->var[i]->offset]),
-                   callee->var[i]->intinit,
-                   callee->var[i]->length * sizeof(int));
-        } /* other possibilities will have already been checked before */
     }
 
     /* push return and procedure to be called on to the stack */
