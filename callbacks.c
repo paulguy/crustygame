@@ -447,44 +447,13 @@ int gfx_set_layer_colormod(void *priv,
                            void *ptr,
                            unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
-    int r, g, b;
-
-    if(type != CRUSTY_TYPE_INT || size < 3) {
-        fprintf(stderr, "Wrong type.\n");
-        return(-1);
-    }
-
-    int *buf = (int *)ptr;
-    r = buf[0]; g = buf[1]; b = buf[2];
-
-    if(r < 0 || g < 0 || b < 0) {
-        fprintf(stderr, "Value out of range.\n");
-        return(-1);
-    }
-
-    return(tilemap_set_layer_colormod(state->ll, index, r, g, b));
-}
-
-int gfx_set_layer_alphamod(void *priv,
-                           CrustyType type,
-                           unsigned int size,
-                           void *ptr,
-                           unsigned int index) {
-    CrustyGame *state = (CrustyGame *)priv;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
 
-    int alphamod = *(int *)ptr;
-
-    if(alphamod < 0) {
-        fprintf(stderr, "Value out of range.\n");
-        return(-1);
-    }
-
-    return(tilemap_set_layer_alphamod(state->ll, index, alphamod));
+    return(tilemap_set_layer_colormod(state->ll, index, *(int *)ptr));
 }
 
 int gfx_set_layer_blendmode(void *priv,
@@ -1033,12 +1002,6 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = gfx_set_layer_colormod, .writepriv = &state
-    },
-    {
-        .name = "gfx_set_layer_alphamod", .length = INT_MAX,
-        .readType = CRUSTY_TYPE_NONE,
-        .read = NULL, .readpriv = NULL,
-        .write = gfx_set_layer_alphamod, .writepriv = &state
     },
     {
         .name = "gfx_set_layer_blendmode", .length = INT_MAX,

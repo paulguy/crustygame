@@ -85,7 +85,7 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       int pitch,
                                       int w,
                                       int h,
-                                      unsigned int *value,
+                                      Uint32 *value,
                                       unsigned int size);
 int tilemap_update_tilemap(LayerList *ll,
                            unsigned int index,
@@ -119,12 +119,7 @@ int tilemap_set_layer_rotation(LayerList *ll,
                                double angle);
 int tilemap_set_layer_colormod(LayerList *ll,
                                unsigned int index,
-                               Uint8 r,
-                               Uint8 g,
-                               Uint8 b);
-int tilemap_set_layer_alphamod(LayerList *ll,
-                                unsigned int index,
-                                Uint8 alphamod);
+                               Uint32 colormod);
 int tilemap_set_layer_blendmode(LayerList *ll,
                                 unsigned int index,
                                 int blendMode);

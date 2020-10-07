@@ -4,17 +4,74 @@ include videomode.inc
 include timers.inc
 binclude gfx ints "crustris.crsg"
 
-expr INITIAL_CHANGE_RATE 500
+expr STARTING_LEVEL 1
+expr LINES_PER_LEVEL 10
+expr MAX_LEVEL 20
+static LEVEL_CHANGE_RATES ints "\
+    1000 950 900 850 800 750 700 650 600 550 \
+     500 450 400 350 300 250 200 150 100  50"
+
+TILEMAP_COLOR BG_L1    244 169 213 255
+TILEMAP_COLOR BG_D_L1   27  80 173 255 
+TILEMAP_COLOR BG_L2    244 169 213 255
+TILEMAP_COLOR BG_D_L2   27  80 173 255 
+TILEMAP_COLOR BG_L3    244 169 213 255
+TILEMAP_COLOR BG_D_L3   27  80 173 255 
+TILEMAP_COLOR BG_L4    244 169 213 255
+TILEMAP_COLOR BG_D_L4   27  80 173 255 
+TILEMAP_COLOR BG_L5    244 169 213 255
+TILEMAP_COLOR BG_D_L5   27  80 173 255 
+TILEMAP_COLOR BG_L6    244 169 213 255
+TILEMAP_COLOR BG_D_L6   27  80 173 255 
+TILEMAP_COLOR BG_L7    244 169 213 255
+TILEMAP_COLOR BG_D_L7   27  80 173 255 
+TILEMAP_COLOR BG_L8    244 169 213 255
+TILEMAP_COLOR BG_D_L8   27  80 173 255 
+TILEMAP_COLOR BG_L9    244 169 213 255
+TILEMAP_COLOR BG_D_L9   27  80 173 255 
+TILEMAP_COLOR BG_L10   244 169 213 255
+TILEMAP_COLOR BG_D_L10  27  80 173 255 
+TILEMAP_COLOR BG_L11   244 169 213 255
+TILEMAP_COLOR BG_D_L11  27  80 173 255 
+TILEMAP_COLOR BG_L12   244 169 213 255
+TILEMAP_COLOR BG_D_L12  27  80 173 255 
+TILEMAP_COLOR BG_L13   244 169 213 255
+TILEMAP_COLOR BG_D_L13  27  80 173 255 
+TILEMAP_COLOR BG_L14   244 169 213 255
+TILEMAP_COLOR BG_D_L14  27  80 173 255 
+TILEMAP_COLOR BG_L15   244 169 213 255
+TILEMAP_COLOR BG_D_L15  27  80 173 255 
+TILEMAP_COLOR BG_L16   244 169 213 255
+TILEMAP_COLOR BG_D_L16  27  80 173 255 
+TILEMAP_COLOR BG_L17   244 169 213 255
+TILEMAP_COLOR BG_D_L17  27  80 173 255 
+TILEMAP_COLOR BG_L18   244 169 213 255
+TILEMAP_COLOR BG_D_L18  27  80 173 255 
+TILEMAP_COLOR BG_L19   244 169 213 255
+TILEMAP_COLOR BG_D_L19  27  80 173 255 
+TILEMAP_COLOR BG_L20   244 169 213 255
+TILEMAP_COLOR BG_D_L20  27  80 173 255 
+
 expr INPUT_DELAY 50
 expr TAP_DELAY 2
-TILEMAP_COLOR BG   244 169 213 255
-TILEMAP_COLOR BG_D  27  80 173 255 
-expr BACKGROUND_PATTERN_SHADOW_STRENGTH 48
+TILEMAP_COLOR BG_PATTERN_SHADOW 255 255 255 64
 expr BGSCROLL_DELAY "1000 / 60"
 ; 0 for normal
 expr DEBUG_START_PIECE 0
 ; 1 for normal
 expr DEBUG_DO_PIECE_FALL 1
+
+static LEVEL_BG_COLOR ints "\
+    C_BG_L1  C_BG_L2  C_BG_L3  C_BG_L4  C_BG_L5  \
+    C_BG_L6  C_BG_L7  C_BG_L8  C_BG_L9  C_BG_L10 \
+    C_BG_L11 C_BG_L12 C_BG_L13 C_BG_L14 C_BG_L15 \
+    C_BG_L16 C_BG_L17 C_BG_L18 C_BG_L19 C_BG_L20"
+
+static LEVEL_BG_SHADOW_COLOR ints "\
+    C_BG_D_L1  C_BG_D_L2  C_BG_D_L3  C_BG_D_L4  C_BG_D_L5  \
+    C_BG_D_L6  C_BG_D_L7  C_BG_D_L8  C_BG_D_L9  C_BG_D_L10 \
+    C_BG_D_L11 C_BG_D_L12 C_BG_D_L13 C_BG_D_L14 C_BG_D_L15 \
+    C_BG_D_L16 C_BG_D_L17 C_BG_D_L18 C_BG_D_L19 C_BG_D_L20"
 
 macro SET_VIDEO_MODE
     static videomode string VIDEOMODE
@@ -191,32 +248,32 @@ static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
 ; Probably should be power of two
 static TILEMAP_WIDTH 4
 static TILEMAP_HEIGHT 8
-TILEMAP_COLOR BL   0   0   0 255
-TILEMAP_COLOR  C   0 170 170 255
-TILEMAP_COLOR  Y 170 170   0 255
-TILEMAP_COLOR  P 170   0 170 255
-TILEMAP_COLOR  G   0 170   0 255
-TILEMAP_COLOR  R 170   0   0 255
-TILEMAP_COLOR  B   0   0 170 255
-TILEMAP_COLOR  O 170  85   0 255
-TILEMAP_COLOR LC  85 255 255 255
-TILEMAP_COLOR LY 255 255  85 255
-TILEMAP_COLOR LP 255  85 255 255
-TILEMAP_COLOR LG  85 255  85 255
-TILEMAP_COLOR LR 255  85  85 255
-TILEMAP_COLOR LB  85  85 255 255
-TILEMAP_COLOR LO 255 170  85 255
-TILEMAP_COLOR  W 255 255 255 255
+TILEMAP_COLOR BLK   0   0   0 255
+TILEMAP_COLOR CYA   0 170 170 255
+TILEMAP_COLOR YEL 170 170   0 255
+TILEMAP_COLOR PUR 170   0 170 255
+TILEMAP_COLOR GRN   0 170   0 255
+TILEMAP_COLOR RED 170   0   0 255
+TILEMAP_COLOR BLU   0   0 170 255
+TILEMAP_COLOR ORA 170  85   0 255
+TILEMAP_COLOR LCY  85 255 255 255
+TILEMAP_COLOR LYE 255 255  85 255
+TILEMAP_COLOR LPU 255  85 255 255
+TILEMAP_COLOR LGR  85 255  85 255
+TILEMAP_COLOR LRE 255  85  85 255
+TILEMAP_COLOR LBL  85  85 255 255
+TILEMAP_COLOR LOR 255 170  85 255
+TILEMAP_COLOR WHT 255 255 255 255
 
 ; 0th is no block
 static PIECE_COLORMOD ints "0 0 0 0 \
-                            C_C C_LC C_W 0 \
-                            C_Y C_LY C_W 0 \
-                            C_P C_LP C_W 0 \
-                            C_G C_LG C_W 0 \
-                            C_R C_LR C_W 0 \
-                            C_B C_LB C_W 0 \
-                            C_O C_LO C_W 0"
+                            C_CYA C_LCY C_WHT 0 \
+                            C_YEL C_LYE C_WHT 0 \
+                            C_PUR C_LPU C_WHT 0 \
+                            C_GRN C_LGR C_WHT 0 \
+                            C_RED C_LRE C_WHT 0 \
+                            C_BLU C_LBL C_WHT 0 \
+                            C_ORA C_LOR C_WHT 0"
 
 static BACKGROUND_PATTERN ints "\
     BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE \
@@ -1122,7 +1179,14 @@ proc update_scale
     call update_obj_scales
 ret
 
-static change_rate INITIAL_CHANGE_RATE
+macro UPDATE_LEVEL
+    move nextlines level
+    mul  nextlines LINES_PER_LEVEL
+    call set_timer_rate PIECE_TIMER_ID LEVEL_CHANGE_RATES:level
+    move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
+    move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
+endmacro UPDATE_LEVEL
+
 expr FPS_TIMER_ID 0
 expr PIECE_TIMER_ID 1
 expr INPUT_TIMER_ID 2
@@ -1140,7 +1204,6 @@ proc init
     local pitflags ints PIT_BG_SIZE 
     local pitcolormod ints PIT_BG_SIZE
     local row ints SCREEN_TILES_WIDTH
-    local rowcolormod ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
     call set_video_mode temp videomode
@@ -1188,7 +1251,7 @@ proc init
     call gfx_set_tilemap_map pit_background_id pitbg
     call fill_with_border pitflags PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH 0 0 TILEMAP_HFLIP_MASK TILEMAP_ROTATE_90 0 TILEMAP_ROTATE_90 TILEMAP_VFLIP_MASK 0 TILEMAP_BFLIP_MASK
     call gfx_set_tilemap_attr_flags pit_background_id pitflags
-    call fill_with_border pitcolormod PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH C_W C_W C_W C_W C_PIT_FILL C_W C_W C_W C_W
+    call fill_with_border pitcolormod PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH C_WHT C_WHT C_WHT C_WHT C_PIT_FILL C_WHT C_WHT C_WHT C_WHT
     call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
     call gfx_update_tilemap pit_background_id
     
@@ -1198,8 +1261,6 @@ proc init
     SET_OBJ_ID PIT_SH_OBJ pit_shadow_id
     call fill row PIT_BG_WIDTH 1 PIT_BG_WIDTH SOLID_TILE
     call gfx_set_tilemap_map3 pit_shadow_id row 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
-    call fill rowcolormod PIT_BG_WIDTH 1 PIT_BG_WIDTH C_BG_D
-    call gfx_set_tilemap_attr_colormod3 pit_shadow_id rowcolormod 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
     call gfx_update_tilemap pit_shadow_id
 
     call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
@@ -1210,8 +1271,6 @@ proc init
     call fill row SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH SOLID_TILE
     ; pitch = 0 so the same row is copied for each row
     call gfx_set_tilemap_map3 window_background_id row 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
-    call fill rowcolormod SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH C_BG
-    call gfx_set_tilemap_attr_colormod3 window_background_id rowcolormod 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
     call gfx_update_tilemap window_background_id
 
     call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
@@ -1233,7 +1292,7 @@ proc init
     move gfx_set_layer_window:window_pattern0_layer_id temp
     move gfx_set_layer_window:window_pattern1_layer_id temp
     move gfx_set_layer_blendmode:window_pattern1_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_alphamod:window_pattern1_layer_id BACKGROUND_PATTERN_SHADOW_STRENGTH
+    move gfx_set_layer_colormod:window_pattern1_layer_id C_BG_PATTERN_SHADOW
     SET_OBJ_ID WIN_PAT0_OBJ window_pattern0_layer_id
     SET_OBJ_POS WIN_PAT0_OBJ 0 0
     SET_OBJ_ID WIN_PAT1_OBJ window_pattern1_layer_id
@@ -1258,7 +1317,7 @@ proc init
     move gfx_set_layer_window:pit_pattern0_layer_id temp
     move gfx_set_layer_window:pit_pattern1_layer_id temp
     move gfx_set_layer_blendmode:pit_pattern1_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_alphamod:pit_pattern1_layer_id BACKGROUND_PATTERN_SHADOW_STRENGTH
+    move gfx_set_layer_colormod:pit_pattern1_layer_id C_BG_PATTERN_SHADOW
     SET_OBJ_ID PIT_PAT0_OBJ pit_pattern0_layer_id
     SET_OBJ_ID PIT_PAT1_OBJ pit_pattern1_layer_id
 
@@ -1268,7 +1327,6 @@ proc init
     call update_scale
 
     call set_timer_rate FPS_TIMER_ID 1000
-    call set_timer_rate PIECE_TIMER_ID change_rate
     call set_timer_rate INPUT_TIMER_ID INPUT_DELAY
     call set_timer_rate BGSCROLL_TIMER_ID BGSCROLL_DELAY
 
@@ -1288,6 +1346,8 @@ proc init
     move gfx_set_layer_scroll_pos:window_pattern1_layer_id bgscroll1
     move gfx_set_layer_scroll_pos:pit_pattern0_layer_id bgscroll2
     move gfx_set_layer_scroll_pos:pit_pattern1_layer_id bgscroll3
+
+    UPDATE_LEVEL
 
     label end
 ret
@@ -1358,6 +1418,7 @@ macro ADVANCE_BGSCROLL VAR DIR MAX
     label wrap_VAR_done
 endmacro ADVANCE_BGSCROLL
 
+static level STARTING_LEVEL
 static curpiece DEBUG_START_PIECE
 static currotation
 static xpos 0
@@ -1367,6 +1428,8 @@ static move 0
 static tapped 0
 static fall 0
 static rotate 0
+static lines_cleared 0
+static nextlines
 
 proc frame
     local curTick
@@ -1498,6 +1561,15 @@ proc frame
         call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
         jump done_pit_updates
         label update_pit_lines
+        add lines_cleared lines
+        cmp lines_cleared nextlines
+        jumpl no_next_level
+        cmp level MAX_LEVEL
+        jumpz no_next_level
+        add level 1
+        ERR_NL level
+        UPDATE_LEVEL
+        label no_next_level
         ; update the pit up to the line the piece fell to
         add height ypos
         call update_pit_tilemaps 0 0 PIT_WIDTH height

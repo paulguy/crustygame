@@ -48,10 +48,7 @@ typedef struct {
     double scale_x;
     double scale_y;
     double angle;
-    Uint8 colormod_r;
-    Uint8 colormod_g;
-    Uint8 colormod_b;
-    Uint8 alphamod;
+    Uint32 colormod;
     SDL_BlendMode blendMode;
 } Layer;
 
@@ -563,7 +560,7 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       int pitch,
                                       int w,
                                       int h,
-                                      unsigned int *value,
+                                      Uint32 *value,
                                       unsigned int size) {
     unsigned int i;
 
@@ -846,10 +843,7 @@ int tilemap_add_layer(LayerList *ll,
         ll->layer[0].scale_x = 1.0;
         ll->layer[0].scale_y = 1.0;
         ll->layer[0].angle = 0.0;
-        ll->layer[0].colormod_r = 255;
-        ll->layer[0].colormod_g = 255;
-        ll->layer[0].colormod_b = 255;
-        ll->layer[0].alphamod = 255;
+        ll->layer[0].colormod = TILEMAP_COLOR(255, 255, 255, 255);
         ll->layer[0].blendMode = SDL_BLENDMODE_BLEND;
         ll->layer[0].tilemap = tilemap;
         return(0);
@@ -867,10 +861,7 @@ int tilemap_add_layer(LayerList *ll,
             ll->layer[i].scale_x = 1.0;
             ll->layer[i].scale_y = 1.0;
             ll->layer[i].angle = 0.0;
-            ll->layer[i].colormod_r = 255;
-            ll->layer[i].colormod_g = 255;
-            ll->layer[i].colormod_b = 255;
-            ll->layer[i].alphamod = 255;
+            ll->layer[i].colormod = TILEMAP_COLOR(255, 255, 255, 255);
             ll->layer[i].blendMode = SDL_BLENDMODE_BLEND;
             ll->layer[i].tilemap = tilemap;
             return(i);
@@ -895,10 +886,7 @@ int tilemap_add_layer(LayerList *ll,
     ll->layer[i].scale_x = 1.0;
     ll->layer[i].scale_y = 1.0;
     ll->layer[i].angle = 0.0;
-    ll->layer[i].colormod_r = 255;
-    ll->layer[i].colormod_g = 255;
-    ll->layer[i].colormod_b = 255;
-    ll->layer[i].alphamod = 255;
+    ll->layer[i].colormod = TILEMAP_COLOR(255, 255, 255, 255);
     ll->layer[i].blendMode = SDL_BLENDMODE_BLEND;
     ll->layer[i].tilemap = tilemap;
     /* initialize empty excess surfaces as NULL */
@@ -1040,28 +1028,14 @@ int tilemap_set_layer_rotation(LayerList *ll, unsigned int index, double angle) 
     return(0);
 }
 
-int tilemap_set_layer_colormod(LayerList *ll, unsigned int index, Uint8 r, Uint8 g, Uint8 b) {
+int tilemap_set_layer_colormod(LayerList *ll, unsigned int index, Uint32 colormod) {
     if(index >= ll->layersmem ||
        ll->layer[index].tilemap == -1) {
         LOG_PRINTF(ll, "Invalid layer index.\n");
         return(-1);
     }
 
-    ll->layer[index].colormod_r = r;
-    ll->layer[index].colormod_g = g;
-    ll->layer[index].colormod_b = b;
-
-    return(0);
-}
- 
-int tilemap_set_layer_alphamod(LayerList *ll, unsigned int index, Uint8 alphamod) {
-    if(index >= ll->layersmem ||
-       ll->layer[index].tilemap == -1) {
-        LOG_PRINTF(ll, "Invalid layer index.\n");
-        return(-1);
-    }
-
-    ll->layer[index].alphamod = alphamod;
+    ll->layer[index].colormod = colormod;
 
     return(0);
 }
@@ -1117,16 +1091,18 @@ int tilemap_draw_layer(LayerList *ll, unsigned int index) {
     layer = &(ll->layer[index]);
     tilemap = &(ll->tilemap[layer->tilemap]);
     if(SDL_SetTextureColorMod(tilemap->tex,
-                              layer->colormod_r,
-                              layer->colormod_g,
-                              layer->colormod_b) < 0) {
+            (layer->colormod & TILEMAP_RMASK) >> TILEMAP_RSHIFT,
+            (layer->colormod & TILEMAP_GMASK) >> TILEMAP_GSHIFT,
+            (layer->colormod & TILEMAP_BMASK) >> TILEMAP_BSHIFT) < 0) {
         fprintf(stderr, "Failed to set layer colormod.\n");
         return(-1);
     }
-    if(SDL_SetTextureAlphaMod(tilemap->tex, layer->alphamod) < 0) {
-        fprintf(stderr, "Failed to set layer alphamod.\n");
+    if(SDL_SetTextureAlphaMod(tilemap->tex,
+            (layer->colormod & TILEMAP_AMASK) >> TILEMAP_ASHIFT) < 0) {
+        fprintf(stderr, "Failed to set tile alphamod.\n");
         return(-1);
     }
+
     if(SDL_SetTextureBlendMode(tilemap->tex, layer->blendMode) < 0) {
         if(ll->blendWarned == 0) {
             fprintf(stderr, "Failed to set layer blend mode, falling back to "
