@@ -434,6 +434,7 @@ proc check_collision collided x y pos width height
             label skip_x
             add piecepos 1
             add pitpos 1
+            add pitx 1
             add piecex 1
             cmp piecex width
         jumpl x
