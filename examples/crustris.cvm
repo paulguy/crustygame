@@ -11,6 +11,10 @@ TILEMAP_COLOR BG   244 169 213 255
 TILEMAP_COLOR BG_D  27  80 173 255 
 expr BACKGROUND_PATTERN_SHADOW_STRENGTH 48
 expr BGSCROLL_DELAY "1000 / 60"
+; 0 for normal
+expr DEBUG_START_PIECE 0
+; 1 for normal
+expr DEBUG_DO_PIECE_FALL 1
 
 macro SET_VIDEO_MODE
     static videomode string VIDEOMODE
@@ -292,12 +296,16 @@ ret
 
 expr COLLIDED_LEFT   1
 expr COLLIDED_RIGHT  2
+expr COLLIDED_LEFT_RIGHT "COLLIDED_LEFT | COLLIDED_RIGHT"
 expr COLLIDED_TOP    4
 expr COLLIDED_BOTTOM 8
+expr COLLIDED_TOP_BOTTOM "COLLIDED_TOP | COLLIDED_BOTTOM"
 
 proc check_collision collided x y pos width height
     local piecex
     local piecey
+    local pitx
+    local pity
     local pitpos
     local piecepos
     local pieceval
@@ -350,7 +358,6 @@ proc check_collision collided x y pos width height
     jumpg check_pit_bottom
     jumpz check_pit_bottom
     or collided COLLIDED_TOP
-    jump end
 
     label check_pit_bottom
     move piecey y
@@ -359,14 +366,12 @@ proc check_collision collided x y pos width height
     jumpl check_pit_left
     jumpz check_pit_left
     or collided COLLIDED_BOTTOM
-    jump end
 
     label check_pit_left
     cmp x 0
     jumpg check_pit_right
     jumpz check_pit_right
     or collided COLLIDED_LEFT
-    jump end
 
     label check_pit_right
     move piecex x
@@ -375,7 +380,6 @@ proc check_collision collided x y pos width height
     jumpl check_pit
     jumpz check_pit
     or collided COLLIDED_RIGHT
-    jump end
 
     label check_pit
     ; initial pit position
@@ -385,10 +389,23 @@ proc check_collision collided x y pos width height
 
     move piecepos pos
     move piecey 0
+    move pity y
     label y
-        move piecex 0
+        cmp pity 0
+        jumpl skip_y
+        cmp pity PIT_HEIGHT
+        jumpg end
+        jumpz end
 
+        move piecex 0
+        move pitx x
         label x
+            cmp pitx 0
+            jumpl skip_x
+            cmp pitx PIT_WIDTH
+            jumpg skip_x
+            jumpz skip_x
+
             move pieceval pieces:piecepos
             and  pieceval pit:pitpos
             jumpz no_collision
@@ -414,6 +431,7 @@ proc check_collision collided x y pos width height
             or collided COLLIDED_BOTTOM
             label no_collision
 
+            label skip_x
             add piecepos 1
             add pitpos 1
             add piecex 1
@@ -421,7 +439,9 @@ proc check_collision collided x y pos width height
         jumpl x
 
         sub pitpos width
+        label skip_y
         add pitpos PIT_WIDTH
+        add pity 1
         add piecey 1
         cmp piecey height
     jumpl y
@@ -484,165 +504,183 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
     jump no_kick
 
     label horz_kick
-        ; determine growth in both directions and try all possibilities from
-        ; outside in
+        ; piece is "jammed", don't try
+        and priority COLLIDED_LEFT_RIGHT
+        cmp priority COLLIDED_LEFT_RIGHT
+        jumpz no_kick
 
-        ; xbias will always be 0 or negative indicating the piece has to move
-        ; to grow in that direction
-        move leftgrowth xbias
-        mul  leftgrowth -1
+        move leftgrowth widthdiff
+        move rightgrowth widthdiff
 
-        ; start with the growth in the left direction, if any, find the width
-        ; past the 0 point, then subtract the original width
-        move rightgrowth xbias
-        add  rightgrowth width
-        sub  rightgrowth oldwidth
-
-        ; and finally apply the attempted movement
-        sub  leftgrowth  xmove
-        add  rightgrowth xmove
-
-        ; apply drop, if any
+        ; apply drop, if any, as well as bias
         move checky y
+        add  checky ybias
         add  checky ymove
 
-        ; try the largest of leftgrowth and rightgrowth (or the side that
-        ; collided if they are equal), decrement by one then repeat until 
-        ; they're both zero
+        ; try searching outwards up to the difference in width until a
+        ; collision is found, if so, back off one and use that
         label horz_kick_loop
             cmp leftgrowth 0
             jumpg horz_loop_continue
+            jumpz horz_loop_continue
             cmp rightgrowth 0
             jumpg horz_loop_continue
+            jumpz horz_loop_continue
             ; all possibilities were tried and nothing was found, don't update
             ; anything, but try to see if the piece will move without rotation
-            jump no_kick
+            jump horz_loop_break
             label horz_loop_continue
-                cmp leftgrowth rightgrowth
-                jumpg try_left
-                jumpl try_right
-                and priority COLLIDED_LEFT
-                jump try_left
+                and priority COLLIDED_RIGHT
+                jumpz try_left
 
             label try_right
-                ; actually try moving it to the left to _compensate_ for right
-                ; side growth
-                move checkx x
-                add  checkx xbias
+                cmp rightgrowth 0
+                jumpl horz_kick_loop
+
+                ; try moving right incrementally until a collision
+                move checkx 0
                 sub  checkx rightgrowth
+                add  checkx x
 
                 call check_collision collided checkx checky pos width height
                 ; subtract it now because if it collided it needs to be updated
                 ; anyway, otherwise it doesn't matter
                 sub rightgrowth 1
                 cmp collided
-                jumpn horz_kick_loop
+                jumpz continue_right
+                ; check to see if the collision happened on the right side
+                and collided COLLIDED_RIGHT
+                jumpz continue_right
+                ; step back 1 and use that value
+                sub checkx 1
+                ; check if it's still a collision, indicating there's simply
+                ; not enough space to fit.
+                call check_collision collided checkx checky pos width height
+                cmp collided
+                jumpn no_kick
+            jump update_all
+            label continue_right
+                cmp priority COLLIDED_RIGHT
+                jumpz horz_kick_loop
 
-                ; found open spot, update values and finish
-                move x checkx
-                move y checky
-                move rotation newrotation
-            jump horz_loop_break
             label try_left
-                ; same as above but moving right to compensate for left hand
-                ; growth
-                move checkx x
-                add  checkx xbias
-                add  checkx leftgrowth
+                cmp leftgrowth 0
+                jumpl horz_kick_loop
 
+                ; same as above
+                move checkx widthdiff
+                mul  checkx -1
+                add  checkx leftgrowth
+                add  checkx x
+                
                 call check_collision collided checkx checky pos width height
                 ; same as above
                 sub leftgrowth 1
                 cmp collided
-                jumpn horz_kick_loop
+                jumpz continue_left
+                and collided COLLIDED_LEFT
+                jumpz continue_left
 
-                ; also as above 
-                move x checkx
-                move y checky
-                move rotation newrotation
-            ; break out here
+                add checkx 1
+                ; check if it's still a collision, indicating there's simply
+                ; not enough space to fit.
+                call check_collision collided checkx checky pos width height
+                cmp collided
+                jumpn no_kick
+            jump update_all
+            label continue_left
+                cmp priority COLLIDED_RIGHT
+                jumpn try_right
+            jump horz_kick_loop
+
         label horz_loop_break
-    jump end
+    jump no_kick
 
     label vert_kick
         ; should be pretty much like horz_kick just in a vertical direction
+        ; since it's copypasta, comment directions may be incongruous.
 
-        ; ybias will always be 0 or negative indicating the piece has to move
-        ; to grow in that direction
-        move topgrowth ybias
-        mul  topgrowth -1
+        ; piece is "jammed", don't try
+        and priority COLLIDED_TOP_BOTTOM
+        cmp priority COLLIDED_TOP_BOTTOM
+        jumpz no_kick
 
-        ; start with the growth upwards, if any, find the height
-        ; past the 0 point, then subtract the original height
-        move bottomgrowth ybias
-        add  bottomgrowth height
-        sub  bottomgrowth oldheight
+        move topgrowth heightdiff
+        move bottomgrowth heightdiff
 
-        ; and finally apply the attempted movement
-        sub  topgrowth    ymove
-        add  bottomgrowth ymove
-
-        ; apply horizontal movement, if any
+        ; apply movement, if any, as well as bias
         move checkx x
+        add  checkx xbias
         add  checkx xmove
 
-        ; try the largest of topgrowth and bottomgrowth (or the side that
-        ; collided if they are equal), decrement by one then repeat until 
-        ; they're both zero
+        ; try searching outwards up to the difference in width until a
+        ; collision is found, if so, back off one and use that
         label vert_kick_loop
             cmp topgrowth 0
             jumpg vert_loop_continue
+            jumpz vert_loop_continue
             cmp bottomgrowth 0
             jumpg vert_loop_continue
+            jumpz vert_loop_continue
             ; all possibilities were tried and nothing was found, don't update
             ; anything, but try to see if the piece will move without rotation
-            jump no_kick
+            jump vert_loop_break
             label vert_loop_continue
-                cmp topgrowth bottomgrowth
-                jumpg try_up
-                jumpl try_down
-                cmp priority COLLIDED_TOP
-                jumpn try_up
+                and priority COLLIDED_BOTTOM
+                jumpz try_up
 
             label try_down
-                ; actually try moving it up to _compensate_ for bottom
-                ; growth
-                move checky y
-                add  checky ybias
+                cmp bottomgrowth 0
+                jumpl vert_kick_loop
+
+                ; try moving right incrementally until a collision
+                move checky 0
                 sub  checky bottomgrowth
+                add  checky y
 
                 call check_collision collided checkx checky pos width height
                 ; subtract it now because if it collided it needs to be updated
                 ; anyway, otherwise it doesn't matter
                 sub bottomgrowth 1
                 cmp collided
-                jumpn vert_kick_loop
+                jumpz continue_down
+                ; check to see if the collision happened on the right side
+                and collided COLLIDED_BOTTOM
+                jumpz continue_down
+                ; step back 1 and use that value
+                sub checky 1
+            jump update_all
+            label continue_down
+                cmp priority COLLIDED_BOTTOM
+                jumpz vert_kick_loop
 
-                ; found open spot, update values and finish
-                move x checkx
-                move y checky
-                move rotation newrotation
-            jump vert_loop_break
             label try_up
-                ; same as above but moving down to compensate for upward
-                ; growth
-                move checky y
-                add  checky ybias
-                add  checky topgrowth
+                cmp topgrowth 0
+                jumpl vert_kick_loop
 
+                ; same as above
+                move checky heightdiff
+                mul  checky -1
+                add  checky rightgrowth
+                add  checky y
+                
                 call check_collision collided checkx checky pos width height
                 ; same as above
                 sub topgrowth 1
                 cmp collided
-                jumpn vert_kick_loop
+                jumpz continue_up
+                and collided COLLIDED_TOP
+                jumpz continue_up
 
-                ; also as above 
-                move x checkx
-                move y checky
-                move rotation newrotation
-            ; break out here
+                add checky 1
+            jump update_all
+            label continue_up
+                cmp priority COLLIDED_TOP
+                jumpn try_down
+            jump vert_kick_loop
+
         label vert_loop_break
-    jump end
+ 
 
     label no_kick
         ; try to move the piece in both requested directions
@@ -1319,7 +1357,7 @@ macro ADVANCE_BGSCROLL VAR DIR MAX
     label wrap_VAR_done
 endmacro ADVANCE_BGSCROLL
 
-static curpiece 0
+static curpiece DEBUG_START_PIECE
 static currotation
 static xpos 0
 static ypos 0
@@ -1440,7 +1478,7 @@ proc frame
     cmp elapsed
     jumpz done_update
     move ymove ypos
-    add  ymove 1
+    add  ymove DEBUG_DO_PIECE_FALL
 
     ; repopulate because they may have changed
     call populate_piece_values curpiece currotation pos width height

@@ -2,6 +2,16 @@
 static SPC string " "
 static NL  string "\n"
 
+macro ERR_SPC VAL
+    move err VAL
+    move err SPC
+endmacro ERR_SPC
+
+macro ERR_NL VAL
+    move err VAL
+    move err NL
+endmacro ERR_NL
+
 expr TILEMAP_PIXEL_BYTES 4
 
 expr TILEMAP_BMASK  0xFF000000
