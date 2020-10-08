@@ -2,7 +2,11 @@ include crustygame.inc
 include fills.inc
 include videomode.inc
 include timers.inc
+include text.inc
+include objects.inc
+
 binclude gfx ints "crustris.crsg"
+binclude font ints "font.crsg"
 
 expr STARTING_LEVEL 1
 expr LINES_PER_LEVEL 10
@@ -92,17 +96,25 @@ expr SCREEN_WIDTH 640
 expr SCREEN_HEIGHT 480
 expr SCREEN_TILES_WIDTH "SCREEN_WIDTH / TILE_SIDE"
 expr SCREEN_TILES_HEIGHT "SCREEN_HEIGHT / TILE_SIDE"
-macro RESCALE_POS XPOS YPOS
-    mul XPOS global_scale
-    mul YPOS global_scale
-    add XPOS global_offset:0
-    add YPOS global_offset:1
-endmacro RESCALE_POS
 
 expr GAME_MODE_PLAYING 0
 expr GAME_MODE_ENDED   1
 
 static game_mode GAME_MODE_PLAYING
+
+expr FONT_SIDE 8
+
+static CONTROLS_TEXT string "\
+CONTROLS:
+Q - Rotate Counter Clockwise
+E - Rotate Clockwise
+A - Move Left
+S - Move Down
+D - Move Up"
+expr CONTROLS_TILEMAP_WIDTH  15
+expr CONTROLS_TILEMAP_HEIGHT 9
+expr CONTROLS_TILEMAP_SIZE   "CONTROLS_TILEMAP_WIDTH * CONTROLS_TILEMAP_HEIGHT" 
+static controls_tilemap ints CONTROLS_TILEMAP_SIZE
 
 ; assure collision masking works.
 static pieces ints "\
@@ -988,15 +1000,15 @@ proc draw_piece layer_id piece rotation x y
 
     ; size of a tile in float which will be used to accumulate location
     move scaled_tile TILE_SIDE
-    mul  scaled_tile global_scale
+    mul  scaled_tile objects_global_scale
 
     ; get the starting scaled position
     move scaledx x
-    mul  scaledx global_scale
-    add  scaledx global_offset:0
+    mul  scaledx objects_global_scale
+    add  scaledx objects_global_offset:0
     move scaledy y
-    mul  scaledy global_scale
-    add  scaledy global_offset:1
+    mul  scaledy objects_global_scale
+    add  scaledy objects_global_offset:1
 
     ; get initial y position
     move position:1 scaledy
@@ -1040,6 +1052,7 @@ proc draw_piece layer_id piece rotation x y
 ret
 
 static gfx_id
+static font_id
 static block_tilemap_id
 static block_layer_id
 static pit_tilemap_id0
@@ -1052,105 +1065,196 @@ static pit_background_id
 static pit_background_layer_id
 static window_background_id
 static window_background_layer_id
-static window_pattern0_id
+static window_pattern_id
 static window_pattern0_layer_id
-static window_pattern1_id
 static window_pattern1_layer_id
 static pit_shadow_id
 static pit_shadow_layer_id
-static pit_pattern0_id
-static pit_pattern1_id
+static pit_pattern_id
 static pit_pattern0_layer_id
 static pit_pattern1_layer_id
-static global_scale floats "0.0 0.0"
-static global_offset ints 2
+static controls_tilemap_id
+static controls_layer0_id
+static controls_layer1_id
 
-expr BLOCK_OBJ    0
-expr PIT0_OBJ     1
-expr PIT1_OBJ     2
-expr PIT2_OBJ     3
-expr PIT_BG_OBJ   4
-expr WIN_BG_OBJ   5
-expr PIT_SH_OBJ   6
-expr WIN_PAT0_OBJ 7
-expr WIN_PAT1_OBJ 8
-expr PIT_PAT0_OBJ 9
-expr PIT_PAT1_OBJ 10
-expr TOTAL_OBJ    11
-static objects_id ints TOTAL_OBJ
-static objects_x  ints TOTAL_OBJ
-static objects_y  ints TOTAL_OBJ
-
-macro SET_OBJ_ID OBJ ID
-    move objects_id:OBJ ID
-endmacro SET_OBJ_ID
-
-macro SET_OBJ_POS OBJ X Y
-    move objects_x:OBJ X
-    move objects_y:OBJ Y
-endmacro SET_OBJ_POS
-
-proc update_obj_scale obj
-    local pos ints 2
-    local id
-
-    move pos:0 objects_x:obj
-    move pos:1 objects_y:obj
-    RESCALE_POS pos:0 pos:1
-    move id    objects_id:obj
-
-    move gfx_set_layer_pos:id   pos
-    move gfx_set_layer_scale:id global_scale
-ret
-
-proc update_obj_scales
-    local obj TOTAL_OBJ
-    sub   obj 1
-
-    label loop
-        call update_obj_scale obj
-        sub obj 1
-    jumpg loop
-    jumpz loop
-ret
+static block_obj
+static pit0_obj
+static pit1_obj
+static pit2_obj
+static pit_bg_obj
+static win_bg_obj
+static pit_sh_obj
+static win_pat0_obj
+static win_pat1_obj
+static pit_pat0_obj
+static pit_pat1_obj
+static controls0_obj
+static controls1_obj
 
 static pitxpos
 static pitypos
 
-proc update_scale
-    local tempf floats "0.0 0.0 0.0 0.0"
-    local temp ints 2
+macro UPDATE_LEVEL
+    move nextlines level
+    mul  nextlines LINES_PER_LEVEL
+    call set_timer_rate PIECE_TIMER_ID LEVEL_CHANGE_RATES:level
+    move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
+    move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
+    move gfx_set_layer_colormod:controls_layer0_id LEVEL_BG_SHADOW_COLOR:level
+endmacro UPDATE_LEVEL
 
-    move tempf:0 gfx_get_width
-    move tempf:1 gfx_get_height
-    div  tempf:0 SCREEN_WIDTH
-    div  tempf:1 SCREEN_HEIGHT
-    cmp  tempf:0 tempf:1
-    jumpl scale_taller
-    jumpg scale_wider
-    ; scale equal, keep offset 0
-    move global_scale:0 tempf:0
-    move global_scale:1 tempf:0
-    label scale_taller
-    ; center vertically
-    move global_scale:0 tempf:0
-    move global_scale:1 tempf:0
-    mul  tempf:0 SCREEN_HEIGHT
-    move global_offset:1 gfx_get_height
-    sub  global_offset:1 tempf:0
-    div  global_offset:1 2
-    move global_offset:0 0
-    jump scale_done
-    label scale_wider
-    ; center horizontally
-    move global_scale:0 tempf:1
-    move global_scale:1 tempf:1
-    mul  tempf:1 SCREEN_WIDTH
-    move global_offset:0 gfx_get_width
-    sub  global_offset:0 tempf:1
-    div  global_offset:0 2
-    move global_offset:1 0
-    label scale_done
+expr FPS_TIMER_ID 0
+expr PIECE_TIMER_ID 1
+expr INPUT_TIMER_ID 2
+expr BGSCROLL_TIMER_ID 3
+
+static bgscroll0 ints 2
+static bgscroll1 ints 2
+static bgscroll2 ints 2
+static bgscroll3 ints 2
+
+proc init
+    local temp ints 4
+    local tempf floats "0.0 0.0 0.0 0.0"
+    local pitbg ints PIT_BG_SIZE 
+    local pitflags ints PIT_BG_SIZE 
+    local pitcolormod ints PIT_BG_SIZE
+    local row ints SCREEN_TILES_WIDTH
+    local background_pattern ints BACKGROUND_SIZE
+
+    call set_video_mode temp videomode
+    cmp temp
+    jumpn mode_ok
+    move set_running 0
+    jump end
+    label mode_ok
+
+    call objects_setup SCREEN_WIDTH SCREEN_HEIGHT
+
+    move temp:0 gfx:CRSG_OFFSET_WIDTH
+    mul  temp:0 TILEMAP_PIXEL_BYTES
+    call gfx_add_tileset gfx:CRSG_OFFSET_DATA gfx:CRSG_OFFSET_WIDTH gfx:CRSG_OFFSET_HEIGHT temp:0 TILE_SIDE TILE_SIDE gfx_id
+
+    move temp:0 font:CRSG_OFFSET_WIDTH
+    mul  temp:0 TILEMAP_PIXEL_BYTES
+    call gfx_add_tileset font:CRSG_OFFSET_DATA font:CRSG_OFFSET_WIDTH font:CRSG_OFFSET_HEIGHT temp:0 FONT_SIDE FONT_SIDE font_id
+
+    call gfx_add_tilemap TILEMAP_WIDTH TILEMAP_HEIGHT block_tilemap_id
+    move gfx_set_tilemap_tileset:block_tilemap_id gfx_id
+    call gfx_set_tilemap_map block_tilemap_id PIECE_TILEMAP
+    call gfx_set_tilemap_attr_colormod block_tilemap_id PIECE_COLORMOD
+    call gfx_update_tilemap block_tilemap_id
+    call gfx_add_layer block_tilemap_id block_layer_id
+    call objects_get_free block_obj block_layer_id
+    move temp:0 TILE_SIDE
+    move temp:1 TILE_SIDE
+    move gfx_set_layer_window:block_layer_id temp
+    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_background_id
+    move gfx_set_tilemap_tileset:pit_background_id gfx_id
+    call gfx_add_layer pit_background_id pit_background_layer_id
+    call objects_get_free pit_bg_obj pit_background_layer_id
+
+    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
+    move gfx_set_tilemap_tileset:pit_tilemap_id0 gfx_id
+    call gfx_add_layer pit_tilemap_id0 pit_layer_id0
+    call objects_get_free pit0_obj pit_layer_id0
+    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id1
+    move gfx_set_tilemap_tileset:pit_tilemap_id1 gfx_id
+    call gfx_add_layer pit_tilemap_id1 pit_layer_id1
+    call objects_get_free pit1_obj pit_layer_id1
+    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id2
+    move gfx_set_tilemap_tileset:pit_tilemap_id2 gfx_id
+    call gfx_add_layer pit_tilemap_id2 pit_layer_id2
+    call objects_get_free pit2_obj pit_layer_id2
+  
+    ; don't really care that pit* aren't static because the background is only
+    ; set up once and it doesn't matter if the pointer becomes invalid.
+    call fill_with_border pitbg PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_FILL PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER
+    call gfx_set_tilemap_map pit_background_id pitbg
+    call fill_with_border pitflags PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH 0 0 TILEMAP_HFLIP_MASK TILEMAP_ROTATE_90 0 TILEMAP_ROTATE_90 TILEMAP_VFLIP_MASK 0 TILEMAP_BFLIP_MASK
+    call gfx_set_tilemap_attr_flags pit_background_id pitflags
+    call fill_with_border pitcolormod PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH C_WHT C_WHT C_WHT C_WHT C_PIT_FILL C_WHT C_WHT C_WHT C_WHT
+    call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
+    call gfx_update_tilemap pit_background_id
+    
+    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_shadow_id
+    move gfx_set_tilemap_tileset:pit_shadow_id gfx_id
+    call gfx_add_layer pit_shadow_id pit_shadow_layer_id
+    call objects_get_free pit_sh_obj pit_shadow_id
+    call fill row PIT_BG_WIDTH 1 PIT_BG_WIDTH SOLID_TILE
+    call gfx_set_tilemap_map3 pit_shadow_id row 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
+    call gfx_update_tilemap pit_shadow_id
+
+    call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
+    move gfx_set_tilemap_tileset:window_background_id gfx_id
+    call gfx_add_layer window_background_id window_background_layer_id
+    call objects_get_free win_bg_obj window_background_layer_id
+    OBJECTS_SET_POS win_bg_obj 0 0
+    call fill row SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH SOLID_TILE
+    ; pitch = 0 so the same row is copied for each row
+    call gfx_set_tilemap_map3 window_background_id row 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
+    call gfx_update_tilemap window_background_id
+
+    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
+
+    call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern_id
+    move gfx_set_tilemap_tileset:window_pattern_id gfx_id
+    call gfx_set_tilemap_map window_pattern_id background_pattern
+    call gfx_update_tilemap window_pattern_id
+    call gfx_add_layer window_pattern_id window_pattern0_layer_id
+    call gfx_add_layer window_pattern_id window_pattern1_layer_id
+    move temp:0 SCREEN_TILES_WIDTH
+    mul  temp:0 TILE_SIDE
+    move temp:1 SCREEN_TILES_HEIGHT
+    mul  temp:1 TILE_SIDE
+    move gfx_set_layer_window:window_pattern0_layer_id temp
+    move gfx_set_layer_window:window_pattern1_layer_id temp
+    move gfx_set_layer_blendmode:window_pattern1_layer_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_colormod:window_pattern1_layer_id C_BG_PATTERN_SHADOW
+    call objects_get_free win_pat0_obj window_pattern0_layer_id
+    OBJECTS_SET_POS win_pat0_obj 0 0
+    call objects_get_free win_pat1_obj window_pattern1_layer_id
+    OBJECTS_SET_POS win_pat1_obj 0 0
+
+    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN:BACKGROUND_PATTERN_SIZE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
+
+    call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern_id
+    move gfx_set_tilemap_tileset:pit_pattern_id gfx_id
+    call gfx_set_tilemap_map3 pit_pattern_id background_pattern 0 0 BACKGROUND_WIDTH PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT
+    call gfx_update_tilemap pit_pattern_id
+    call gfx_add_layer pit_pattern_id pit_pattern0_layer_id
+    call gfx_add_layer pit_pattern_id pit_pattern1_layer_id
+    move temp:0 PIT_BG_WIDTH
+    mul  temp:0 TILE_SIDE
+    move temp:1 PIT_BG_HEIGHT
+    mul  temp:1 TILE_SIDE
+    move gfx_set_layer_window:pit_pattern0_layer_id temp
+    move gfx_set_layer_window:pit_pattern1_layer_id temp
+    move gfx_set_layer_blendmode:pit_pattern1_layer_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_colormod:pit_pattern1_layer_id C_BG_PATTERN_SHADOW
+    call objects_get_free pit_pat0_obj pit_pattern0_layer_id
+    call objects_get_free pit_pat1_obj pit_pattern1_layer_id
+
+    call gfx_add_tilemap CONTROLS_TILEMAP_WIDTH CONTROLS_TILEMAP_HEIGHT controls_tilemap_id
+    move gfx_set_tilemap_tileset:controls_tilemap_id font_id
+    call text_string_to_tilemap controls_tilemap CONTROLS_TILEMAP_WIDTH CONTROLS_TILEMAP_HEIGHT CONTROLS_TILEMAP_WIDTH CONTROLS_TEXT
+    call gfx_set_tilemap_map controls_tilemap_id controls_tilemap
+    call gfx_update_tilemap controls_tilemap_id
+    call gfx_add_layer controls_tilemap_id controls_layer0_id
+    call gfx_add_layer controls_tilemap_id controls_layer1_id
+    move gfx_set_layer_blendmode:controls_layer1_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_colormod:controls_layer1_id C_BG_PATTERN_SHADOW
+    call objects_get_free controls0_obj controls_layer0_id
+    call objects_get_free controls1_obj controls_layer1_id
+    OBJECTS_SET_POS controls0_obj FONT_SIDE FONT_SIDE
+    move temp:0 FONT_SIDE
+    add  temp:0 1
+    OBJECTS_SET_POS controls1_obj temp:0 temp:0
+    OBJECTS_SET_SCALE controls0_obj 2 2
+    OBJECTS_SET_SCALE controls1_obj 2 2
+
+    ; update the whole pit
+    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
 
     ; center the pit
     move tempf:0 SCREEN_WIDTH
@@ -1169,165 +1273,17 @@ proc update_scale
     sub  tempf:3 TILE_SIDE
     move pitxpos tempf:0
     move pitypos tempf:1
-    SET_OBJ_POS PIT0_OBJ pitxpos pitypos
-    SET_OBJ_POS PIT1_OBJ pitxpos pitypos
-    SET_OBJ_POS PIT2_OBJ pitxpos pitypos
+    OBJECTS_SET_POS pit0_obj pitxpos pitypos
+    OBJECTS_SET_POS pit1_obj pitxpos pitypos
+    OBJECTS_SET_POS pit2_obj pitxpos pitypos
     move temp:0 tempf:2
     move temp:1 tempf:3
-    SET_OBJ_POS PIT_BG_OBJ temp:0 temp:1
-    SET_OBJ_POS PIT_SH_OBJ pitxpos pitypos
-    SET_OBJ_POS PIT_PAT0_OBJ pitxpos pitypos
-    SET_OBJ_POS PIT_PAT1_OBJ pitxpos pitypos
+    OBJECTS_SET_POS pit_bg_obj temp:0 temp:1
+    OBJECTS_SET_POS pit_sh_obj pitxpos pitypos
+    OBJECTS_SET_POS pit_pat0_obj pitxpos pitypos
+    OBJECTS_SET_POS pit_pat1_obj pitxpos pitypos
 
-    call update_obj_scales
-ret
-
-macro UPDATE_LEVEL
-    move nextlines level
-    mul  nextlines LINES_PER_LEVEL
-    call set_timer_rate PIECE_TIMER_ID LEVEL_CHANGE_RATES:level
-    move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
-    move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
-endmacro UPDATE_LEVEL
-
-expr FPS_TIMER_ID 0
-expr PIECE_TIMER_ID 1
-expr INPUT_TIMER_ID 2
-expr BGSCROLL_TIMER_ID 3
-
-static bgscroll0 ints 2
-static bgscroll1 ints 2
-static bgscroll2 ints 2
-static bgscroll3 ints 2
-
-proc init
-    local temp ints 4
-    local tempf floats "0.0 0.0"
-    local pitbg ints PIT_BG_SIZE 
-    local pitflags ints PIT_BG_SIZE 
-    local pitcolormod ints PIT_BG_SIZE
-    local row ints SCREEN_TILES_WIDTH
-    local background_pattern ints BACKGROUND_SIZE
-
-    call set_video_mode temp videomode
-    cmp temp
-    jumpn mode_ok
-    move set_running 0
-    jump end
-    label mode_ok
-
-    move temp:0 gfx:CRSG_OFFSET_WIDTH
-    mul  temp:0 TILEMAP_PIXEL_BYTES
-    call gfx_add_tileset gfx:CRSG_OFFSET_DATA gfx:CRSG_OFFSET_WIDTH gfx:CRSG_OFFSET_HEIGHT temp:0 TILE_SIDE TILE_SIDE gfx_id
-
-    call gfx_add_tilemap TILEMAP_WIDTH TILEMAP_HEIGHT block_tilemap_id
-    move gfx_set_tilemap_tileset:block_tilemap_id gfx_id
-    call gfx_set_tilemap_map block_tilemap_id PIECE_TILEMAP
-    call gfx_set_tilemap_attr_colormod block_tilemap_id PIECE_COLORMOD
-    call gfx_update_tilemap block_tilemap_id
-    call gfx_add_layer block_tilemap_id block_layer_id
-    SET_OBJ_ID BLOCK_OBJ block_layer_id
-    move temp:0 TILE_SIDE
-    move temp:1 TILE_SIDE
-    move gfx_set_layer_window:block_layer_id temp
-    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_background_id
-    move gfx_set_tilemap_tileset:pit_background_id gfx_id
-    call gfx_add_layer pit_background_id pit_background_layer_id
-    SET_OBJ_ID PIT_BG_OBJ pit_background_layer_id
-
-    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
-    move gfx_set_tilemap_tileset:pit_tilemap_id0 gfx_id
-    call gfx_add_layer pit_tilemap_id0 pit_layer_id0
-    SET_OBJ_ID PIT0_OBJ pit_layer_id0
-    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id1
-    move gfx_set_tilemap_tileset:pit_tilemap_id1 gfx_id
-    call gfx_add_layer pit_tilemap_id1 pit_layer_id1
-    SET_OBJ_ID PIT1_OBJ pit_layer_id1
-    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id2
-    move gfx_set_tilemap_tileset:pit_tilemap_id2 gfx_id
-    call gfx_add_layer pit_tilemap_id2 pit_layer_id2
-    SET_OBJ_ID PIT2_OBJ pit_layer_id2
-  
-    ; don't really care that pit* aren't static because the background is only
-    ; set up once and it doesn't matter if the pointer becomes invalid.
-    call fill_with_border pitbg PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_FILL PIT_TILE_EDGE PIT_TILE_CORNER PIT_TILE_EDGE PIT_TILE_CORNER
-    call gfx_set_tilemap_map pit_background_id pitbg
-    call fill_with_border pitflags PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH 0 0 TILEMAP_HFLIP_MASK TILEMAP_ROTATE_90 0 TILEMAP_ROTATE_90 TILEMAP_VFLIP_MASK 0 TILEMAP_BFLIP_MASK
-    call gfx_set_tilemap_attr_flags pit_background_id pitflags
-    call fill_with_border pitcolormod PIT_BG_WIDTH PIT_BG_HEIGHT PIT_BG_WIDTH C_WHT C_WHT C_WHT C_WHT C_PIT_FILL C_WHT C_WHT C_WHT C_WHT
-    call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
-    call gfx_update_tilemap pit_background_id
-    
-    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_shadow_id
-    move gfx_set_tilemap_tileset:pit_shadow_id gfx_id
-    call gfx_add_layer pit_shadow_id pit_shadow_layer_id
-    SET_OBJ_ID PIT_SH_OBJ pit_shadow_id
-    call fill row PIT_BG_WIDTH 1 PIT_BG_WIDTH SOLID_TILE
-    call gfx_set_tilemap_map3 pit_shadow_id row 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
-    call gfx_update_tilemap pit_shadow_id
-
-    call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
-    move gfx_set_tilemap_tileset:window_background_id gfx_id
-    call gfx_add_layer window_background_id window_background_layer_id
-    SET_OBJ_ID WIN_BG_OBJ window_background_layer_id
-    SET_OBJ_POS WIN_BG_OBJ 0 0
-    call fill row SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH SOLID_TILE
-    ; pitch = 0 so the same row is copied for each row
-    call gfx_set_tilemap_map3 window_background_id row 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
-    call gfx_update_tilemap window_background_id
-
-    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
-
-    call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern0_id
-    call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern1_id
-    move gfx_set_tilemap_tileset:window_pattern0_id gfx_id
-    move gfx_set_tilemap_tileset:window_pattern1_id gfx_id
-    call gfx_add_layer window_pattern0_id window_pattern0_layer_id
-    call gfx_add_layer window_pattern1_id window_pattern1_layer_id
-    call gfx_set_tilemap_map window_pattern0_id background_pattern
-    call gfx_update_tilemap window_pattern0_id
-    call gfx_set_tilemap_map window_pattern1_id background_pattern
-    call gfx_update_tilemap window_pattern1_id
-    move temp:0 SCREEN_TILES_WIDTH
-    mul  temp:0 TILE_SIDE
-    move temp:1 SCREEN_TILES_HEIGHT
-    mul  temp:1 TILE_SIDE
-    move gfx_set_layer_window:window_pattern0_layer_id temp
-    move gfx_set_layer_window:window_pattern1_layer_id temp
-    move gfx_set_layer_blendmode:window_pattern1_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:window_pattern1_layer_id C_BG_PATTERN_SHADOW
-    SET_OBJ_ID WIN_PAT0_OBJ window_pattern0_layer_id
-    SET_OBJ_POS WIN_PAT0_OBJ 0 0
-    SET_OBJ_ID WIN_PAT1_OBJ window_pattern1_layer_id
-    SET_OBJ_POS WIN_PAT1_OBJ 0 0
-
-    call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN:BACKGROUND_PATTERN_SIZE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
-
-    call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern0_id
-    call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern1_id
-    move gfx_set_tilemap_tileset:pit_pattern0_id gfx_id
-    move gfx_set_tilemap_tileset:pit_pattern1_id gfx_id
-    call gfx_add_layer pit_pattern0_id pit_pattern0_layer_id
-    call gfx_add_layer pit_pattern1_id pit_pattern1_layer_id
-    call gfx_set_tilemap_map3 pit_pattern0_id background_pattern 0 0 BACKGROUND_WIDTH PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT
-    call gfx_update_tilemap pit_pattern0_id
-    call gfx_set_tilemap_map3 pit_pattern1_id background_pattern 0 0 BACKGROUND_WIDTH PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT
-    call gfx_update_tilemap pit_pattern1_id
-    move temp:0 PIT_BG_WIDTH
-    mul  temp:0 TILE_SIDE
-    move temp:1 PIT_BG_HEIGHT
-    mul  temp:1 TILE_SIDE
-    move gfx_set_layer_window:pit_pattern0_layer_id temp
-    move gfx_set_layer_window:pit_pattern1_layer_id temp
-    move gfx_set_layer_blendmode:pit_pattern1_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:pit_pattern1_layer_id C_BG_PATTERN_SHADOW
-    SET_OBJ_ID PIT_PAT0_OBJ pit_pattern0_layer_id
-    SET_OBJ_ID PIT_PAT1_OBJ pit_pattern1_layer_id
-
-    ; update the whole pit
-    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
-
-    call update_scale
+    call objects_update_scale
 
     call set_timer_rate FPS_TIMER_ID 1000
     call set_timer_rate INPUT_TIMER_ID INPUT_DELAY
@@ -1608,6 +1564,8 @@ proc frame
         mul  ymove TILE_SIDE
         add  ymove pitypos
         call draw_piece block_layer_id curpiece currotation xmove ymove
+        move gfx_draw_layer controls_layer1_id
+        move gfx_draw_layer controls_layer0_id
 
     label end
 ret
@@ -1633,7 +1591,7 @@ proc event
 
     label toggle_fullscreen
         call toggle_fullscreen
-        call update_scale
+        call objects_update_scale
     jump end
 
     label quit

@@ -12,6 +12,36 @@ macro ERR_NL VAL
     move err NL
 endmacro ERR_NL
 
+proc debug_dump_values values length
+    local i 0
+
+    label loop
+        cmp i length
+        jumpz done
+        ERR_SPC values:i
+
+        add i 1
+    jump loop
+    label done
+ret
+
+proc debug_dump_2D_values values width height stride
+    local y 0
+    local ptr 0
+
+    label y
+        cmp y height
+        jumpz done
+
+        call debug_dump_values values:ptr width
+        move err NL
+
+        add ptr stride
+        add y 1
+    jump y
+    label done
+ret
+
 expr TILEMAP_PIXEL_BYTES 4
 
 expr TILEMAP_BMASK  0xFF000000
