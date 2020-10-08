@@ -472,7 +472,8 @@ int tilemap_set_tilemap_map(LayerList *ll,
        x + w > ll->tilemap[index].w ||
        y + h > ll->tilemap[index].h) {
         LOG_PRINTF(ll, "Position/size would expand outside of "
-                       "tilemap.\n");
+                       "tilemap. x:%d->%d, y:%d %d\n",
+                       x, w, y, h);
         return(-1);
     }
 

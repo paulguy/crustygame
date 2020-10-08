@@ -13,44 +13,44 @@ static LEVEL_CHANGE_RATES ints "\
 
 TILEMAP_COLOR BG_L1    244 169 213 255
 TILEMAP_COLOR BG_D_L1   27  80 173 255 
-TILEMAP_COLOR BG_L2    244 169 213 255
-TILEMAP_COLOR BG_D_L2   27  80 173 255 
-TILEMAP_COLOR BG_L3    244 169 213 255
-TILEMAP_COLOR BG_D_L3   27  80 173 255 
-TILEMAP_COLOR BG_L4    244 169 213 255
-TILEMAP_COLOR BG_D_L4   27  80 173 255 
-TILEMAP_COLOR BG_L5    244 169 213 255
-TILEMAP_COLOR BG_D_L5   27  80 173 255 
-TILEMAP_COLOR BG_L6    244 169 213 255
-TILEMAP_COLOR BG_D_L6   27  80 173 255 
-TILEMAP_COLOR BG_L7    244 169 213 255
-TILEMAP_COLOR BG_D_L7   27  80 173 255 
-TILEMAP_COLOR BG_L8    244 169 213 255
-TILEMAP_COLOR BG_D_L8   27  80 173 255 
-TILEMAP_COLOR BG_L9    244 169 213 255
-TILEMAP_COLOR BG_D_L9   27  80 173 255 
-TILEMAP_COLOR BG_L10   244 169 213 255
-TILEMAP_COLOR BG_D_L10  27  80 173 255 
-TILEMAP_COLOR BG_L11   244 169 213 255
-TILEMAP_COLOR BG_D_L11  27  80 173 255 
-TILEMAP_COLOR BG_L12   244 169 213 255
-TILEMAP_COLOR BG_D_L12  27  80 173 255 
-TILEMAP_COLOR BG_L13   244 169 213 255
-TILEMAP_COLOR BG_D_L13  27  80 173 255 
-TILEMAP_COLOR BG_L14   244 169 213 255
-TILEMAP_COLOR BG_D_L14  27  80 173 255 
-TILEMAP_COLOR BG_L15   244 169 213 255
-TILEMAP_COLOR BG_D_L15  27  80 173 255 
-TILEMAP_COLOR BG_L16   244 169 213 255
-TILEMAP_COLOR BG_D_L16  27  80 173 255 
-TILEMAP_COLOR BG_L17   244 169 213 255
-TILEMAP_COLOR BG_D_L17  27  80 173 255 
-TILEMAP_COLOR BG_L18   244 169 213 255
-TILEMAP_COLOR BG_D_L18  27  80 173 255 
-TILEMAP_COLOR BG_L19   244 169 213 255
-TILEMAP_COLOR BG_D_L19  27  80 173 255 
-TILEMAP_COLOR BG_L20   244 169 213 255
-TILEMAP_COLOR BG_D_L20  27  80 173 255 
+TILEMAP_COLOR BG_L2    230 227  74 255
+TILEMAP_COLOR BG_D_L2   63 136  88 255 
+TILEMAP_COLOR BG_L3    139 157  84 255
+TILEMAP_COLOR BG_D_L3  124  87  39 255 
+TILEMAP_COLOR BG_L4     80 202 255 255
+TILEMAP_COLOR BG_D_L4   74   5 121 255 
+TILEMAP_COLOR BG_L5    181 224 213 255
+TILEMAP_COLOR BG_D_L5  104 102  85 255 
+TILEMAP_COLOR BG_L6    212 209 180 255
+TILEMAP_COLOR BG_D_L6   69  71  63 255 
+TILEMAP_COLOR BG_L7     94 184 209 255
+TILEMAP_COLOR BG_D_L7   83 144  29 255 
+TILEMAP_COLOR BG_L8    121 250  97 255
+TILEMAP_COLOR BG_D_L8  182 199   8 255 
+TILEMAP_COLOR BG_L9    239 233 120 255
+TILEMAP_COLOR BG_D_L9   74 115  13 255 
+TILEMAP_COLOR BG_L10    79 200  39 255
+TILEMAP_COLOR BG_D_L10  15  86  70 255 
+TILEMAP_COLOR BG_L11    94 190 186 255
+TILEMAP_COLOR BG_D_L11   0  81 117 255 
+TILEMAP_COLOR BG_L12   205 221 253 255
+TILEMAP_COLOR BG_D_L12   1  14  49 255 
+TILEMAP_COLOR BG_L13   106 150 242 255
+TILEMAP_COLOR BG_D_L13 192 205 221 255 
+TILEMAP_COLOR BG_L14   204  92 215 255
+TILEMAP_COLOR BG_D_L14 155  18  91 255 
+TILEMAP_COLOR BG_L15    49 181 148 255
+TILEMAP_COLOR BG_D_L15  67 112  31 255 
+TILEMAP_COLOR BG_L16    32 113   0 255
+TILEMAP_COLOR BG_D_L16  70  59  31 255 
+TILEMAP_COLOR BG_L17    89  85  58 255
+TILEMAP_COLOR BG_D_L17  66  29  10 255 
+TILEMAP_COLOR BG_L18    38  28  20 255
+TILEMAP_COLOR BG_D_L18 111  20   0 255 
+TILEMAP_COLOR BG_L19   255   0   0 255
+TILEMAP_COLOR BG_D_L19   0   0   0 255 
+TILEMAP_COLOR BG_L20     0   0   0 255
+TILEMAP_COLOR BG_D_L20 255 255 255 255 
 
 expr INPUT_DELAY 50
 expr TAP_DELAY 2
@@ -588,12 +588,12 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
             ; anything, but try to see if the piece will move without rotation
             jump horz_loop_break
             label horz_loop_continue
-                and priority COLLIDED_RIGHT
-                jumpz try_left
+                and priority COLLIDED_LEFT
+                jumpn try_left
 
             label try_right
                 cmp rightgrowth 0
-                jumpl horz_kick_loop
+                jumpl continue_right
 
                 ; try moving right incrementally until a collision
                 move checkx 0
@@ -618,12 +618,12 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
                 jumpn no_kick
             jump update_all
             label continue_right
-                cmp priority COLLIDED_RIGHT
-                jumpz horz_kick_loop
+                and priority COLLIDED_LEFT
+                jumpn horz_kick_loop
 
             label try_left
                 cmp leftgrowth 0
-                jumpl horz_kick_loop
+                jumpl continue_left
 
                 ; same as above
                 move checkx widthdiff
@@ -647,7 +647,7 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
                 jumpn no_kick
             jump update_all
             label continue_left
-                cmp priority COLLIDED_RIGHT
+                and priority COLLIDED_LEFT
                 jumpn try_right
             jump horz_kick_loop
 
@@ -739,8 +739,11 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
 
         label vert_loop_break
  
-
     label no_kick
+        ; recalculate original position, width and height as they may have
+        ; changed to a rotated state
+        call populate_piece_values piece rotation pos width height
+
         ; try to move the piece in both requested directions
         move checkx x
         add  checkx xmove
@@ -775,7 +778,7 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
             call check_collision collided checkx checky pos width height
             cmp collided
             jumpz update_pos
-       label no_lateral_only
+        label no_lateral_only
     jump end
 
     label update_all
