@@ -1097,16 +1097,16 @@ static pitypos
 macro UPDATE_LEVEL
     move nextlines level
     mul  nextlines LINES_PER_LEVEL
-    call set_timer_rate PIECE_TIMER_ID LEVEL_CHANGE_RATES:level
+    TIMERS_SET_RATE piece_timer_id LEVEL_CHANGE_RATES:level
     move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
     move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
     move gfx_set_layer_colormod:controls_layer0_id LEVEL_BG_SHADOW_COLOR:level
 endmacro UPDATE_LEVEL
 
-expr FPS_TIMER_ID 0
-expr PIECE_TIMER_ID 1
-expr INPUT_TIMER_ID 2
-expr BGSCROLL_TIMER_ID 3
+static fps_timer_id
+static piece_timer_id
+static input_timer_id
+static bgscroll_timer_id
 
 static bgscroll0 ints 2
 static bgscroll1 ints 2
@@ -1129,6 +1129,7 @@ proc init
     jump end
     label mode_ok
 
+    call timers_clear
     call objects_setup
     OBJECTS_SET_SCREEN_SIZE SCREEN_WIDTH SCREEN_HEIGHT
 
@@ -1284,9 +1285,11 @@ proc init
     OBJECTS_SET_POS pit_pat0_obj pitxpos pitypos
     OBJECTS_SET_POS pit_pat1_obj pitxpos pitypos
 
-    call set_timer_rate FPS_TIMER_ID 1000
-    call set_timer_rate INPUT_TIMER_ID INPUT_DELAY
-    call set_timer_rate BGSCROLL_TIMER_ID BGSCROLL_DELAY
+    call timers_get_free fps_timer_id 1000
+    ; not ready to get this one going yet but just get the ID
+    call timers_get_free piece_timer_id 0
+    call timers_get_free input_timer_id INPUT_DELAY
+    call timers_get_free bgscroll_timer_id BGSCROLL_DELAY
 
     move bgscroll0:0 0
     move bgscroll0:1 0
@@ -1315,7 +1318,7 @@ static fps
 proc count_fps
     local elapsed
 
-    call check_timer elapsed FPS_TIMER_ID
+    call timers_check elapsed fps_timer_id
     cmp elapsed
     jumpz fps_continue
     move err fps
@@ -1459,7 +1462,7 @@ proc frame
     move tapped TAP_DELAY
     label done_tap
 
-    call check_timer elapsed INPUT_TIMER_ID
+    call timers_check elapsed input_timer_id
     cmp elapsed
     jumpz done_repeat
 
@@ -1496,7 +1499,7 @@ proc frame
     ; reset rotation so it only happens once
     move rotate 0
 
-    call check_timer elapsed PIECE_TIMER_ID
+    call timers_check elapsed piece_timer_id
     cmp elapsed
     jumpz done_update
     move ymove ypos
@@ -1536,7 +1539,7 @@ proc frame
         move curpiece 0
 
     label done_update
-        call check_timer elapsed BGSCROLL_TIMER_ID
+        call timers_check elapsed bgscroll_timer_id
         jumpz no_bgscroll
         ADVANCE_BGSCROLL bgscroll0:0 1  BACKGROUND_PATTERN_PXSIDE
         ADVANCE_BGSCROLL bgscroll0:1 -1 BACKGROUND_PATTERN_PXSIDE
