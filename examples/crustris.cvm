@@ -1129,7 +1129,8 @@ proc init
     jump end
     label mode_ok
 
-    call objects_setup SCREEN_WIDTH SCREEN_HEIGHT
+    call objects_setup
+    OBJECTS_SET_SCREEN_SIZE SCREEN_WIDTH SCREEN_HEIGHT
 
     move temp:0 gfx:CRSG_OFFSET_WIDTH
     mul  temp:0 TILEMAP_PIXEL_BYTES
@@ -1146,6 +1147,8 @@ proc init
     call gfx_update_tilemap block_tilemap_id
     call gfx_add_layer block_tilemap_id block_layer_id
     call objects_get_free block_obj block_layer_id
+    ; set some parameter otherwise it won't be updated right away
+    OBJECTS_SET_SCALE block_obj 1 1
     move temp:0 TILE_SIDE
     move temp:1 TILE_SIDE
     move gfx_set_layer_window:block_layer_id temp
@@ -1246,12 +1249,10 @@ proc init
     move gfx_set_layer_colormod:controls_layer1_id C_BG_PATTERN_SHADOW
     call objects_get_free controls0_obj controls_layer0_id
     call objects_get_free controls1_obj controls_layer1_id
-    OBJECTS_SET_POS controls0_obj FONT_SIDE FONT_SIDE
+    OBJECTS_SET_POS_AND_SCALE controls0_obj FONT_SIDE FONT_SIDE 2 2
     move temp:0 FONT_SIDE
     add  temp:0 1
-    OBJECTS_SET_POS controls1_obj temp:0 temp:0
-    OBJECTS_SET_SCALE controls0_obj 2 2
-    OBJECTS_SET_SCALE controls1_obj 2 2
+    OBJECTS_SET_POS_AND_SCALE controls1_obj temp:0 temp:0 2 2
 
     ; update the whole pit
     call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
@@ -1282,8 +1283,6 @@ proc init
     OBJECTS_SET_POS pit_sh_obj pitxpos pitypos
     OBJECTS_SET_POS pit_pat0_obj pitxpos pitypos
     OBJECTS_SET_POS pit_pat1_obj pitxpos pitypos
-
-    call objects_update_scale
 
     call set_timer_rate FPS_TIMER_ID 1000
     call set_timer_rate INPUT_TIMER_ID INPUT_DELAY
@@ -1591,7 +1590,8 @@ proc event
 
     label toggle_fullscreen
         call toggle_fullscreen
-        call objects_update_scale
+        call objects_update_global_scale
+        call objects_update_scales
     jump end
 
     label quit
