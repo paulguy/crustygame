@@ -2574,6 +2574,7 @@ static int number_list_floats(const char *list, double **buffer) {
 static int variable_declaration(CrustyVM *cvm,
                                 CrustyLine *line,
                                 int procIndex) {
+    char *end;
     int length;
     int *intinit = NULL;
     char *chrinit = NULL;
@@ -2593,7 +2594,6 @@ static int variable_declaration(CrustyVM *cvm,
         intinit[0] = 0;
     } else if(line->tokencount == 3) { /* with initializer */
         int num;
-        char *end;
         type = CRUSTY_TYPE_INT;
         length = 1;
 
@@ -2622,6 +2622,12 @@ static int variable_declaration(CrustyVM *cvm,
                 return(-1);
             } else if(length == 1) { /* array without initializer, so fill with zero */
                 length = intinit[0];
+                if(length <= 0) {
+                    LOG_PRINTF_TOK(cvm, "Arrays size must be positive and non "
+                                        "zero.\n");
+                    free(intinit);
+                    return(-1);
+                }
 
                 free(intinit);
                 intinit = malloc(sizeof(int) * length);
@@ -2636,13 +2642,31 @@ static int variable_declaration(CrustyVM *cvm,
                are already what they should be */
         } else if(strcmp(&(cvm->tokenmem[line->offset[2]]), "floats") == 0) {
             type = CRUSTY_TYPE_FLOAT;
-            length = number_list_floats(&(cvm->tokenmem[line->offset[3]]), &floatinit);
-            if(length < 0) {
-                LOG_PRINTF_TOK(cvm, "Failed to allocate memory for initializer.\n");
-                return(-1);
-            } else if(length == 0) {
-                LOG_PRINTF_TOK(cvm, "Initializer must be a space separated list of numbers.\n");
-                return(-1);
+            /* if the argument provided is a single, valid integer, use that
+             * for the length, otherwise, it's a list of float initializers */
+            length = strtol(&(cvm->tokenmem[line->offset[3]]), &end, 0);
+            if(end != &(cvm->tokenmem[line->offset[3]]) &&
+               *end == '\0') {
+                if(length <= 0) {
+                    LOG_PRINTF_TOK(cvm, "Arrays size must be positive and non "
+                                        "zero.\n");
+                    return(-1);
+                }
+                floatinit = malloc(length * sizeof(double));
+                if(floatinit == NULL) {
+                    LOG_PRINTF_TOK(cvm, "Failed to allocate memory for initializer");
+                    return(-1);
+                }
+                memset(floatinit, 0, sizeof(double) * length);
+            } else {
+                length = number_list_floats(&(cvm->tokenmem[line->offset[3]]), &floatinit);
+                if(length < 0) {
+                    LOG_PRINTF_TOK(cvm, "Failed to allocate memory for initializer.\n");
+                    return(-1);
+                } else if(length == 0) {
+                    LOG_PRINTF_TOK(cvm, "Initializer must be a space separated list of numbers.\n");
+                    return(-1);
+                }
             }
             /* array with initializer */
         } else if(strcmp(&(cvm->tokenmem[line->offset[2]]), "string") == 0) {

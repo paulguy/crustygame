@@ -2,12 +2,12 @@ expr _OBJECTS_MAX 100
 static _objects_id     ints _OBJECTS_MAX
 static _objects_x      ints _OBJECTS_MAX
 static _objects_y      ints _OBJECTS_MAX
-static _objects_xscale ints _OBJECTS_MAX
-static _objects_yscale ints _OBJECTS_MAX
+static _objects_xscale floats _OBJECTS_MAX
+static _objects_yscale floats _OBJECTS_MAX
 static _objects_screen_width
 static _objects_screen_height
 
-static objects_global_scale floats "0.0 0.0"
+static objects_global_scale floats 2
 static objects_global_offset ints 2
 
 macro OBJECTS_RESCALE_POS XPOS YPOS
@@ -28,7 +28,7 @@ proc objects_setup
 ret
 
 proc objects_update_global_scale
-    local tempf floats "0.0 0.0 0.0 0.0"
+    local tempf floats 4
     local temp ints 2
 
     move tempf:0 gfx_get_width
@@ -96,7 +96,7 @@ endmacro OBJECTS_FREE
 
 proc _objects_update_scale obj
     local pos ints 2
-    local scale floats "0.0 0.0"
+    local scale floats 2
     local id
 
     move pos:0 _objects_x:obj
