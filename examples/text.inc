@@ -167,3 +167,50 @@ proc text_string_to_tilemap tilemap width height stride string
     label done
     _TEXT_PAD_LINE_WITH_SPACE
 ret
+
+static _TEXT_NUMBERS string "0123456789-"
+expr _TEXT_MINUS_INDEX 10
+
+proc text_integer_to_string length string value
+    local temp
+    local temp2
+    local strptr
+
+    move length 1
+    ; add an extra space for negative sign
+    cmp value 0
+    jumpg do_find_digits
+    jumpz do_find_digits
+    add length 1
+    label do_find_digits
+    ; find number of digits
+    move temp value
+    label find_digits
+        div temp 10
+        jumpz found_digits
+        add length 1
+    jump find_digits
+    label found_digits
+
+    cmp length string:
+    jumpg done_put_digits
+
+    move temp value
+    move strptr length
+    sub strptr 1
+    cmp value 0
+    jumpg do_put_digits
+    jumpz do_put_digits
+    move string:0 _TEXT_NUMBERS:_TEXT_MINUS_INDEX
+    mul temp -1
+    label do_put_digits
+    label put_digits
+        move temp2 temp
+        mod  temp2 10
+        move string:strptr _TEXT_NUMBERS:temp2
+        sub strptr 1
+        div temp 10
+        jumpz done_put_digits
+    jump put_digits
+    label done_put_digits
+ret

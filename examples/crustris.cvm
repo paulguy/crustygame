@@ -60,6 +60,7 @@ expr INPUT_DELAY 50
 expr TAP_DELAY 2
 TILEMAP_COLOR BG_PATTERN_SHADOW 255 255 255 64
 expr BGSCROLL_DELAY "1000 / 60"
+expr FONT_SCALE 2
 ; 0 for normal
 expr DEBUG_START_PIECE 0
 ; 1 for normal
@@ -111,10 +112,32 @@ E - Rotate Clockwise
 A - Move Left
 S - Move Down
 D - Move Up"
-expr CONTROLS_TILEMAP_WIDTH  15
-expr CONTROLS_TILEMAP_HEIGHT 9
-expr CONTROLS_TILEMAP_SIZE   "CONTROLS_TILEMAP_WIDTH * CONTROLS_TILEMAP_HEIGHT" 
-static controls_tilemap ints CONTROLS_TILEMAP_SIZE
+expr CONTROLS_TEXT_POS    0
+expr CONTROLS_TEXT_WIDTH  13
+expr CONTROLS_TEXT_HEIGHT 9
+expr CONTROLS_TEXT_SCREEN_POS 0
+static LINES_TEXT string "Lines:"
+expr LINES_POS 9
+expr LINES_SCREEN_POS 10
+expr LINES_NUM_SCREEN_POS 11
+static LEVEL_TEXT string "level:"
+expr LEVEL_POS 10
+expr LEVEL_SCREEN_POS 13
+expr LEVEL_NUM_SCREEN_POS 14
+static SCORE_TEXT string "Score:"
+expr SCORE_POS 11
+expr SCORE_SCREEN_POS 16
+expr SCORE_NUM_SCREEN_POS 17
+static NEXT_TEXT string "Next:"
+expr NEXT_SIZE 5
+expr NEXT_POS 12
+expr NEXT_SCREEN_POS 19
+expr LABEL_SIZE 6
+expr LABELS_TILEMAP_WIDTH  15
+expr LABELS_TILEMAP_HEIGHT 13
+
+; 10 digits + negative sign
+expr MAX_INTEGER_SIZE 11
 
 ; assure collision masking works.
 static pieces ints "\
@@ -1073,9 +1096,12 @@ static pit_shadow_layer_id
 static pit_pattern_id
 static pit_pattern0_layer_id
 static pit_pattern1_layer_id
-static controls_tilemap_id
-static controls_layer0_id
-static controls_layer1_id
+static labels_tilemap_id
+static labels_layer0_id
+static labels_layer1_id
+static number_tilemap_id
+static number_layer0_id
+static number_layer1_id
 
 static block_obj
 static pit0_obj
@@ -1088,8 +1114,10 @@ static win_pat0_obj
 static win_pat1_obj
 static pit_pat0_obj
 static pit_pat1_obj
-static controls0_obj
-static controls1_obj
+static labels0_obj
+static labels1_obj
+static number0_obj
+static number1_obj
 
 static pitxpos
 static pitypos
@@ -1100,7 +1128,8 @@ macro UPDATE_LEVEL
     TIMERS_SET_RATE piece_timer_id LEVEL_CHANGE_RATES:level
     move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
     move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
-    move gfx_set_layer_colormod:controls_layer0_id LEVEL_BG_SHADOW_COLOR:level
+    move gfx_set_layer_colormod:labels_layer0_id LEVEL_BG_SHADOW_COLOR:level
+    move gfx_set_layer_colormod:number_layer0_id LEVEL_BG_SHADOW_COLOR:level
 endmacro UPDATE_LEVEL
 
 static fps_timer_id
@@ -1239,21 +1268,43 @@ proc init
     call objects_get_free pit_pat0_obj pit_pattern0_layer_id
     call objects_get_free pit_pat1_obj pit_pattern1_layer_id
 
-    call gfx_add_tilemap CONTROLS_TILEMAP_WIDTH CONTROLS_TILEMAP_HEIGHT controls_tilemap_id
-    move gfx_set_tilemap_tileset:controls_tilemap_id font_id
-    call text_string_to_tilemap controls_tilemap CONTROLS_TILEMAP_WIDTH CONTROLS_TILEMAP_HEIGHT CONTROLS_TILEMAP_WIDTH CONTROLS_TEXT
-    call gfx_set_tilemap_map controls_tilemap_id controls_tilemap
-    call gfx_update_tilemap controls_tilemap_id
-    call gfx_add_layer controls_tilemap_id controls_layer0_id
-    call gfx_add_layer controls_tilemap_id controls_layer1_id
-    move gfx_set_layer_blendmode:controls_layer1_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:controls_layer1_id C_BG_PATTERN_SHADOW
-    call objects_get_free controls0_obj controls_layer0_id
-    call objects_get_free controls1_obj controls_layer1_id
-    OBJECTS_SET_POS_AND_SCALE controls0_obj FONT_SIDE FONT_SIDE 2 2
-    move temp:0 FONT_SIDE
-    add  temp:0 1
-    OBJECTS_SET_POS_AND_SCALE controls1_obj temp:0 temp:0 2 2
+    ; reuse background_pattern because it's a very large buffer
+    call gfx_add_tilemap LABELS_TILEMAP_WIDTH LABELS_TILEMAP_HEIGHT labels_tilemap_id
+    move gfx_set_tilemap_tileset:labels_tilemap_id font_id
+    call text_string_to_tilemap background_pattern LABELS_TILEMAP_WIDTH LABELS_TILEMAP_HEIGHT LABELS_TILEMAP_WIDTH CONTROLS_TEXT
+    move temp LABELS_TILEMAP_WIDTH
+    mul  temp LINES_POS
+    call text_string_to_tilemap background_pattern:temp LABEL_SIZE 1 LABEL_SIZE LINES_TEXT
+    move temp LABELS_TILEMAP_WIDTH
+    mul  temp LEVEL_POS
+    call text_string_to_tilemap background_pattern:temp LABEL_SIZE 1 LABEL_SIZE LEVEL_TEXT
+    move temp LABELS_TILEMAP_WIDTH
+    mul  temp SCORE_POS
+    call text_string_to_tilemap background_pattern:temp LABEL_SIZE 1 LABEL_SIZE SCORE_TEXT
+    move temp LABELS_TILEMAP_WIDTH
+    mul  temp NEXT_POS
+    call text_string_to_tilemap background_pattern:temp NEXT_SIZE 1 NEXT_SIZE NEXT_TEXT
+    call gfx_set_tilemap_map labels_tilemap_id background_pattern 
+    call gfx_update_tilemap labels_tilemap_id
+    call gfx_add_layer labels_tilemap_id labels_layer0_id
+    call gfx_add_layer labels_tilemap_id labels_layer1_id
+    move gfx_set_layer_blendmode:labels_layer1_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_colormod:labels_layer1_id C_BG_PATTERN_SHADOW
+    call objects_get_free labels0_obj labels_layer0_id
+    call objects_get_free labels1_obj labels_layer1_id
+    OBJECTS_SET_SCALE labels0_obj FONT_SCALE FONT_SCALE
+    OBJECTS_SET_SCALE labels1_obj FONT_SCALE FONT_SCALE
+
+    call gfx_add_tilemap MAX_INTEGER_SIZE 1 number_tilemap_id
+    move gfx_set_tilemap_tileset:number_tilemap_id font_id
+    call gfx_add_layer number_tilemap_id number_layer0_id
+    call gfx_add_layer number_tilemap_id number_layer1_id
+    move gfx_set_layer_blendmode:number_layer1_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_colormod:number_layer1_id C_BG_PATTERN_SHADOW
+    call objects_get_free number0_obj number_layer0_id
+    call objects_get_free number1_obj number_layer1_id
+    OBJECTS_SET_SCALE number0_obj FONT_SCALE FONT_SCALE
+    OBJECTS_SET_SCALE number1_obj FONT_SCALE FONT_SCALE
 
     ; update the whole pit
     call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
@@ -1379,6 +1430,53 @@ macro ADVANCE_BGSCROLL VAR DIR MAX
     label wrap_VAR_done
 endmacro ADVANCE_BGSCROLL
 
+macro DRAW_LABEL LPOS WIDTH HEIGHT SCREENPOS
+    move temp:0 WIDTH
+    mul  temp:0 FONT_SIDE
+    move temp:1 HEIGHT
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_set_layer_window:labels_layer1_id temp
+    move temp:0 0
+    move temp:1 LPOS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move gfx_set_layer_scroll_pos:labels_layer1_id temp
+    move temp:0 FONT_SIDE
+    move temp:1 SCREENPOS
+    mul  temp:1 FONT_SIDE
+    mul  temp:1 FONT_SCALE
+    add  temp:1 FONT_SIDE
+    OBJECTS_SET_POS labels0_obj temp:0 temp:1
+    add  temp:0 1
+    add  temp:1 1
+    OBJECTS_SET_POS labels1_obj temp:0 temp:1
+    move gfx_draw_layer labels_layer1_id
+    move gfx_draw_layer labels_layer0_id
+endmacro DRAW_LABEL
+
+macro DRAW_NUMBER NUM SCREENPOS
+    call text_integer_to_string numlen tempnum NUM
+    call text_string_to_tilemap tempnummap numlen 1 MAX_INTEGER_SIZE tempnum
+    call gfx_set_tilemap_map3 number_tilemap_id tempnummap 0 0 numlen numlen 1
+    call gfx_update_tilemap2 number_tilemap_id 0 0 numlen 1
+    move temp:0 numlen
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:number_layer0_id temp
+    move gfx_set_layer_window:number_layer1_id temp
+    move temp SCREENPOS
+    mul  temp FONT_SIDE
+    mul  temp FONT_SCALE
+    add  temp FONT_SIDE
+    OBJECTS_SET_POS number0_obj FONT_SIDE temp
+    add temp:0 1
+    add temp:1 1
+    OBJECTS_SET_POS number1_obj FONT_SIDE temp
+    move gfx_draw_layer number_layer1_id
+    move gfx_draw_layer number_layer0_id
+endmacro DRAW_NUMBER
+
 static level STARTING_LEVEL
 static curpiece DEBUG_START_PIECE
 static currotation
@@ -1391,6 +1489,7 @@ static fall 0
 static rotate 0
 static lines_cleared 0
 static nextlines
+static score 0
 
 proc frame
     local curTick
@@ -1402,6 +1501,10 @@ proc frame
     local ymove
     local collided
     local lines
+    local temp ints 2
+    local tempnum string "           "
+    local tempnummap ints MAX_INTEGER_SIZE
+    local numlen
 
 ;    call count_fps
 
@@ -1528,7 +1631,6 @@ proc frame
         cmp level MAX_LEVEL
         jumpz no_next_level
         add level 1
-        ERR_NL level
         UPDATE_LEVEL
         label no_next_level
         ; update the pit up to the line the piece fell to
@@ -1566,9 +1668,14 @@ proc frame
         mul  ymove TILE_SIDE
         add  ymove pitypos
         call draw_piece block_layer_id curpiece currotation xmove ymove
-        move gfx_draw_layer controls_layer1_id
-        move gfx_draw_layer controls_layer0_id
-
+        DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT CONTROLS_TEXT_SCREEN_POS
+        DRAW_LABEL LINES_POS LABEL_SIZE 1 LINES_SCREEN_POS
+        DRAW_NUMBER lines_cleared LINES_NUM_SCREEN_POS
+        DRAW_LABEL LEVEL_POS LABEL_SIZE 1 LEVEL_SCREEN_POS
+        DRAW_NUMBER level LEVEL_NUM_SCREEN_POS
+        DRAW_LABEL SCORE_POS LABEL_SIZE 1 SCORE_SCREEN_POS
+        DRAW_NUMBER score SCORE_NUM_SCREEN_POS
+        DRAW_LABEL NEXT_POS NEXT_SIZE 1 NEXT_SCREEN_POS
     label end
 ret
 

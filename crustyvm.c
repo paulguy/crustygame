@@ -5466,6 +5466,7 @@ CrustyStatus crustyvm_step(CrustyVM *cvm) {
             if(update_src_ref(cvm, &srcflags, &srcval, &srcindex, &srcptr) < 0) {
                 break;
             }
+
             if(fetch_val(cvm,
                          srcflags,
                          srcval,
@@ -5486,28 +5487,42 @@ CrustyStatus crustyvm_step(CrustyVM *cvm) {
             }
 
             if(srcflags == MOVE_FLAG_VAR) {
-                if(cvm->var[srcval].type == CRUSTY_TYPE_FLOAT &&
-                   cvm->var[destval].type != CRUSTY_TYPE_FLOAT) {
-                    cvm->intresult = ((double)(cvm->intresult)) - floatoperand;
-                    cvm->resulttype = CRUSTY_TYPE_INT;
-                } else if(cvm->var[srcval].type != CRUSTY_TYPE_FLOAT &&
-                          cvm->var[destval].type == CRUSTY_TYPE_FLOAT) {
-                    cvm->floatresult = cvm->floatresult - ((double)intoperand);
-                    cvm->resulttype = CRUSTY_TYPE_FLOAT;
-                } else if(cvm->var[srcval].type == CRUSTY_TYPE_FLOAT &&
-                          cvm->var[destval].type == CRUSTY_TYPE_FLOAT) {
-                    cvm->floatresult -= floatoperand;
-                    cvm->resulttype = CRUSTY_TYPE_FLOAT;
-                } else { /* both not float */
-                    cvm->intresult -= intoperand;
-                    cvm->resulttype = CRUSTY_TYPE_INT;
+                if(destflags == MOVE_FLAG_VAR) {
+                    if(cvm->var[srcval].type == CRUSTY_TYPE_FLOAT &&
+                       cvm->var[destval].type != CRUSTY_TYPE_FLOAT) {
+                        cvm->floatresult = ((double)(cvm->intresult)) - floatoperand;
+                        cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                    } else if(cvm->var[srcval].type != CRUSTY_TYPE_FLOAT &&
+                              cvm->var[destval].type == CRUSTY_TYPE_FLOAT) {
+                        cvm->floatresult = cvm->floatresult - ((double)intoperand);
+                        cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                    } else if(cvm->var[srcval].type == CRUSTY_TYPE_FLOAT &&
+                              cvm->var[destval].type == CRUSTY_TYPE_FLOAT) {
+                        cvm->floatresult -= floatoperand;
+                        cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                    } else { /* both not float */
+                        cvm->intresult -= intoperand;
+                        cvm->resulttype = CRUSTY_TYPE_INT;
+                    }
+                } else { /* with cmp, destination can be an immediate */
+                    if(cvm->var[srcval].type == CRUSTY_TYPE_FLOAT) {
+                        cvm->floatresult = ((double)(cvm->intresult)) - floatoperand;
+                        cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                    } else {
+                        cvm->intresult -= intoperand;
+                    }
                 }
             } else {
                 /* immediates can only be ints */
-                if(cvm->var[destval].type == CRUSTY_TYPE_FLOAT) {
-                    cvm->floatresult -= ((double)intoperand);
-                    cvm->resulttype = CRUSTY_TYPE_FLOAT;
-                } else {
+                if(destflags == MOVE_FLAG_VAR) {
+                    if(cvm->var[destval].type == CRUSTY_TYPE_FLOAT) {
+                        cvm->floatresult -= ((double)intoperand);
+                        cvm->resulttype = CRUSTY_TYPE_FLOAT;
+                    } else {
+                        cvm->intresult -= intoperand;
+                        cvm->resulttype = CRUSTY_TYPE_INT;
+                    }
+                } else { /* I guess we're comparing 2 immediates */
                     cvm->intresult -= intoperand;
                     cvm->resulttype = CRUSTY_TYPE_INT;
                 }
