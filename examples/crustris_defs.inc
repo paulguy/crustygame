@@ -1,0 +1,322 @@
+expr STARTING_LEVEL 1
+expr LINES_PER_LEVEL 10
+expr MAX_LEVEL 20
+static LEVEL_CHANGE_RATES ints "\
+    1000 950 900 850 800 750 700 650 600 550 \
+     500 450 400 350 300 250 200 150 100  50"
+
+TILEMAP_COLOR BG_L1    244 169 213 255
+TILEMAP_COLOR BG_D_L1   27  80 173 255 
+TILEMAP_COLOR BG_L2    230 227  74 255
+TILEMAP_COLOR BG_D_L2   63 136  88 255 
+TILEMAP_COLOR BG_L3    139 157  84 255
+TILEMAP_COLOR BG_D_L3  124  87  39 255 
+TILEMAP_COLOR BG_L4     80 202 255 255
+TILEMAP_COLOR BG_D_L4   74   5 121 255 
+TILEMAP_COLOR BG_L5    181 224 213 255
+TILEMAP_COLOR BG_D_L5  104 102  85 255 
+TILEMAP_COLOR BG_L6    212 209 180 255
+TILEMAP_COLOR BG_D_L6   69  71  63 255 
+TILEMAP_COLOR BG_L7     94 184 209 255
+TILEMAP_COLOR BG_D_L7   83 144  29 255 
+TILEMAP_COLOR BG_L8    121 250  97 255
+TILEMAP_COLOR BG_D_L8  182 199   8 255 
+TILEMAP_COLOR BG_L9    239 233 120 255
+TILEMAP_COLOR BG_D_L9   74 115  13 255 
+TILEMAP_COLOR BG_L10    79 200  39 255
+TILEMAP_COLOR BG_D_L10  15  86  70 255 
+TILEMAP_COLOR BG_L11    94 190 186 255
+TILEMAP_COLOR BG_D_L11   0  81 117 255 
+TILEMAP_COLOR BG_L12   205 221 253 255
+TILEMAP_COLOR BG_D_L12   1  14  49 255 
+TILEMAP_COLOR BG_L13   106 150 242 255
+TILEMAP_COLOR BG_D_L13 192 205 221 255 
+TILEMAP_COLOR BG_L14   204  92 215 255
+TILEMAP_COLOR BG_D_L14 155  18  91 255 
+TILEMAP_COLOR BG_L15    49 181 148 255
+TILEMAP_COLOR BG_D_L15  67 112  31 255 
+TILEMAP_COLOR BG_L16    32 113   0 255
+TILEMAP_COLOR BG_D_L16  70  59  31 255 
+TILEMAP_COLOR BG_L17    89  85  58 255
+TILEMAP_COLOR BG_D_L17  66  29  10 255 
+TILEMAP_COLOR BG_L18    38  28  20 255
+TILEMAP_COLOR BG_D_L18 111  20   0 255 
+TILEMAP_COLOR BG_L19   255   0   0 255
+TILEMAP_COLOR BG_D_L19   0   0   0 255 
+TILEMAP_COLOR BG_L20     0   0   0 255
+TILEMAP_COLOR BG_D_L20 255 255 255 255 
+
+expr INPUT_DELAY 50
+expr TAP_DELAY 2
+TILEMAP_COLOR BG_PATTERN_SHADOW 255 255 255 64
+expr BGSCROLL_DELAY "1000 / 60"
+; 0 for normal
+expr DEBUG_START_PIECE 0
+; 1 for normal
+expr DEBUG_DO_PIECE_FALL 1
+
+static LEVEL_BG_COLOR ints "\
+    C_BG_L1  C_BG_L2  C_BG_L3  C_BG_L4  C_BG_L5  \
+    C_BG_L6  C_BG_L7  C_BG_L8  C_BG_L9  C_BG_L10 \
+    C_BG_L11 C_BG_L12 C_BG_L13 C_BG_L14 C_BG_L15 \
+    C_BG_L16 C_BG_L17 C_BG_L18 C_BG_L19 C_BG_L20"
+
+static LEVEL_BG_SHADOW_COLOR ints "\
+    C_BG_D_L1  C_BG_D_L2  C_BG_D_L3  C_BG_D_L4  C_BG_D_L5  \
+    C_BG_D_L6  C_BG_D_L7  C_BG_D_L8  C_BG_D_L9  C_BG_D_L10 \
+    C_BG_D_L11 C_BG_D_L12 C_BG_D_L13 C_BG_D_L14 C_BG_D_L15 \
+    C_BG_D_L16 C_BG_D_L17 C_BG_D_L18 C_BG_D_L19 C_BG_D_L20"
+
+macro SET_VIDEO_MODE
+    static videomode string VIDEOMODE
+    expr VIDEO_MODE_SET 1
+endmacro SET_VIDEO_MODE
+
+macro SET_DEFAULT_VIDEO_MODE
+    static videomode string "640x480"
+endmacro SET_DEFAULT_VIDEO_MODE
+
+if VIDEOMODE SET_VIDEO_MODE
+expr VIDEO_MODE_NOT_SET "VIDEO_MODE_SET ^ 1"
+if VIDEO_MODE_NOT_SET SET_DEFAULT_VIDEO_MODE
+
+expr TILE_SIDE 16
+
+expr SCREEN_WIDTH 640
+expr SCREEN_HEIGHT 480
+expr SCREEN_TILES_WIDTH "SCREEN_WIDTH / TILE_SIDE"
+expr SCREEN_TILES_HEIGHT "SCREEN_HEIGHT / TILE_SIDE"
+
+expr FONT_SIDE 8
+expr FONT_SCALE 2
+expr FONT_SCALED_SIDE "FONT_SIDE * FONT_SCALE"
+
+expr TITLE_SCALE 2
+
+static CONTROLS_TEXT string "\
+CONTROLS:
+Q - Rotate Counter Clockwise
+E - Rotate Clockwise
+A - Move Left
+S - Move Down
+D - Move Up"
+expr CONTROLS_TEXT_POS    0
+expr CONTROLS_TEXT_WIDTH  13
+expr CONTROLS_TEXT_HEIGHT 9
+expr CONTROLS_TEXT_SCREEN_POS 0
+static LINES_TEXT string "Lines:"
+expr LINES_POS 9
+expr LINES_SCREEN_POS 10
+expr LINES_NUM_SCREEN_POS 11
+static LEVEL_TEXT string "level:"
+expr LEVEL_POS 10
+expr LEVEL_SCREEN_POS 13
+expr LEVEL_NUM_SCREEN_POS 14
+static SCORE_TEXT string "Score:"
+expr SCORE_POS 11
+expr SCORE_SCREEN_POS 16
+expr SCORE_NUM_SCREEN_POS 17
+static NEXT_TEXT string "Next:"
+expr NEXT_POS 12
+expr NEXT_SCREEN_POS 19
+static PRESS_ENTER_TEXT string "Press [ENTER] to play"
+expr PRESS_ENTER_POS 13
+expr LABELS_TILEMAP_WIDTH  21
+expr LABELS_TILEMAP_HEIGHT 14
+
+; 10 digits + negative sign
+expr MAX_INTEGER_SIZE 11
+
+; assure collision masking works.
+static pieces ints "\
+255 255 255 \
+0   255 0 \
+0   255 \
+255 255 \
+0   255 \
+0   255 0 \
+255 255 255 \
+255 0 \
+255 255 \
+255 0 \
+\
+255 255 255 \
+0   0   255 \
+0   255 \
+0   255 \
+255 255 \
+255 0   0 \
+255 255 255 \
+255 255 \
+255 0 \
+255 0 \
+\
+255 255 0 \
+0   255 255 \
+0   255 \
+255 255 \
+255 0 \
+\
+255 255 \
+255 255 \
+\
+0   255 255 \
+255 255 0 \
+255 0 \
+255 255 \
+0   255 \
+\
+255 255 255 \
+255 0   0 \
+255 255 \
+0   255 \
+0   255 \
+0   0   255 \
+255 255 255 \
+255 0 \
+255 0 \
+255 255 \
+\
+255 \
+255 \
+255 \
+255 \
+255 255 255 255"
+; all arrays refering to pieces have a null 0th index since 0 means no piece
+; and pieces index starting at 1
+expr PIECEINFO_PIECES    7
+expr PIECEINFO_ROTATIONS 4
+static PIECEINFO_POS ints "\
+      0   0   0   0 \
+      0   6  12  18 \
+     24  30  36  42 \
+     48  54  48  54 \
+     60  60  60  60 \
+     64  70  64  70 \
+     76  82  88  94 \
+    100 104 100 104"
+static PIECEINFO_WIDTH ints "\
+    0 0 0 0 \
+    3 2 3 2 \
+    3 2 3 2 \
+    3 2 3 2 \
+    2 2 2 2 \
+    3 2 3 2 \
+    3 2 3 2 \
+    1 4 1 4"
+static PIECEINFO_HEIGHT ints "\
+    0 0 0 0 \
+    2 3 2 3 \
+    2 3 2 3 \
+    2 3 2 3 \
+    2 2 2 2 \
+    2 3 2 3 \
+    2 3 2 3 \
+    4 1 4 1"
+; left side is starting at transition from rotation 0 to rotation 1 then the
+; far right column is the transition from rotation 3 back to 0.
+; that is, the rotation transitioned from is the column that should be read
+; from.
+; for counter-clockwise rotation, the column for the rotation transitioned to
+; should be read, then negated.
+static ROTATION_X_BIAS ints "\
+     0  0  0  0 \
+     0  0  1 -1 \
+     0  0  1 -1 \
+     1 -1  0  0 \
+     0  0  0  0 \
+     1 -1  0  0 \
+     0  0  1 -1 \
+    -2  1 -1  2"
+static ROTATION_Y_BIAS ints "\
+     0  0  0  0 \
+    -1  0  0  1 \
+    -1  0  0  1 \
+     0  1 -1  0 \
+     0  0  0  0 \
+     0  1 -1  0 \
+    -1  0  0  1 \
+     2 -2  1 -1"
+
+expr PIT_WIDTH 10
+expr PIT_HEIGHT 20
+expr PIT_SIZE "PIT_WIDTH * PIT_HEIGHT"
+expr PIT_PXWIDTH "PIT_WIDTH * TILE_SIDE"
+expr PIT_PXHEIGHT "PIT_HEIGHT * TILE_SIDE"
+static pit ints PIT_SIZE
+static pit_map0_tiles ints PIT_SIZE
+static pit_map1_tiles ints PIT_SIZE
+static pit_map2_tiles ints PIT_SIZE
+static pit_map0_colormod ints PIT_SIZE
+static pit_map1_colormod ints PIT_SIZE
+static pit_map2_colormod ints PIT_SIZE
+expr PIT_BG_WIDTH  "PIT_WIDTH + 2"
+expr PIT_BG_HEIGHT "PIT_HEIGHT + 2"
+expr PIT_BG_SIZE   "PIT_BG_WIDTH * PIT_BG_HEIGHT"
+expr PIT_TILE_CORNER 4
+expr PIT_TILE_EDGE   5
+expr PIT_TILE_FILL   3
+; C_PIT_FILL
+TILEMAP_COLOR PIT_FILL 160 160 160 127
+expr CLEAR_TILE      1
+expr SOLID_TILE      0
+expr BACKGROUND_TILE 2
+
+static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
+                           0  6  7 0 \
+                           0  8  9 0 \
+                           0 10 11 0 \
+                           0 12 13 0 \
+                           0 14 15 0 \
+                           0 16 17 0 \
+                           0 18 19 0"
+; Probably should be power of two
+static TILEMAP_WIDTH 4
+static TILEMAP_HEIGHT 8
+TILEMAP_COLOR BLK   0   0   0 255
+TILEMAP_COLOR CYA   0 170 170 255
+TILEMAP_COLOR YEL 170 170   0 255
+TILEMAP_COLOR PUR 170   0 170 255
+TILEMAP_COLOR GRN   0 170   0 255
+TILEMAP_COLOR RED 170   0   0 255
+TILEMAP_COLOR BLU   0   0 170 255
+TILEMAP_COLOR ORA 170  85   0 255
+TILEMAP_COLOR LCY  85 255 255 255
+TILEMAP_COLOR LYE 255 255  85 255
+TILEMAP_COLOR LPU 255  85 255 255
+TILEMAP_COLOR LGR  85 255  85 255
+TILEMAP_COLOR LRE 255  85  85 255
+TILEMAP_COLOR LBL  85  85 255 255
+TILEMAP_COLOR LOR 255 170  85 255
+TILEMAP_COLOR WHT 255 255 255 255
+
+; 0th is no block
+static PIECE_COLORMOD ints "0 0 0 0 \
+                            C_CYA C_LCY C_WHT 0 \
+                            C_YEL C_LYE C_WHT 0 \
+                            C_PUR C_LPU C_WHT 0 \
+                            C_GRN C_LGR C_WHT 0 \
+                            C_RED C_LRE C_WHT 0 \
+                            C_BLU C_LBL C_WHT 0 \
+                            C_ORA C_LOR C_WHT 0"
+
+static BACKGROUND_PATTERN ints "\
+    BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE \
+    CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
+    CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
+    CLEAR_TILE CLEAR_TILE CLEAR_TILE BACKGROUND_TILE \
+    CLEAR_TILE CLEAR_TILE CLEAR_TILE BACKGROUND_TILE \
+    CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
+    CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
+    BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE"
+expr BACKGROUND_PATTERN_SIDE 4
+expr BACKGROUND_PATTERN_SIZE "BACKGROUND_PATTERN_SIDE * \
+                              BACKGROUND_PATTERN_SIDE"
+expr BACKGROUND_PATTERN_PXSIDE "BACKGROUND_PATTERN_SIDE * TILE_SIDE"
+expr BACKGROUND_WIDTH  "SCREEN_TILES_WIDTH + 4"
+expr BACKGROUND_HEIGHT "SCREEN_TILES_HEIGHT + 4"
+expr BACKGROUND_SIZE   "BACKGROUND_WIDTH * BACKGROUND_HEIGHT"
+expr PIT_PATTERN_WIDTH  "PIT_BG_WIDTH + 4"
+expr PIT_PATTERN_HEIGHT "PIT_BG_HEIGHT + 4"
+
+

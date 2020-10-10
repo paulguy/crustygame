@@ -4,330 +4,17 @@ include videomode.inc
 include timers.inc
 include text.inc
 include objects.inc
+include crustris_defs.inc
 
 binclude gfx ints "crustris.crsg"
 binclude font ints "font.crsg"
+binclude title ints "crustris_logo.crsg"
 
-expr STARTING_LEVEL 1
-expr LINES_PER_LEVEL 10
-expr MAX_LEVEL 20
-static LEVEL_CHANGE_RATES ints "\
-    1000 950 900 850 800 750 700 650 600 550 \
-     500 450 400 350 300 250 200 150 100  50"
-
-TILEMAP_COLOR BG_L1    244 169 213 255
-TILEMAP_COLOR BG_D_L1   27  80 173 255 
-TILEMAP_COLOR BG_L2    230 227  74 255
-TILEMAP_COLOR BG_D_L2   63 136  88 255 
-TILEMAP_COLOR BG_L3    139 157  84 255
-TILEMAP_COLOR BG_D_L3  124  87  39 255 
-TILEMAP_COLOR BG_L4     80 202 255 255
-TILEMAP_COLOR BG_D_L4   74   5 121 255 
-TILEMAP_COLOR BG_L5    181 224 213 255
-TILEMAP_COLOR BG_D_L5  104 102  85 255 
-TILEMAP_COLOR BG_L6    212 209 180 255
-TILEMAP_COLOR BG_D_L6   69  71  63 255 
-TILEMAP_COLOR BG_L7     94 184 209 255
-TILEMAP_COLOR BG_D_L7   83 144  29 255 
-TILEMAP_COLOR BG_L8    121 250  97 255
-TILEMAP_COLOR BG_D_L8  182 199   8 255 
-TILEMAP_COLOR BG_L9    239 233 120 255
-TILEMAP_COLOR BG_D_L9   74 115  13 255 
-TILEMAP_COLOR BG_L10    79 200  39 255
-TILEMAP_COLOR BG_D_L10  15  86  70 255 
-TILEMAP_COLOR BG_L11    94 190 186 255
-TILEMAP_COLOR BG_D_L11   0  81 117 255 
-TILEMAP_COLOR BG_L12   205 221 253 255
-TILEMAP_COLOR BG_D_L12   1  14  49 255 
-TILEMAP_COLOR BG_L13   106 150 242 255
-TILEMAP_COLOR BG_D_L13 192 205 221 255 
-TILEMAP_COLOR BG_L14   204  92 215 255
-TILEMAP_COLOR BG_D_L14 155  18  91 255 
-TILEMAP_COLOR BG_L15    49 181 148 255
-TILEMAP_COLOR BG_D_L15  67 112  31 255 
-TILEMAP_COLOR BG_L16    32 113   0 255
-TILEMAP_COLOR BG_D_L16  70  59  31 255 
-TILEMAP_COLOR BG_L17    89  85  58 255
-TILEMAP_COLOR BG_D_L17  66  29  10 255 
-TILEMAP_COLOR BG_L18    38  28  20 255
-TILEMAP_COLOR BG_D_L18 111  20   0 255 
-TILEMAP_COLOR BG_L19   255   0   0 255
-TILEMAP_COLOR BG_D_L19   0   0   0 255 
-TILEMAP_COLOR BG_L20     0   0   0 255
-TILEMAP_COLOR BG_D_L20 255 255 255 255 
-
-expr INPUT_DELAY 50
-expr TAP_DELAY 2
-TILEMAP_COLOR BG_PATTERN_SHADOW 255 255 255 64
-expr BGSCROLL_DELAY "1000 / 60"
-expr FONT_SCALE 2
-; 0 for normal
-expr DEBUG_START_PIECE 0
-; 1 for normal
-expr DEBUG_DO_PIECE_FALL 1
-
-static LEVEL_BG_COLOR ints "\
-    C_BG_L1  C_BG_L2  C_BG_L3  C_BG_L4  C_BG_L5  \
-    C_BG_L6  C_BG_L7  C_BG_L8  C_BG_L9  C_BG_L10 \
-    C_BG_L11 C_BG_L12 C_BG_L13 C_BG_L14 C_BG_L15 \
-    C_BG_L16 C_BG_L17 C_BG_L18 C_BG_L19 C_BG_L20"
-
-static LEVEL_BG_SHADOW_COLOR ints "\
-    C_BG_D_L1  C_BG_D_L2  C_BG_D_L3  C_BG_D_L4  C_BG_D_L5  \
-    C_BG_D_L6  C_BG_D_L7  C_BG_D_L8  C_BG_D_L9  C_BG_D_L10 \
-    C_BG_D_L11 C_BG_D_L12 C_BG_D_L13 C_BG_D_L14 C_BG_D_L15 \
-    C_BG_D_L16 C_BG_D_L17 C_BG_D_L18 C_BG_D_L19 C_BG_D_L20"
-
-macro SET_VIDEO_MODE
-    static videomode string VIDEOMODE
-    expr VIDEO_MODE_SET 1
-endmacro SET_VIDEO_MODE
-
-macro SET_DEFAULT_VIDEO_MODE
-    static videomode string "640x480"
-endmacro SET_DEFAULT_VIDEO_MODE
-
-if VIDEOMODE SET_VIDEO_MODE
-expr VIDEO_MODE_NOT_SET "VIDEO_MODE_SET ^ 1"
-if VIDEO_MODE_NOT_SET SET_DEFAULT_VIDEO_MODE
-
-expr TILE_SIDE 16
-
-expr SCREEN_WIDTH 640
-expr SCREEN_HEIGHT 480
-expr SCREEN_TILES_WIDTH "SCREEN_WIDTH / TILE_SIDE"
-expr SCREEN_TILES_HEIGHT "SCREEN_HEIGHT / TILE_SIDE"
-
-expr GAME_MODE_PLAYING 0
-expr GAME_MODE_ENDED   1
-
-static game_mode GAME_MODE_PLAYING
-
-expr FONT_SIDE 8
-
-static CONTROLS_TEXT string "\
-CONTROLS:
-Q - Rotate Counter Clockwise
-E - Rotate Clockwise
-A - Move Left
-S - Move Down
-D - Move Up"
-expr CONTROLS_TEXT_POS    0
-expr CONTROLS_TEXT_WIDTH  13
-expr CONTROLS_TEXT_HEIGHT 9
-expr CONTROLS_TEXT_SCREEN_POS 0
-static LINES_TEXT string "Lines:"
-expr LINES_POS 9
-expr LINES_SCREEN_POS 10
-expr LINES_NUM_SCREEN_POS 11
-static LEVEL_TEXT string "level:"
-expr LEVEL_POS 10
-expr LEVEL_SCREEN_POS 13
-expr LEVEL_NUM_SCREEN_POS 14
-static SCORE_TEXT string "Score:"
-expr SCORE_POS 11
-expr SCORE_SCREEN_POS 16
-expr SCORE_NUM_SCREEN_POS 17
-static NEXT_TEXT string "Next:"
-expr NEXT_SIZE 5
-expr NEXT_POS 12
-expr NEXT_SCREEN_POS 19
-expr LABEL_SIZE 6
-expr LABELS_TILEMAP_WIDTH  15
-expr LABELS_TILEMAP_HEIGHT 13
-
-; 10 digits + negative sign
-expr MAX_INTEGER_SIZE 11
-
-; assure collision masking works.
-static pieces ints "\
-255 255 255 \
-0   255 0 \
-0   255 \
-255 255 \
-0   255 \
-0   255 0 \
-255 255 255 \
-255 0 \
-255 255 \
-255 0 \
-\
-255 255 255 \
-0   0   255 \
-0   255 \
-0   255 \
-255 255 \
-255 0   0 \
-255 255 255 \
-255 255 \
-255 0 \
-255 0 \
-\
-255 255 0 \
-0   255 255 \
-0   255 \
-255 255 \
-255 0 \
-\
-255 255 \
-255 255 \
-\
-0   255 255 \
-255 255 0 \
-255 0 \
-255 255 \
-0   255 \
-\
-255 255 255 \
-255 0   0 \
-255 255 \
-0   255 \
-0   255 \
-0   0   255 \
-255 255 255 \
-255 0 \
-255 0 \
-255 255 \
-\
-255 \
-255 \
-255 \
-255 \
-255 255 255 255"
-; all arrays refering to pieces have a null 0th index since 0 means no piece
-; and pieces index starting at 1
-expr PIECEINFO_PIECES    7
-expr PIECEINFO_ROTATIONS 4
-static PIECEINFO_POS ints "\
-      0   0   0   0 \
-      0   6  12  18 \
-     24  30  36  42 \
-     48  54  48  54 \
-     60  60  60  60 \
-     64  70  64  70 \
-     76  82  88  94 \
-    100 104 100 104"
-static PIECEINFO_WIDTH ints "\
-    0 0 0 0 \
-    3 2 3 2 \
-    3 2 3 2 \
-    3 2 3 2 \
-    2 2 2 2 \
-    3 2 3 2 \
-    3 2 3 2 \
-    1 4 1 4"
-static PIECEINFO_HEIGHT ints "\
-    0 0 0 0 \
-    2 3 2 3 \
-    2 3 2 3 \
-    2 3 2 3 \
-    2 2 2 2 \
-    2 3 2 3 \
-    2 3 2 3 \
-    4 1 4 1"
-; left side is starting at transition from rotation 0 to rotation 1 then the
-; far right column is the transition from rotation 3 back to 0.
-; that is, the rotation transitioned from is the column that should be read
-; from.
-; for counter-clockwise rotation, the column for the rotation transitioned to
-; should be read, then negated.
-static ROTATION_X_BIAS ints "\
-     0  0  0  0 \
-     0  0  1 -1 \
-     0  0  1 -1 \
-     1 -1  0  0 \
-     0  0  0  0 \
-     1 -1  0  0 \
-     0  0  1 -1 \
-    -2  1 -1  2"
-static ROTATION_Y_BIAS ints "\
-     0  0  0  0 \
-    -1  0  0  1 \
-    -1  0  0  1 \
-     0  1 -1  0 \
-     0  0  0  0 \
-     0  1 -1  0 \
-    -1  0  0  1 \
-     2 -2  1 -1"
-
-expr PIT_WIDTH 10
-expr PIT_HEIGHT 20
-expr PIT_SIZE "PIT_WIDTH * PIT_HEIGHT"
-static pit ints PIT_SIZE
-static pit_map0_tiles ints PIT_SIZE
-static pit_map1_tiles ints PIT_SIZE
-static pit_map2_tiles ints PIT_SIZE
-static pit_map0_colormod ints PIT_SIZE
-static pit_map1_colormod ints PIT_SIZE
-static pit_map2_colormod ints PIT_SIZE
-expr PIT_BG_WIDTH  "PIT_WIDTH + 2"
-expr PIT_BG_HEIGHT "PIT_HEIGHT + 2"
-expr PIT_BG_SIZE   "PIT_BG_WIDTH * PIT_BG_HEIGHT"
-expr PIT_TILE_CORNER 4
-expr PIT_TILE_EDGE   5
-expr PIT_TILE_FILL   3
-; C_PIT_FILL
-TILEMAP_COLOR PIT_FILL 160 160 160 127
-expr CLEAR_TILE      1
-expr SOLID_TILE      0
-expr BACKGROUND_TILE 2
-
-static PIECE_TILEMAP ints "CLEAR_TILE CLEAR_TILE CLEAR_TILE 0 \
-                           0  6  7 0 \
-                           0  8  9 0 \
-                           0 10 11 0 \
-                           0 12 13 0 \
-                           0 14 15 0 \
-                           0 16 17 0 \
-                           0 18 19 0"
-; Probably should be power of two
-static TILEMAP_WIDTH 4
-static TILEMAP_HEIGHT 8
-TILEMAP_COLOR BLK   0   0   0 255
-TILEMAP_COLOR CYA   0 170 170 255
-TILEMAP_COLOR YEL 170 170   0 255
-TILEMAP_COLOR PUR 170   0 170 255
-TILEMAP_COLOR GRN   0 170   0 255
-TILEMAP_COLOR RED 170   0   0 255
-TILEMAP_COLOR BLU   0   0 170 255
-TILEMAP_COLOR ORA 170  85   0 255
-TILEMAP_COLOR LCY  85 255 255 255
-TILEMAP_COLOR LYE 255 255  85 255
-TILEMAP_COLOR LPU 255  85 255 255
-TILEMAP_COLOR LGR  85 255  85 255
-TILEMAP_COLOR LRE 255  85  85 255
-TILEMAP_COLOR LBL  85  85 255 255
-TILEMAP_COLOR LOR 255 170  85 255
-TILEMAP_COLOR WHT 255 255 255 255
-
-; 0th is no block
-static PIECE_COLORMOD ints "0 0 0 0 \
-                            C_CYA C_LCY C_WHT 0 \
-                            C_YEL C_LYE C_WHT 0 \
-                            C_PUR C_LPU C_WHT 0 \
-                            C_GRN C_LGR C_WHT 0 \
-                            C_RED C_LRE C_WHT 0 \
-                            C_BLU C_LBL C_WHT 0 \
-                            C_ORA C_LOR C_WHT 0"
-
-static BACKGROUND_PATTERN ints "\
-    BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE \
-    CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
-    CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
-    CLEAR_TILE CLEAR_TILE CLEAR_TILE BACKGROUND_TILE \
-    CLEAR_TILE CLEAR_TILE CLEAR_TILE BACKGROUND_TILE \
-    CLEAR_TILE CLEAR_TILE BACKGROUND_TILE CLEAR_TILE \
-    CLEAR_TILE BACKGROUND_TILE CLEAR_TILE CLEAR_TILE \
-    BACKGROUND_TILE CLEAR_TILE CLEAR_TILE CLEAR_TILE"
-expr BACKGROUND_PATTERN_SIDE 4
-expr BACKGROUND_PATTERN_SIZE "BACKGROUND_PATTERN_SIDE * \
-                              BACKGROUND_PATTERN_SIDE"
-expr BACKGROUND_PATTERN_PXSIDE "BACKGROUND_PATTERN_SIDE * TILE_SIDE"
-expr BACKGROUND_WIDTH  "SCREEN_TILES_WIDTH + 4"
-expr BACKGROUND_HEIGHT "SCREEN_TILES_HEIGHT + 4"
-expr BACKGROUND_SIZE   "BACKGROUND_WIDTH * BACKGROUND_HEIGHT"
-expr PIT_PATTERN_WIDTH  "PIT_BG_WIDTH + 4"
-expr PIT_PATTERN_HEIGHT "PIT_BG_HEIGHT + 4"
+macro CENTER RESULT SPACESIZE ITEMSIZE
+    move RESULT SPACESIZE
+    sub  RESULT ITEMSIZE
+    div  RESULT 2
+endmacro CENTER
 
 proc populate_piece_values piece rotation pos width height
     local pieceptr
@@ -690,9 +377,6 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
     jump no_kick
 
     label vert_kick
-        ; should be pretty much like horz_kick just in a vertical direction
-        ; since it's copypasta, comment directions may be incongruous.
-
         ; piece is "jammed", don't try
         and priority COLLIDED_TOP_BOTTOM
         cmp priority COLLIDED_TOP_BOTTOM
@@ -701,12 +385,12 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
         move topgrowth heightdiff
         move bottomgrowth heightdiff
 
-        ; apply movement, if any, as well as bias
+        ; apply drop, if any, as well as bias
         move checkx x
         add  checkx xbias
         add  checkx xmove
 
-        ; try searching outwards up to the difference in width until a
+        ; try searching outwards up to the difference in height until a
         ; collision is found, if so, back off one and use that
         label vert_kick_loop
             cmp topgrowth 0
@@ -719,14 +403,14 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
             ; anything, but try to see if the piece will move without rotation
             jump vert_loop_break
             label vert_loop_continue
-                and priority COLLIDED_BOTTOM
-                jumpz try_up
+                and priority COLLIDED_TOP
+                jumpn try_top
 
-            label try_down
+            label try_bottom
                 cmp bottomgrowth 0
-                jumpl vert_kick_loop
+                jumpl continue_bottom
 
-                ; try moving right incrementally until a collision
+                ; try moving bottom incrementally until a collision
                 move checky 0
                 sub  checky bottomgrowth
                 add  checky y
@@ -736,40 +420,51 @@ proc try_resolve_piece_movement piece rotation x y xmove ymove dir
                 ; anyway, otherwise it doesn't matter
                 sub bottomgrowth 1
                 cmp collided
-                jumpz continue_down
-                ; check to see if the collision happened on the right side
+                jumpz continue_bottom
+                ; check to see if the collision happened on the bottom side
                 and collided COLLIDED_BOTTOM
-                jumpz continue_down
+                jumpz continue_bottom
                 ; step back 1 and use that value
                 sub checky 1
+                ; check if it's still a collision, indicating there's simply
+                ; not enough space to fit.
+                call check_collision collided checkx checky pos width height
+                ERR_NL collided
+                cmp collided
+                jumpn no_kick
             jump update_all
-            label continue_down
-                cmp priority COLLIDED_BOTTOM
-                jumpz vert_kick_loop
+            label continue_bottom
+                and priority COLLIDED_TOP
+                jumpn vert_kick_loop
 
-            label try_up
+            label try_top
                 cmp topgrowth 0
-                jumpl vert_kick_loop
+                jumpl continue_top
 
                 ; same as above
                 move checky heightdiff
                 mul  checky -1
-                add  checky rightgrowth
+                add  checky topgrowth
                 add  checky y
                 
                 call check_collision collided checkx checky pos width height
                 ; same as above
                 sub topgrowth 1
                 cmp collided
-                jumpz continue_up
+                jumpz continue_top
                 and collided COLLIDED_TOP
-                jumpz continue_up
+                jumpz continue_top
 
                 add checky 1
+                ; check if it's still a collision, indicating there's simply
+                ; not enough space to fit.
+                call check_collision collided checkx checky pos width height
+                cmp collided
+                jumpn no_kick
             jump update_all
-            label continue_up
-                cmp priority COLLIDED_TOP
-                jumpn try_down
+            label continue_top
+                and priority COLLIDED_TOP
+                jumpn try_bottom
             jump vert_kick_loop
 
         label vert_loop_break
@@ -1076,6 +771,7 @@ ret
 
 static gfx_id
 static font_id
+static title_id
 static block_tilemap_id
 static block_layer_id
 static pit_tilemap_id0
@@ -1102,6 +798,9 @@ static labels_layer1_id
 static number_tilemap_id
 static number_layer0_id
 static number_layer1_id
+static title_tilemap_id
+static title_layer_id
+static shade_layer_id
 
 static block_obj
 static pit0_obj
@@ -1118,6 +817,8 @@ static labels0_obj
 static labels1_obj
 static number0_obj
 static number1_obj
+static title_obj
+static shade_obj
 
 static pitxpos
 static pitypos
@@ -1136,11 +837,6 @@ static fps_timer_id
 static piece_timer_id
 static input_timer_id
 static bgscroll_timer_id
-
-static bgscroll0 ints 2
-static bgscroll1 ints 2
-static bgscroll2 ints 2
-static bgscroll3 ints 2
 
 proc init
     local temp ints 4
@@ -1169,6 +865,11 @@ proc init
     move temp:0 font:CRSG_OFFSET_WIDTH
     mul  temp:0 TILEMAP_PIXEL_BYTES
     call gfx_add_tileset font:CRSG_OFFSET_DATA font:CRSG_OFFSET_WIDTH font:CRSG_OFFSET_HEIGHT temp:0 FONT_SIDE FONT_SIDE font_id
+
+    ; single sprite
+    move temp:0 title:CRSG_OFFSET_WIDTH
+    mul  temp:0 TILEMAP_PIXEL_BYTES
+    call gfx_add_tileset title:CRSG_OFFSET_DATA title:CRSG_OFFSET_WIDTH title:CRSG_OFFSET_HEIGHT temp:0 title:CRSG_OFFSET_WIDTH title:CRSG_OFFSET_HEIGHT title_id
 
     call gfx_add_tilemap TILEMAP_WIDTH TILEMAP_HEIGHT block_tilemap_id
     move gfx_set_tilemap_tileset:block_tilemap_id gfx_id
@@ -1220,13 +921,18 @@ proc init
 
     call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
     move gfx_set_tilemap_tileset:window_background_id gfx_id
-    call gfx_add_layer window_background_id window_background_layer_id
-    call objects_get_free win_bg_obj window_background_layer_id
-    OBJECTS_SET_POS win_bg_obj 0 0
     call fill row SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH SOLID_TILE
     ; pitch = 0 so the same row is copied for each row
     call gfx_set_tilemap_map3 window_background_id row 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
     call gfx_update_tilemap window_background_id
+    call gfx_add_layer window_background_id window_background_layer_id
+    call objects_get_free win_bg_obj window_background_layer_id
+    OBJECTS_SET_POS win_bg_obj 0 0
+    call gfx_add_layer window_background_id shade_layer_id
+    call objects_get_free shade_obj shade_layer_id
+    OBJECTS_SET_SCALE shade_obj 1 1
+    move gfx_set_layer_blendmode:shade_layer_id GFX_BLENDMODE_SUB
+    move gfx_set_layer_colormod:shade_layer_id C_BG_PATTERN_SHADOW
 
     call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
 
@@ -1271,19 +977,22 @@ proc init
     ; reuse background_pattern because it's a very large buffer
     call gfx_add_tilemap LABELS_TILEMAP_WIDTH LABELS_TILEMAP_HEIGHT labels_tilemap_id
     move gfx_set_tilemap_tileset:labels_tilemap_id font_id
-    call text_string_to_tilemap background_pattern LABELS_TILEMAP_WIDTH LABELS_TILEMAP_HEIGHT LABELS_TILEMAP_WIDTH CONTROLS_TEXT
+    call text_string_to_tilemap background_pattern CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT LABELS_TILEMAP_WIDTH CONTROLS_TEXT
     move temp LABELS_TILEMAP_WIDTH
     mul  temp LINES_POS
-    call text_string_to_tilemap background_pattern:temp LABEL_SIZE 1 LABEL_SIZE LINES_TEXT
+    call text_string_to_tilemap background_pattern:temp LINES_TEXT: 1 LINES_TEXT: LINES_TEXT
     move temp LABELS_TILEMAP_WIDTH
     mul  temp LEVEL_POS
-    call text_string_to_tilemap background_pattern:temp LABEL_SIZE 1 LABEL_SIZE LEVEL_TEXT
+    call text_string_to_tilemap background_pattern:temp LEVEL_TEXT: 1 LEVEL_TEXT: LEVEL_TEXT
     move temp LABELS_TILEMAP_WIDTH
     mul  temp SCORE_POS
-    call text_string_to_tilemap background_pattern:temp LABEL_SIZE 1 LABEL_SIZE SCORE_TEXT
+    call text_string_to_tilemap background_pattern:temp SCORE_TEXT: 1 SCORE_TEXT: SCORE_TEXT
     move temp LABELS_TILEMAP_WIDTH
     mul  temp NEXT_POS
-    call text_string_to_tilemap background_pattern:temp NEXT_SIZE 1 NEXT_SIZE NEXT_TEXT
+    call text_string_to_tilemap background_pattern:temp NEXT_TEXT: 1 NEXT_TEXT: NEXT_TEXT
+    move temp LABELS_TILEMAP_WIDTH
+    mul  temp PRESS_ENTER_POS
+    call text_string_to_tilemap background_pattern:temp PRESS_ENTER_TEXT: 1 PRESS_ENTER_TEXT: PRESS_ENTER_TEXT
     call gfx_set_tilemap_map labels_tilemap_id background_pattern 
     call gfx_update_tilemap labels_tilemap_id
     call gfx_add_layer labels_tilemap_id labels_layer0_id
@@ -1306,20 +1015,21 @@ proc init
     OBJECTS_SET_SCALE number0_obj FONT_SCALE FONT_SCALE
     OBJECTS_SET_SCALE number1_obj FONT_SCALE FONT_SCALE
 
-    ; update the whole pit
-    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
+    call gfx_add_tilemap 1 1 title_tilemap_id
+    move gfx_set_tilemap_tileset:title_tilemap_id title_id
+    move temp 0
+    call gfx_set_tilemap_map title_tilemap_id temp
+    call gfx_update_tilemap title_tilemap_id
+    call gfx_add_layer title_tilemap_id title_layer_id
+    call objects_get_free title_obj title_layer_id
+    move tempf:1 title:CRSG_OFFSET_WIDTH
+    mul  tempf:1 TITLE_SCALE
+    CENTER tempf:0 SCREEN_WIDTH tempf:1
+    OBJECTS_SET_POS_AND_SCALE title_obj tempf:0 tempf:0 TITLE_SCALE TITLE_SCALE
 
     ; center the pit
-    move tempf:0 SCREEN_WIDTH
-    move tempf:2 PIT_WIDTH
-    mul  tempf:2 TILE_SIDE
-    sub  tempf:0 tempf:2
-    div  tempf:0 2
-    move tempf:1 SCREEN_HEIGHT
-    move tempf:2 PIT_HEIGHT
-    mul  tempf:2 TILE_SIDE
-    sub  tempf:1 tempf:2
-    div  tempf:1 2
+    CENTER tempf:0 SCREEN_WIDTH PIT_PXWIDTH
+    CENTER tempf:1 SCREEN_HEIGHT PIT_PXHEIGHT
     move tempf:2 tempf:0
     move tempf:3 tempf:1
     sub  tempf:2 TILE_SIDE
@@ -1359,8 +1069,11 @@ proc init
     move gfx_set_layer_scroll_pos:pit_pattern0_layer_id bgscroll2
     move gfx_set_layer_scroll_pos:pit_pattern1_layer_id bgscroll3
 
-    UPDATE_LEVEL
-
+    ; will be called anyway later, but the background and some initial things
+    ; need to be set up first
+    call setup_game
+    ; so the title screen shows up properly
+    move gfx_set_layer_colormod:labels_layer0_id C_WHT
     label end
 ret
 
@@ -1444,8 +1157,7 @@ macro DRAW_LABEL LPOS WIDTH HEIGHT SCREENPOS
     move gfx_set_layer_scroll_pos:labels_layer1_id temp
     move temp:0 FONT_SIDE
     move temp:1 SCREENPOS
-    mul  temp:1 FONT_SIDE
-    mul  temp:1 FONT_SCALE
+    mul  temp:1 FONT_SCALED_SIDE
     add  temp:1 FONT_SIDE
     OBJECTS_SET_POS labels0_obj temp:0 temp:1
     add  temp:0 1
@@ -1466,8 +1178,7 @@ macro DRAW_NUMBER NUM SCREENPOS
     move gfx_set_layer_window:number_layer0_id temp
     move gfx_set_layer_window:number_layer1_id temp
     move temp SCREENPOS
-    mul  temp FONT_SIDE
-    mul  temp FONT_SCALE
+    mul  temp FONT_SCALED_SIDE
     add  temp FONT_SIDE
     OBJECTS_SET_POS number0_obj FONT_SIDE temp
     add temp:0 1
@@ -1477,21 +1188,157 @@ macro DRAW_NUMBER NUM SCREENPOS
     move gfx_draw_layer number_layer0_id
 endmacro DRAW_NUMBER
 
-static level STARTING_LEVEL
-static curpiece DEBUG_START_PIECE
-static currotation
-static xpos 0
-static ypos 0
-static lastmove 0
-static move 0
-static tapped 0
-static fall 0
-static rotate 0
-static lines_cleared 0
-static nextlines
-static score 0
+static bgscroll0 ints 2
+static bgscroll1 ints 2
+static bgscroll2 ints 2
+static bgscroll3 ints 2
+expr TEXT_ANIM_AMP 6
+static text_anim_dir 1
+static text_anim_start 0
 
-proc frame
+proc text_anim_next start dir
+    local temp
+
+    move temp TEXT_ANIM_AMP
+    mul  temp dir
+    cmp  start temp
+    jumpz text_anim_reverse
+    jump no_text_anim_reverse
+    label text_anim_reverse
+    mul  dir -1
+    label no_text_anim_reverse
+    add  start dir
+ret
+
+proc draw_screen
+    local elapsed
+
+    call timers_check elapsed bgscroll_timer_id
+    cmp elapsed
+    jumpz no_bgscroll
+    ADVANCE_BGSCROLL bgscroll0:0 1  BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll0:1 -1 BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll1:0 1  BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll1:1 -1 BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll2:0 1 BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll2:1 1 BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll3:0 1 BACKGROUND_PATTERN_PXSIDE
+    ADVANCE_BGSCROLL bgscroll3:1 1 BACKGROUND_PATTERN_PXSIDE
+
+    call text_anim_next text_anim_start text_anim_dir
+
+    move gfx_set_layer_scroll_pos:window_pattern0_layer_id bgscroll0
+    move gfx_set_layer_scroll_pos:window_pattern1_layer_id bgscroll1
+    move gfx_set_layer_scroll_pos:pit_pattern0_layer_id bgscroll2
+    move gfx_set_layer_scroll_pos:pit_pattern1_layer_id bgscroll3
+    label no_bgscroll
+    move gfx_draw_layer window_background_layer_id
+    move gfx_draw_layer window_pattern1_layer_id
+    move gfx_draw_layer window_pattern0_layer_id
+    call draw_pit
+ret
+
+proc draw_shade x y w h
+    local temp ints 2
+
+    OBJECTS_SET_POS shade_obj x y
+    move temp:0 w
+    move temp:1 h
+    move gfx_set_layer_window:shade_layer_id temp
+    move gfx_draw_layer shade_layer_id
+ret
+
+static level
+static curpiece
+static currotation
+static xpos
+static ypos
+static lastmove
+static move
+static tapped
+static fall
+static rotate
+static lines_cleared
+static nextlines
+static score
+
+expr GAME_MODE_PLAYING 0
+expr GAME_MODE_ENDED   1
+expr GAME_MODE_TITLE   2
+
+static game_mode GAME_MODE_TITLE
+
+proc do_title_frame
+    local temp ints 4
+    local textw
+    local texth
+    local textx
+    local texty
+    local shadew
+    local shadeh
+    local shadex
+    local shadey
+    local titlew
+    local titlex
+    local text_anim_offset
+    local text_anim_offset_dir
+    local i
+
+    call pit_effect
+    call draw_screen
+    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
+    move gfx_draw_layer title_layer_id
+
+    move textw PRESS_ENTER_TEXT:
+    move shadew textw
+    add  shadew 2
+    mul  textw FONT_SCALED_SIDE
+    mul  shadew FONT_SCALED_SIDE
+    move shadeh FONT_SCALED_SIDE
+    mul  shadeh 3
+    CENTER shadex SCREEN_WIDTH shadew
+    move textx shadex
+    add  textx FONT_SCALED_SIDE
+    move titlew title:CRSG_OFFSET_WIDTH
+    mul  titlew TITLE_SCALE
+    CENTER titlex SCREEN_WIDTH titlew
+    move shadey SCREEN_HEIGHT
+    sub  shadey titlex
+    sub  shadey shadeh
+    move texty shadey
+    add  texty FONT_SCALED_SIDE
+
+    call draw_shade shadex shadey shadew shadeh
+
+    move text_anim_offset text_anim_start
+    move text_anim_offset_dir text_anim_dir
+
+    move temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+
+    move temp:3 PRESS_ENTER_POS
+    mul  temp:3 FONT_SIDE
+    move temp:0 textx
+    move i 0
+    label loop
+        cmp i PRESS_ENTER_TEXT:
+        jumpz done
+        move temp:2 i
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:labels_layer0_id temp:2
+        move temp:1 texty
+        add  temp:1 text_anim_offset
+        OBJECTS_SET_POS labels0_obj temp:0 temp:1
+        move gfx_draw_layer labels_layer0_id
+        add temp:0 FONT_SCALED_SIDE
+        call text_anim_next text_anim_offset text_anim_offset_dir
+        add i 1
+    jump loop
+    label done
+ret
+
+proc do_game_frame
     local curTick
     local width
     local height
@@ -1505,11 +1352,6 @@ proc frame
     local tempnum string "           "
     local tempnummap ints MAX_INTEGER_SIZE
     local numlen
-
-;    call count_fps
-
-    cmp game_mode GAME_MODE_ENDED
-    jumpz done_update
 
     cmp curpiece
     jumpn have_piece
@@ -1641,26 +1483,17 @@ proc frame
         move curpiece 0
 
     label done_update
-        call timers_check elapsed bgscroll_timer_id
-        jumpz no_bgscroll
-        ADVANCE_BGSCROLL bgscroll0:0 1  BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll0:1 -1 BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll1:0 1  BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll1:1 -1 BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll2:0 1 BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll2:1 1 BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll3:0 1 BACKGROUND_PATTERN_PXSIDE
-        ADVANCE_BGSCROLL bgscroll3:1 1 BACKGROUND_PATTERN_PXSIDE
+        call draw_screen
 
-        move gfx_set_layer_scroll_pos:window_pattern0_layer_id bgscroll0
-        move gfx_set_layer_scroll_pos:window_pattern1_layer_id bgscroll1
-        move gfx_set_layer_scroll_pos:pit_pattern0_layer_id bgscroll2
-        move gfx_set_layer_scroll_pos:pit_pattern1_layer_id bgscroll3
-        label no_bgscroll
-        move gfx_draw_layer window_background_layer_id
-        move gfx_draw_layer window_pattern1_layer_id
-        move gfx_draw_layer window_pattern0_layer_id
-        call draw_pit
+        DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT CONTROLS_TEXT_SCREEN_POS
+        DRAW_LABEL LINES_POS LINES_TEXT: 1 LINES_SCREEN_POS
+        DRAW_NUMBER lines_cleared LINES_NUM_SCREEN_POS
+        DRAW_LABEL LEVEL_POS LEVEL_TEXT: 1 LEVEL_SCREEN_POS
+        DRAW_NUMBER level LEVEL_NUM_SCREEN_POS
+        DRAW_LABEL SCORE_POS SCORE_TEXT: 1 SCORE_SCREEN_POS
+        DRAW_NUMBER score SCORE_NUM_SCREEN_POS
+        DRAW_LABEL NEXT_POS NEXT_TEXT: 1 NEXT_SCREEN_POS
+
         move xmove xpos
         mul  xmove TILE_SIDE
         add  xmove pitxpos
@@ -1668,44 +1501,129 @@ proc frame
         mul  ymove TILE_SIDE
         add  ymove pitypos
         call draw_piece block_layer_id curpiece currotation xmove ymove
-        DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT CONTROLS_TEXT_SCREEN_POS
-        DRAW_LABEL LINES_POS LABEL_SIZE 1 LINES_SCREEN_POS
-        DRAW_NUMBER lines_cleared LINES_NUM_SCREEN_POS
-        DRAW_LABEL LEVEL_POS LABEL_SIZE 1 LEVEL_SCREEN_POS
-        DRAW_NUMBER level LEVEL_NUM_SCREEN_POS
-        DRAW_LABEL SCORE_POS LABEL_SIZE 1 SCORE_SCREEN_POS
-        DRAW_NUMBER score SCORE_NUM_SCREEN_POS
-        DRAW_LABEL NEXT_POS NEXT_SIZE 1 NEXT_SCREEN_POS
-    label end
 ret
 
-proc event
-    cmp event_get_type INPUT_TYPE_KEYDOWN
-    jumpn keyup
+proc do_gameover_frame
+    call draw_screen
+ret
+
+proc frame
+    local junk
+
+    cmp game_mode GAME_MODE_TITLE
+    jumpz do_title
+    cmp game_mode GAME_MODE_PLAYING
+    jumpz do_game
+    cmp game_mode GAME_MODE_ENDED
+    jumpz do_gameover
+    jump end
+    label do_title
+        call do_title_frame
+    jump end
+    label do_game
+        call do_game_frame
+    jump end
+    label do_gameover
+        call do_gameover_frame
+    label end
+
+    ; always do random
+    move junk get_random
+;    call count_fps
+ret
+
+proc setup_game
+    local i
+
+    ; reset variables
+    move level STARTING_LEVEL
+    move curpiece DEBUG_START_PIECE
+    move lastmove 0
+    move move 0
+    move tapped 0
+    move fall 0
+    move rotate 0
+    move lines_cleared 0
+    move score 0
+
+    ; clear the pit
+    move i PIT_SIZE
+    label clear_pit
+        sub i 1
+        jumpl done_clear_pit
+        move pit:i 0
+    jump clear_pit
+    label done_clear_pit    
+    
+    ; update the whole pit
+    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
+
+    UPDATE_LEVEL
+ret
+
+proc generic_event keycode
     cmp event_get_button INPUT_KEY_f
     jumpz toggle_fullscreen
     cmp event_get_button INPUT_KEY_ESCAPE
     jumpz quit
-    cmp event_get_button INPUT_KEY_a
-    jumpz move_left
-    cmp event_get_button INPUT_KEY_d
-    jumpz move_right
-    cmp event_get_button INPUT_KEY_q
-    jumpz rotate_left
-    cmp event_get_button INPUT_KEY_e
-    jumpz rotate_right
-    cmp event_get_button INPUT_KEY_s
-    jumpz fall
     jump end
 
     label toggle_fullscreen
         call toggle_fullscreen
         call objects_update_global_scale
         call objects_update_scales
+        move keycode -1
     jump end
 
     label quit
         move set_running 0
+        move keycode -1
+    label end
+ret
+
+proc do_title_event
+    local button
+
+    cmp event_get_type INPUT_TYPE_KEYDOWN
+    jumpn end
+    move button event_get_button
+    call generic_event button
+    cmp button
+    jumpl end
+
+    cmp button INPUT_KEY_RETURN
+    jumpz start_game
+    jump end
+
+    label start_game
+        ; TODO look in to flicker when transitioning from title to game
+        call setup_game
+        move game_mode GAME_MODE_PLAYING
+    jump end
+
+    label end
+ret
+
+proc do_game_event
+    local button
+
+    cmp event_get_type INPUT_TYPE_KEYDOWN
+    jumpn keyup
+    move button event_get_button
+    call generic_event button
+    cmp button
+    jumpl end
+
+    cmp button INPUT_KEY_a
+    jumpz move_left
+    cmp button INPUT_KEY_d
+    jumpz move_right
+    cmp button INPUT_KEY_q
+    jumpz rotate_left
+    cmp button INPUT_KEY_e
+    jumpz rotate_right
+    cmp button INPUT_KEY_s
+    jumpz fall
     jump end
 
     label move_left
@@ -1755,5 +1673,35 @@ proc event
         move fall 0
     jump end
  
+    label end
+ret
+
+proc do_gameover_event
+    local button
+
+    cmp event_get_type INPUT_TYPE_KEYDOWN
+    jumpn end
+    move button event_get_button
+    call generic_event button
+
+    label end
+ret
+
+proc event
+    cmp game_mode GAME_MODE_TITLE
+    jumpz do_title
+    cmp game_mode GAME_MODE_PLAYING
+    jumpz do_game
+    cmp game_mode GAME_MODE_ENDED
+    jumpz do_gameover
+    jump end
+    label do_title
+        call do_title_event
+    jump end
+    label do_game
+        call do_game_event
+    jump end
+    label do_gameover
+        call do_gameover_event
     label end
 ret
