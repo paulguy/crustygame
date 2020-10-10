@@ -145,11 +145,32 @@ LayerList *layerlist_new(SDL_Renderer *renderer,
 }
 
 void layerlist_free(LayerList *ll) {
+    unsigned int i;
+
     if(ll->tilesetsmem > 0) {
+        for(i = 0; i < ll->tilesetsmem; i++) {
+            if(ll->tileset[i].tex != NULL) {
+                SDL_DestroyTexture(ll->tileset[i].tex);
+            }
+        }
         free(ll->tileset);
     }
 
     if(ll->tilemapsmem > 0) {
+        for(i = 0; i < ll->tilemapsmem; i++) {
+            if(ll->tilemap[i].map != NULL) {
+                free(ll->tilemap[i].map);
+                if(ll->tilemap[i].attr_flags != NULL) {
+                    free(ll->tilemap[i].attr_flags);
+                }
+                if(ll->tilemap[i].attr_colormod != NULL) {
+                    free(ll->tilemap[i].attr_colormod);
+                }
+                if(ll->tilemap[i].tex != NULL) {
+                    SDL_DestroyTexture(ll->tilemap[i].tex);
+                }
+            }
+        }
         free(ll->tilemap);
     }
 

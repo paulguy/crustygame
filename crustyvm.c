@@ -2267,9 +2267,7 @@ static int new_variable(CrustyVM *cvm,
                         long nameOffset,
                         CrustyType type,
                         unsigned int length,
-                        char *chrinit,
-                        int *intinit,
-                        double *floatinit,
+                        void *initializer,
                         const CrustyCallback *cb,
                         int procIndex) {
     int varIndex;
@@ -2358,7 +2356,7 @@ static int new_variable(CrustyVM *cvm,
             memmove(&(proc->initializer[length * sizeof(int)]),
                     proc->initializer,
                     lastSize);
-            memcpy(proc->initializer, intinit, length * sizeof(int));
+            memcpy(proc->initializer, initializer, length * sizeof(int));
         } else if(type == CRUSTY_TYPE_FLOAT) {
             int lastSize = proc->stackneeded;
 
@@ -2375,7 +2373,7 @@ static int new_variable(CrustyVM *cvm,
             memmove(&(proc->initializer[length * sizeof(double)]),
                     proc->initializer,
                     lastSize);
-            memcpy(proc->initializer, floatinit, length * sizeof(double));
+            memcpy(proc->initializer, initializer, length * sizeof(double));
         } else { /* CHAR */
             int lastSize = proc->stackneeded;
 
@@ -2395,7 +2393,7 @@ static int new_variable(CrustyVM *cvm,
             memmove(&(proc->initializer[var->offset - lastSize]),
                     proc->initializer,
                     lastSize);
-            memcpy(proc->initializer, chrinit, length);
+            memcpy(proc->initializer, initializer, length);
         }
     } else { /* global */
         if(cb == NULL) {
@@ -2415,7 +2413,7 @@ static int new_variable(CrustyVM *cvm,
                 cvm->initializer = temp;
 
                 memcpy(&(cvm->initializer[var->offset]),
-                       intinit,
+                       initializer,
                        length * sizeof(int));
             } else if(type == CRUSTY_TYPE_FLOAT) {
                 cvm->initialstack += (length * sizeof(double));
@@ -2428,7 +2426,7 @@ static int new_variable(CrustyVM *cvm,
                 cvm->initializer = temp;
 
                 memcpy(&(cvm->initializer[var->offset]),
-                       floatinit,
+                       initializer,
                        length * sizeof(double));
             } else { /* CHAR */
                 cvm->initialstack += length;
@@ -2446,7 +2444,7 @@ static int new_variable(CrustyVM *cvm,
                 cvm->initializer = temp;
 
                 memcpy(&(cvm->initializer[var->offset]),
-                       chrinit,
+                       initializer,
                        length);
             }
         } else {
@@ -2577,8 +2575,8 @@ static int variable_declaration(CrustyVM *cvm,
     char *end;
     int length;
     int *intinit = NULL;
-    char *chrinit = NULL;
     double *floatinit = NULL;
+    void *initializer = NULL;
     CrustyType type;
 
     if(line->tokencount == 2) { /* no initializer, allocated to 0 */
@@ -2592,6 +2590,7 @@ static int variable_declaration(CrustyVM *cvm,
         }
 
         intinit[0] = 0;
+        initializer = intinit;
     } else if(line->tokencount == 3) { /* with initializer */
         int num;
         type = CRUSTY_TYPE_INT;
@@ -2606,6 +2605,7 @@ static int variable_declaration(CrustyVM *cvm,
             }
 
             intinit[0] = num;
+            initializer = intinit;
         } else {
             LOG_PRINTF_TOK(cvm, "Initializer wasn't a number.\n");
             return(-1);
@@ -2637,9 +2637,11 @@ static int variable_declaration(CrustyVM *cvm,
                 }
 
                 memset(intinit, 0, sizeof(int) * length);
+                initializer = intinit;
             }
             /* array with initializer, nothing to do, since length and intinit
                are already what they should be */
+            initializer = intinit;
         } else if(strcmp(&(cvm->tokenmem[line->offset[2]]), "floats") == 0) {
             type = CRUSTY_TYPE_FLOAT;
             /* if the argument provided is a single, valid integer, use that
@@ -2658,6 +2660,7 @@ static int variable_declaration(CrustyVM *cvm,
                     return(-1);
                 }
                 memset(floatinit, 0, sizeof(double) * length);
+                initializer = floatinit;
             } else {
                 length = number_list_floats(&(cvm->tokenmem[line->offset[3]]), &floatinit);
                 if(length < 0) {
@@ -2667,12 +2670,13 @@ static int variable_declaration(CrustyVM *cvm,
                     LOG_PRINTF_TOK(cvm, "Initializer must be a space separated list of numbers.\n");
                     return(-1);
                 }
+                initializer = floatinit;
             }
             /* array with initializer */
         } else if(strcmp(&(cvm->tokenmem[line->offset[2]]), "string") == 0) {
             type = CRUSTY_TYPE_CHAR;
             length = strlen(&(cvm->tokenmem[line->offset[3]]));
-            chrinit = &(cvm->tokenmem[line->offset[3]]);
+            initializer = &(cvm->tokenmem[line->offset[3]]);
         } else {
             LOG_PRINTF_TOK(cvm, "variable declaration can be array or string.\n");
             return(-1);
@@ -2689,7 +2693,7 @@ static int variable_declaration(CrustyVM *cvm,
                     line->offset[1],
                     type,
                     length,
-                    chrinit, intinit, floatinit,
+                    initializer,
                     NULL,
                     procIndex) < 0) {
         /* print an error so the user can get a line number. */
@@ -2780,7 +2784,7 @@ static int symbols_scan(CrustyVM *cvm,
                                 cvm->line[cvm->logline].offset[i + 2],
                                 CRUSTY_TYPE_NONE,
                                 0,
-                                NULL, NULL, NULL,
+                                NULL,
                                 NULL,
                                 curProcIndex) < 0) {
                     /* reason will have already been printed */
@@ -2978,7 +2982,7 @@ static int symbols_scan(CrustyVM *cvm,
                                 cvm->line[cvm->logline].offset[1],
                                 CRUSTY_TYPE_CHAR,
                                 fileLength,
-                                buf, NULL, NULL,
+                                buf,
                                 NULL,
                                 curProcIndex) < 0) {
                     free(buf);
@@ -2989,7 +2993,7 @@ static int symbols_scan(CrustyVM *cvm,
                                 cvm->line[cvm->logline].offset[1],
                                 CRUSTY_TYPE_INT,
                                 fileLength / sizeof(int),
-                                NULL, (int *)buf, NULL,
+                                buf,
                                 NULL,
                                 curProcIndex) < 0) {
                     free(buf);
@@ -3000,13 +3004,14 @@ static int symbols_scan(CrustyVM *cvm,
                                 cvm->line[cvm->logline].offset[1],
                                 CRUSTY_TYPE_FLOAT,
                                 fileLength / sizeof(double),
-                                NULL, NULL, (double *)buf,
+                                buf,
                                 NULL,
                                 curProcIndex) < 0) {
                     free(buf);
                     goto failure;
                 }
             }
+            free(buf);
 
             continue;
         }
@@ -4280,7 +4285,7 @@ CrustyVM *crustyvm_new(const char *name,
                         tokenstart,
                         cb[i].readType,
                         cb[i].length,
-                        NULL, NULL, NULL,
+                        NULL,
                         &(cb[i]),
                         -1) < 0) {
             /* reason will have already been printed */
