@@ -145,3 +145,7 @@ macro OBJECTS_SET_POS_AND_SCALE OBJ XPOS YPOS XSCALE YSCALE
     move _objects_yscale:OBJ YSCALE
     call _objects_update_scale OBJ
 endmacro OBJECTS_SET_POS_AND_SCALE
+
+macro OBJECTS_GET_LAYER_ID ID OBJ
+    move ID _objects_id:OBJ
+endmacro OBJECTS_GET_LAYER_ID

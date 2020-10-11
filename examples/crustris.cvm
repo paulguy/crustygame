@@ -801,6 +801,8 @@ static number_layer1_id
 static title_tilemap_id
 static title_layer_id
 static shade_layer_id
+static characters_tilemap_id
+static characters_layer_id
 
 static block_obj
 static pit0_obj
@@ -819,12 +821,14 @@ static number0_obj
 static number1_obj
 static title_obj
 static shade_obj
+static characters_obj
 
 static pitxpos
 static pitypos
 
 macro UPDATE_LEVEL
     move nextlines level
+    add  nextlines 1
     mul  nextlines LINES_PER_LEVEL
     TIMERS_SET_RATE piece_timer_id LEVEL_CHANGE_RATES:level
     move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
@@ -990,9 +994,6 @@ proc init
     move temp LABELS_TILEMAP_WIDTH
     mul  temp NEXT_POS
     call text_string_to_tilemap background_pattern:temp NEXT_TEXT: 1 NEXT_TEXT: NEXT_TEXT
-    move temp LABELS_TILEMAP_WIDTH
-    mul  temp PRESS_ENTER_POS
-    call text_string_to_tilemap background_pattern:temp PRESS_ENTER_TEXT: 1 PRESS_ENTER_TEXT: PRESS_ENTER_TEXT
     call gfx_set_tilemap_map labels_tilemap_id background_pattern 
     call gfx_update_tilemap labels_tilemap_id
     call gfx_add_layer labels_tilemap_id labels_layer0_id
@@ -1003,6 +1004,25 @@ proc init
     call objects_get_free labels1_obj labels_layer1_id
     OBJECTS_SET_SCALE labels0_obj FONT_SCALE FONT_SCALE
     OBJECTS_SET_SCALE labels1_obj FONT_SCALE FONT_SCALE
+
+    call gfx_add_tilemap 128 1 characters_tilemap_id
+    move gfx_set_tilemap_tileset:characters_tilemap_id font_id
+    move temp 0
+    label characters_fill
+        cmp temp 128
+        jumpz done_characters_fill
+        move background_pattern:temp temp
+        add temp 1
+    jump characters_fill
+    label done_characters_fill
+    call gfx_set_tilemap_map characters_tilemap_id background_pattern
+    call gfx_update_tilemap characters_tilemap_id
+    call gfx_add_layer characters_tilemap_id characters_layer_id
+    move temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:characters_layer_id temp
+    call objects_get_free characters_obj characters_layer_id
+    OBJECTS_SET_SCALE characters_obj FONT_SCALE FONT_SCALE
 
     call gfx_add_tilemap MAX_INTEGER_SIZE 1 number_tilemap_id
     move gfx_set_tilemap_tileset:number_tilemap_id font_id
@@ -1072,8 +1092,6 @@ proc init
     ; will be called anyway later, but the background and some initial things
     ; need to be set up first
     call setup_game
-    ; so the title screen shows up properly
-    move gfx_set_layer_colormod:labels_layer0_id C_WHT
     label end
 ret
 
@@ -1248,7 +1266,176 @@ proc draw_shade x y w h
     move gfx_draw_layer shade_layer_id
 ret
 
+proc draw_text obj x y width height string animated
+    local temp ints 2
+    local stringpos 0
+    local xpos 0
+    local ypos
+    local no_advance
+    local layer_id
+    local wordstart
+    local wordlen
+    local remain
+    local anim_offset
+    local anim_offset_dir
+
+    move anim_offset text_anim_start
+    move anim_offset_dir text_anim_dir
+
+    OBJECTS_GET_LAYER_ID layer_id obj
+
+    move ypos FONT_SCALED_SIDE
+    label do_word
+        move no_advance 0
+        ; eat any leading spaces or newlines
+        label eat_whitespace
+            cmp stringpos string:
+            jumpz end
+
+            cmp string:stringpos SPC
+            jumpz eat_space
+            cmp string:stringpos NL
+            jumpz eat_newline
+        jump done_eat_whitespace
+        label eat_space
+            cmp no_advance
+            jumpn eat_whitespace
+
+            add xpos FONT_SCALED_SIDE
+            cmp xpos width
+            jumpl no_wrap
+                add ypos FONT_SCALED_SIDE
+                cmp ypos height
+                jumpg end
+                jumpz end
+
+                move no_advance 1
+                move xpos 0
+            label no_wrap
+
+            add stringpos 1
+        jump eat_whitespace
+        label eat_newline
+            add ypos FONT_SCALED_SIDE
+            cmp ypos height
+            jumpz end
+
+            move no_advance 0
+            move xpos 0
+            add stringpos 1
+        jump eat_whitespace
+        label done_eat_whitespace
+
+        ; find the length of the word that needs to be copied
+        move wordstart stringpos
+        label find_wordend
+            cmp string:stringpos SPC
+            jumpz found_wordend
+            cmp string:stringpos NL
+            jumpz found_wordend
+            ; this one is special because the procedure shouldn't just quit at
+            ; the end of the string, but consider this the end of the word
+            add stringpos 1
+            cmp stringpos string:
+            jumpz found_wordend
+        jump find_wordend
+        label found_wordend
+
+        ; if the word doesn't fit and tilemapx is 0, just copy the word
+        ; character by character advancing the character each time. if tilemapx
+        ; isn't 0, jump to the next line then try the check again. if it still
+        ; doesn't fit, it'll just revert to fully copying.
+
+        move wordlen stringpos
+        ; reset the string position to the start of the word after it's done
+        ; with the value
+        move stringpos wordstart
+        sub  wordlen wordstart
+        label retry_word
+        move remain width
+        sub  remain xpos
+        div  remain FONT_SCALED_SIDE
+        cmp  wordlen remain
+        jumpg try_new_line
+
+        label copy_word
+            move temp:0 string:stringpos
+            mul  temp:0 FONT_SIDE
+            move temp:1 0
+            move gfx_set_layer_scroll_pos:layer_id temp
+            move temp:0 xpos
+            add  temp:0 x
+            move temp:1 ypos
+            add  temp:1 y
+            sub  temp:1 FONT_SCALED_SIDE
+            cmp animated
+            jumpz no_animation
+                add temp:1 anim_offset
+                call text_anim_next anim_offset anim_offset_dir
+            label no_animation
+            OBJECTS_SET_POS obj temp:0 temp:1
+            move gfx_draw_layer layer_id
+
+            add xpos FONT_SCALED_SIDE
+            cmp xpos width
+            jumpl no_wrap2
+                add ypos FONT_SCALED_SIDE
+                cmp ypos height
+                jumpg end
+                jumpz end
+
+                move xpos 0
+            label no_wrap2
+
+            add stringpos 1
+            sub wordlen 1
+        jumpg copy_word
+        jump do_word_continue
+
+        label try_new_line
+            cmp remain width
+            jumpz copy_line
+            add ypos FONT_SCALED_SIDE
+            cmp ypos height
+            jumpg end
+            jumpz end
+            move xpos 0
+            jump retry_word
+
+        label copy_line
+            move temp:0 string:stringpos
+            mul  temp:0 FONT_SIDE
+            move temp:1 0
+            move gfx_set_layer_scroll_pos:layer_id temp
+            move temp:0 xpos
+            add  temp:0 x
+            move temp:1 ypos
+            add  temp:1 y
+            OBJECTS_SET_POS obj temp:0 temp:1
+            move gfx_draw_layer layer_id
+
+            add xpos FONT_SCALED_SIDE
+            cmp xpos width
+            jumpl no_wrap3
+                add ypos FONT_SCALED_SIDE
+                cmp ypos height
+                jumpg end
+                jumpz end
+
+                move xpos 0
+            label no_wrap3
+
+            add stringpos 1
+            sub remain 1
+        jumpg copy_line
+
+        label do_word_continue
+    jumpz do_word
+    label end
+ret
+
 static level
+static nextpiece
 static curpiece
 static currotation
 static xpos
@@ -1271,7 +1458,6 @@ static game_mode GAME_MODE_TITLE
 proc do_title_frame
     local temp ints 4
     local textw
-    local texth
     local textx
     local texty
     local shadew
@@ -1280,9 +1466,6 @@ proc do_title_frame
     local shadey
     local titlew
     local titlex
-    local text_anim_offset
-    local text_anim_offset_dir
-    local i
 
     call pit_effect
     call draw_screen
@@ -1309,33 +1492,7 @@ proc do_title_frame
     add  texty FONT_SCALED_SIDE
 
     call draw_shade shadex shadey shadew shadeh
-
-    move text_anim_offset text_anim_start
-    move text_anim_offset_dir text_anim_dir
-
-    move temp:0 FONT_SIDE
-    move temp:1 FONT_SIDE
-    move gfx_set_layer_window:labels_layer0_id temp
-
-    move temp:3 PRESS_ENTER_POS
-    mul  temp:3 FONT_SIDE
-    move temp:0 textx
-    move i 0
-    label loop
-        cmp i PRESS_ENTER_TEXT:
-        jumpz done
-        move temp:2 i
-        mul  temp:2 FONT_SIDE
-        move gfx_set_layer_scroll_pos:labels_layer0_id temp:2
-        move temp:1 texty
-        add  temp:1 text_anim_offset
-        OBJECTS_SET_POS labels0_obj temp:0 temp:1
-        move gfx_draw_layer labels_layer0_id
-        add temp:0 FONT_SCALED_SIDE
-        call text_anim_next text_anim_offset text_anim_offset_dir
-        add i 1
-    jump loop
-    label done
+    call draw_text characters_obj textx texty textw FONT_SCALED_SIDE PRESS_ENTER_TEXT 1
 ret
 
 proc do_game_frame
@@ -1355,9 +1512,10 @@ proc do_game_frame
 
     cmp curpiece
     jumpn have_piece
-        move curpiece get_random
-        mod  curpiece PIECEINFO_PIECES
-        add  curpiece 1
+        move curpiece nextpiece
+        move nextpiece get_random
+        mod  nextpiece PIECEINFO_PIECES
+        add  nextpiece 1
         move currotation 0
         move ypos 0
         call populate_piece_values curpiece currotation pos width height
@@ -1468,6 +1626,10 @@ proc do_game_frame
         jump done_pit_updates
         label update_pit_lines
         add lines_cleared lines
+        move temp level
+        add  temp 1
+        mul  temp LINES_SCORE_SCALE:lines
+        add  score temp
         cmp lines_cleared nextlines
         jumpl no_next_level
         cmp level MAX_LEVEL
@@ -1501,6 +1663,7 @@ proc do_game_frame
         mul  ymove TILE_SIDE
         add  ymove pitypos
         call draw_piece block_layer_id curpiece currotation xmove ymove
+        call draw_piece block_layer_id nextpiece 0 FONT_SIDE NEXT_PIECE_POS
 ret
 
 proc do_gameover_frame
@@ -1545,7 +1708,10 @@ proc setup_game
     move rotate 0
     move lines_cleared 0
     move score 0
-
+    move nextpiece get_random
+    mod  nextpiece PIECEINFO_PIECES
+    add  nextpiece 1
+ 
     ; clear the pit
     move i PIT_SIZE
     label clear_pit
