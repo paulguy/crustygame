@@ -1,3 +1,6 @@
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -13,6 +16,11 @@
 #define WINDOW_TITLE    "CrustyGame"
 #define WINDOW_WIDTH    (640)
 #define WINDOW_HEIGHT   (480)
+
+const char META_PREFIX[] = ";crustygame ";
+const char SAVE_SIZE_PREFIX[] = "save:";
+const char SAVE_PATH_SUFFIX[] = ".sav";
+#define SAVE_FILL_BUFFER_SIZE (64 * 1024)
 
 CrustyGame state;
 
@@ -177,6 +185,172 @@ void vprintf_cb(void *priv, const char *fmt, ...) {
     vfprintf(out, fmt, ap);
 }
 
+int update_settings(char *program, unsigned long len, unsigned int *savesize) {
+    unsigned long i;
+    unsigned long linelen;
+    char held;
+    char *end;
+    unsigned int value;
+
+    *savesize = 0;
+
+    if(len > sizeof(META_PREFIX) - 1 &&
+       strncmp(program, META_PREFIX, sizeof(META_PREFIX) - 1) == 0) {
+        /* find end of line */
+        for(i = 0; i < len; i++) {
+            if(program[i] == '\r' || program[i] == '\n') {
+                break;
+            }
+        }
+        if(i == len) {
+            fprintf(stderr, "Found end of program searching for end of line.\n");
+            return(-1);
+        }
+        linelen = i;
+        held = program[linelen];
+        /* make strtol safe to use */
+        program[linelen] = '\0';
+
+        for(i = sizeof(META_PREFIX) - 1; i < linelen; i++) {
+            if(linelen - i >= sizeof(SAVE_SIZE_PREFIX) - 1 &&
+               strncmp(&(program[i]),
+                       SAVE_SIZE_PREFIX,
+                       sizeof(SAVE_SIZE_PREFIX) - 1) == 0) {
+                i += sizeof(SAVE_SIZE_PREFIX) - 1;
+
+                value = strtol(&(program[i]), &end, 0);
+                if(end == &(program[i]) ||
+                   (*end != ' ' &&
+                    *end != '\t' &&
+                    *end != '\0')) {
+                    fprintf(stderr, "Save file size was not a number.\n");
+                    goto failure;
+                }
+                *savesize = value;
+
+                i += end - &(program[i]);
+            } else if(program[i] == ' ' ||
+                      program[i] == '\t') {
+                continue;
+            } else {
+                for(value = i; value < linelen; value++) {
+                    if(program[value] == ' ' ||
+                       program[value] == '\t' ||
+                       program[value] == '\0') {
+                        break;
+                    }
+                }
+                fprintf(stderr, "Invalid option string: ");
+                fwrite(&(program[i]), value - i, 1, stderr);
+                fprintf(stderr, "\n");
+                goto failure;
+            }
+        }
+
+        program[linelen] = held;
+    }
+
+    return(0);
+failure:
+    program[linelen] = held;
+
+    return(-1);
+}
+
+FILE *create_save_file(const char *fullpath, unsigned int size) {
+    char *dot;
+    unsigned int pathlen;
+    FILE* savefile;
+    char buffer[SAVE_FILL_BUFFER_SIZE];
+    int need_fill;
+    int this_fill;
+    struct stat filestat;
+
+    dot = strrchr(fullpath, '.');
+    if(dot == NULL) {
+        pathlen = strlen(fullpath);
+    } else {
+        /* ick */
+        pathlen = dot - fullpath;
+    }
+    dot = malloc(pathlen + sizeof(SAVE_PATH_SUFFIX));
+    if(dot == NULL) {
+        fprintf(stderr, "Failed to allocate memory for save path.\n");
+        return(NULL);
+    }
+    memcpy(dot, fullpath, pathlen);
+    memcpy(&(dot[pathlen]), SAVE_PATH_SUFFIX, sizeof(SAVE_PATH_SUFFIX));
+
+    if(stat(dot, &filestat) == 0) {
+        if(S_ISREG(filestat.st_mode)) {
+            /* file exists */
+            if(filestat.st_size < size) {
+                /* old save file is smaller than requested size, grow it */
+                savefile = fopen(dot, "a");
+                if(savefile == NULL) {
+                    fprintf(stderr, "Failed to open save file: %s\n", dot);
+                    free(dot);
+                    return(NULL);
+                }
+
+                memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
+                for(need_fill = filestat.st_size - size;
+                    need_fill > 0;
+                    need_fill -= SAVE_FILL_BUFFER_SIZE) {
+
+                    this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
+                                SAVE_FILL_BUFFER_SIZE :
+                                need_fill;
+                    if(fwrite(buffer, 1, this_fill, savefile) < this_fill) {
+                        fprintf(stderr, "Failed to fill save file.\n");
+                        free(dot);
+                        fclose(savefile);
+                        return(NULL);
+                    }
+                }
+                fclose(savefile);
+            }
+
+            /* open the file for read+write */
+            savefile = fopen(dot, "r+");
+            if(savefile == NULL) {
+                fprintf(stderr, "Failed to open save file: %s\n", dot);
+                free(dot);
+                return(NULL);
+            }
+        } else {
+            fprintf(stderr, "Save file exists but is not a regular file: %s\n", dot);
+            free(dot);
+            return(NULL);
+        }
+    } else {
+        /* file doesn't exist, create it */
+        savefile = fopen(dot, "w+");
+        if(savefile == NULL) {
+            fprintf(stderr, "Failed to open save file: %s\n", dot);
+            free(dot);
+            return(NULL);
+        }
+
+        memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
+        for(need_fill = size; need_fill > 0; need_fill -= SAVE_FILL_BUFFER_SIZE) {
+            this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
+                        SAVE_FILL_BUFFER_SIZE :
+                        need_fill;
+            if(fwrite(buffer, 1, this_fill, savefile) < this_fill) {
+                fprintf(stderr, "Failed to fill save file.\n");
+                free(dot);
+                fclose(savefile);
+                return(NULL);
+            }
+        }
+    }
+
+    free(dot);
+
+    return(savefile);
+}
+
 #define CLEAN_ARGS \
     if(vars > 0) { \
         for(i = 0; i < vars; i++) { \
@@ -195,6 +369,8 @@ int main(int argc, char **argv) {
     state.size = 0;
     state.ret = 0;
     state.mouseCaptured = 0;
+    state.savesize = 0;
+    state.savefile = NULL;
 
     /* CrustyVM stuff */
     unsigned int i;
@@ -327,6 +503,15 @@ int main(int argc, char **argv) {
 
     fclose(in);
     in = NULL;
+    if(update_settings(program, len, &(state.savesize)) < 0) {
+        goto error_infile;
+    }
+    if(state.savesize > 0) {
+        state.savefile = create_save_file(filename, state.savesize);
+        if(state.savefile == NULL) {
+            goto error_infile;
+        }
+    }
 
     cvm = crustyvm_new(filename, fullpath, 
                        program, len,
@@ -503,6 +688,10 @@ error_cvm:
 error_infile:
     if(program != NULL) {
         free(program);
+    }
+
+    if(state.savefile != NULL) {
+        fclose(state.savefile);
     }
 
     if(in != NULL) {

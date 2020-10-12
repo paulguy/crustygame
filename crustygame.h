@@ -60,6 +60,9 @@ typedef struct {
 
     int mouseCaptured;
     int mouseReleaseCombo;
+
+    unsigned int savesize;
+    FILE *savefile;
 } CrustyGame;
 
 extern CrustyGame state;

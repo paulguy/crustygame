@@ -1,3 +1,5 @@
+;crustygame save:1024
+
 include crustygame.inc
 include fills.inc
 include videomode.inc
