@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 #include <SDL.h>
 
 #include "crustygame.h"
@@ -872,6 +874,202 @@ int event_set_mouse_capture(void *priv,
     return(0);
 }
 
+int savedata_seek(void *priv,
+                  CrustyType type,
+                  unsigned int size,
+                  void *ptr,
+                  unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int pos;
+
+    if(type != CRUSTY_TYPE_INT) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    if(state->savefile == NULL) {
+        fprintf(stderr, "Seek in nonexistent save memory.\n");
+        return(-1);
+    }
+
+    pos = *(int *)ptr;
+    if(pos < 0) {
+        fprintf(stderr, "Negative seek index.\n");
+        return(-1);
+    }
+    /* save mirroring */
+    pos %= state->savesize;
+
+    if(fseek(state->savefile, pos, SEEK_SET) < 0) {
+        fprintf(stderr, "Failed to seek in save file: %s\n",
+                        strerror(errno));
+        return(-1);
+    }
+
+    return(0);
+}
+        
+int savedata_write(void *priv,
+                   CrustyType type,
+                   unsigned int size,
+                   void *ptr,
+                   unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int pos;
+
+    if(state->savefile == NULL) {
+        fprintf(stderr, "Write to nonexistent save memory.\n");
+        return(-1);
+    }
+
+    pos = ftell(state->savefile);
+    if(pos < 0) {
+        fprintf(stderr, "Failed to get position in save file.\n");
+        return(-1);
+    }
+
+    if(type == CRUSTY_TYPE_CHAR) {
+        if(fwrite((unsigned char *)ptr, 1, 1, state->savefile) < 1) {
+            fprintf(stderr, "Failed to write to savefile.\n");
+            return(-1);
+        }
+        if(pos + 1 == state->savesize) {
+            if(fseek(state->savefile, 0, SEEK_SET)) {
+                fprintf(stderr, "Failed to seek in save file: %s\n",
+                                strerror(errno));
+                fprintf(stderr, "Failed to seek in savefile.\n");
+                return(-1);
+            }
+        }
+    } else if(type == CRUSTY_TYPE_INT) {
+        if(pos > state->savesize - sizeof(int)) {
+            fprintf(stderr, "Not enough space to write int value.\n");
+            return(-1);
+        }
+        if(fwrite((int *)ptr, 1, sizeof(int), state->savefile) < sizeof(int)) {
+            fprintf(stderr, "Failed to write to savefile.\n");
+            return(-1);
+        }
+        if(pos + sizeof(int) == state->savesize) {
+            if(fseek(state->savefile, 0, SEEK_SET)) {
+                fprintf(stderr, "Failed to seek in save file: %s\n",
+                                strerror(errno));
+                fprintf(stderr, "Failed to seek in savefile.\n");
+                return(-1);
+            }
+        }
+    } else { /* FLOAT */
+        if(pos > state->savesize - sizeof(double)) {
+            fprintf(stderr, "Not enough space to write float value.\n");
+            return(-1);
+        }
+        if(fwrite((double *)ptr, 1, sizeof(double), state->savefile) < sizeof(double)) {
+            fprintf(stderr, "Failed to write to savefile.\n");
+            return(-1);
+        }
+        if(pos + sizeof(double) == state->savesize) {
+            if(fseek(state->savefile, 0, SEEK_SET)) {
+                fprintf(stderr, "Failed to seek in save file: %s\n",
+                                strerror(errno));
+                return(-1);
+            }
+        }
+    }
+
+    return(0);
+}
+
+int savedata_read_char(void *priv, void *val, unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int pos;
+
+    if(state->savefile == NULL) {
+        fprintf(stderr, "Write to nonexistent save memory.\n");
+        return(-1);
+    }
+
+    pos = ftell(state->savefile);
+    if(pos < 0) {
+        fprintf(stderr, "Failed to get position in save file.\n");
+        return(-1);
+    }
+
+    if(fread((unsigned char *)val, 1, 1, state->savefile) < 1) {
+        fprintf(stderr, "Failed to read from savefile.\n");
+        return(-1);
+    }
+    if(pos + 1 == state->savesize) {
+        if(fseek(state->savefile, 0, SEEK_SET)) {
+            fprintf(stderr, "Failed to seek in save file: %s\n",
+                            strerror(errno));
+            return(-1);
+        }
+    }
+
+    return(0);
+}
+
+int savedata_read_int(void *priv, void *val, unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int pos;
+
+    if(state->savefile == NULL) {
+        fprintf(stderr, "Write to nonexistent save memory.\n");
+        return(-1);
+    }
+
+    pos = ftell(state->savefile);
+    if(pos < 0) {
+        fprintf(stderr, "Failed to get position in save file.\n");
+        return(-1);
+    }
+
+    /* no need to check pos beforehand because it should fail to read anyway */
+    if(fread((int *)val, 1, sizeof(int), state->savefile) < sizeof(int)) {
+        fprintf(stderr, "Failed to read from savefile.\n");
+        return(-1);
+    }
+    if(pos + sizeof(int) == state->savesize) {
+        if(fseek(state->savefile, 0, SEEK_SET)) {
+            fprintf(stderr, "Failed to seek in save file: %s\n",
+                            strerror(errno));
+            return(-1);
+        }
+    }
+
+    return(0);
+}
+
+int savedata_read_float(void *priv, void *val, unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+    int pos;
+
+    if(state->savefile == NULL) {
+        fprintf(stderr, "Write to nonexistent save memory.\n");
+        return(-1);
+    }
+
+    pos = ftell(state->savefile);
+    if(pos < 0) {
+        fprintf(stderr, "Failed to get position in save file.\n");
+        return(-1);
+    }
+
+    if(fread((float *)val, 1, sizeof(float), state->savefile) < sizeof(float)) {
+        fprintf(stderr, "Failed to read from savefile.\n");
+        return(-1);
+    }
+    if(pos + sizeof(float) == state->savesize) {
+        if(fseek(state->savefile, 0, SEEK_SET)) {
+            fprintf(stderr, "Failed to seek in save file: %s\n",
+                            strerror(errno));
+            return(-1);
+        }
+    }
+
+    return(0);
+}
+
 CrustyCallback cb[] = {
     {
         .name = "out", .length = 1, .readType = CRUSTY_TYPE_NONE,
@@ -1086,6 +1284,36 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = event_set_mouse_capture, .writepriv = &state
+    },
+    {
+        .name = "savedata_seek", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = savedata_seek, .writepriv = &state
+    },
+    {
+        .name = "savedata_write", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = savedata_write, .writepriv = &state
+    },
+    {
+        .name = "savedata_read_char", .length = 1,
+        .readType = CRUSTY_TYPE_CHAR,
+        .read = savedata_read_char, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "savedata_read_int", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = savedata_read_int, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "savedata_read_float", .length = 1,
+        .readType = CRUSTY_TYPE_FLOAT,
+        .read = savedata_read_float, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
     }
 };
 

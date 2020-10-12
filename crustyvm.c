@@ -118,7 +118,7 @@ typedef struct CrustyProcedure_s {
     unsigned int vars;
 
     unsigned int stackneeded;
-    char *initializer;
+    unsigned char *initializer;
 
     CrustyLabel *label;
     unsigned int labels;
@@ -205,12 +205,12 @@ typedef struct CrustyVM_s {
 
     unsigned int stacksize;
     unsigned int initialstack;
-    char *initializer;
+    unsigned char *initializer;
 
     unsigned int callstacksize;
 
     /* runtime data */
-    char *stack; /* runtime stack */
+    unsigned char *stack; /* runtime stack */
     CrustyCallStackArg *cstack; /* call stack */
     unsigned int sp; /* stack pointer */
     unsigned int csp; /* callstack pointer */
@@ -2271,7 +2271,7 @@ static int new_variable(CrustyVM *cvm,
                         const CrustyCallback *cb,
                         int procIndex) {
     int varIndex;
-    char *temp;
+    unsigned char *temp;
     CrustyVariable *var;
     CrustyProcedure *proc = NULL;
 
@@ -2962,7 +2962,7 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
 
-            char *buf;
+            unsigned char *buf;
             buf = malloc(fileLength);
             if(buf == NULL) {
                 LOG_PRINTF_TOK(cvm, "Couldn't allocate memory.\n");
@@ -4521,7 +4521,7 @@ static int read_var(CrustyVM *cvm,
         if(var->type == CRUSTY_TYPE_CHAR) {
             /* the function will assume only 1 byte of storage so make sure it
              * is all clear. */
-            intval = 0;
+            *intval = 0;
             return(var->read(var->readpriv, intval, index));
         } else if(var->type == CRUSTY_TYPE_FLOAT) {
             return(var->read(var->readpriv, floatval, index));
@@ -4548,7 +4548,7 @@ static void write_var(CrustyVM *cvm,
                       CrustyVariable *var,
                       unsigned int index) {
     if(var->type == CRUSTY_TYPE_CHAR) {
-        cvm->stack[ptr + index] = ((char)intval);
+        cvm->stack[ptr + index] = ((unsigned char)intval);
     } else if(var->type == CRUSTY_TYPE_FLOAT) {
         *((double *)(&(cvm->stack[ptr + (index * sizeof(double))]))) = floatval;
     } else { /* INT */

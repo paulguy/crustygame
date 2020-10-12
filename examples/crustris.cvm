@@ -853,6 +853,85 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
+    local tempc string " "
+
+    move savedata_seek 512
+    move temp:0 512
+    div  temp:0 SIZEOF_FLOAT
+    move tempf:0 0
+    move tempf:1 3
+    div  tempf:1 2
+    label loop_float
+        cmp temp:0 0
+        jumpz done_float
+        move savedata_write tempf:0
+        add tempf:0 tempf:1
+        sub temp:0 1
+    jump loop_float
+    label done_float
+
+    move savedata_seek 256
+    move temp:0 256
+    div  temp:0 SIZEOF_INT
+    move temp:1 0
+    label loop_int
+        cmp temp:0 0
+        jumpz done_int
+        move savedata_write temp:1
+        add temp:1 255
+        sub temp:0 1
+    jump loop_int
+    label done_int
+
+    move savedata_seek 0
+    move temp:0 256
+    move tempc 0
+    label loop_char
+        cmp temp:0 0
+        jumpz done_char
+        move savedata_write tempc
+        add tempc 1
+        sub temp:0 1
+    jump loop_char
+    label done_char
+
+    move savedata_seek 0
+    move temp:0 256
+    label read_chars
+        cmp temp:0 0
+        jumpz done_read_chars
+        move tempc savedata_read_char
+        move temp:1 tempc
+        ERR_SPC temp:1
+        sub temp:0 1
+    jump read_chars
+    label done_read_chars
+    move err NL
+
+    move temp:0 256
+    div  temp:0 SIZEOF_INT
+    label read_ints
+        cmp temp:0 0
+        jumpz done_read_ints
+        move temp:1 savedata_read_int
+        ERR_SPC temp:1
+        sub temp:0 1
+    jump read_ints
+    label done_read_ints
+    move err NL
+
+    move temp:0 512
+    div  temp:0 SIZEOF_FLOAT
+    label read_floats
+        cmp temp:0 0
+        jumpz done_read_floats
+        move tempf:0 savedata_read_float
+        ERR_SPC tempf:0
+        sub temp:0 1
+    jump read_floats
+    label done_read_floats
+    move err NL
+
     call set_video_mode temp videomode
     cmp temp
     jumpn mode_ok

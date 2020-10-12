@@ -1,3 +1,10 @@
+; this is pretty gross but i don't expect this to be used on anything too
+; exotic.  these sizes should be fine on any modern PC OS and probably also
+; on most modern console or mobile platforms.
+expr SIZEOF_CHAR  1
+expr SIZEOF_INT   4
+expr SIZEOF_FLOAT 8
+
 ; useful for printing debug/error strings
 static SPC string " "
 static NL  string "\n"
