@@ -1,4 +1,6 @@
 ;crustygame save:1024
+expr SAVEDATA_SIZE 1024
+expr SAVEDATA_CHECKSUM_POS "SAVEDATA_SIZE - 1"
 
 include crustygame.inc
 include fills.inc
@@ -6,7 +8,10 @@ include videomode.inc
 include timers.inc
 include text.inc
 include objects.inc
+include savedata.inc
+
 include crustris_defs.inc
+include crustris_pit.inc
 
 binclude gfx ints "crustris.crsg"
 binclude font ints "font.crsg"
@@ -17,678 +22,6 @@ macro CENTER RESULT SPACESIZE ITEMSIZE
     sub  RESULT ITEMSIZE
     div  RESULT 2
 endmacro CENTER
-
-proc populate_piece_values piece rotation pos width height
-    local pieceptr
-
-    ; copy values to locals to not mutate caller variables
-    move pieceptr piece
-    mul  pieceptr PIECEINFO_ROTATIONS
-    add  pieceptr rotation
-
-    move pos PIECEINFO_POS:pieceptr
-    move width PIECEINFO_WIDTH:pieceptr
-    move height PIECEINFO_HEIGHT:pieceptr
-ret
- 
-proc rotate x y piece rotation dir
-    local biasptr
-
-    cmp dir 0
-    jumpl rotate_ccw
-    jumpg rotate_cw
-    jump end
-
-    label rotate_ccw
-    sub rotation 1
-    jumpg no_wrap_max
-    jumpz no_wrap_max
-    move rotation 3
-    label no_wrap_max
-
-    ; for counter clockwise, the pointer is the rotation transitioned to
-    move biasptr piece
-    mul  biasptr PIECEINFO_ROTATIONS
-    add  biasptr rotation
-
-    ; for counter clockwise, the bias is subtracted (undone)
-    sub x ROTATION_X_BIAS:biasptr
-    sub y ROTATION_Y_BIAS:biasptr
-    jump end
-
-    label rotate_cw
-    ; for clockwise, the pointer is the rotation transitioned from
-    move biasptr piece
-    mul  biasptr PIECEINFO_ROTATIONS
-    add  biasptr rotation
-
-    add rotation 1
-    cmp rotation 4
-    jumpl no_wrap_0
-    move rotation 0
-    label no_wrap_0
-
-    ; for clockwise, the bias is added
-    add x ROTATION_X_BIAS:biasptr
-    add y ROTATION_Y_BIAS:biasptr
-    
-    label end
-ret
-
-expr COLLIDED_LEFT   1
-expr COLLIDED_RIGHT  2
-expr COLLIDED_LEFT_RIGHT "COLLIDED_LEFT | COLLIDED_RIGHT"
-expr COLLIDED_TOP    4
-expr COLLIDED_BOTTOM 8
-expr COLLIDED_TOP_BOTTOM "COLLIDED_TOP | COLLIDED_BOTTOM"
-
-proc check_collision collided x y pos width height
-    local piecex
-    local piecey
-    local pitx
-    local pity
-    local pitpos
-    local piecepos
-    local pieceval
-    local halfwidth
-    local halfheight
-    local leftx
-    local rightx
-    local topy
-    local bottomy
-
-    move collided 0
-    ; determine ranges where a collision is determined to be to a particular
-    ; side. this could be made smaller but it wouldn't necessarily be faster
-    ; and would be more difficult to understand when it's already janky
-    move halfwidth width
-    mod  halfwidth 2
-    jumpz split_width
-    ; odd number.  be greedy here and count the center piece outwards for both
-    ; sides.  a bottom collision could result in both being flagged but that
-    ; isn't important
-    ; assume that integer divisions will be floored down
-    move leftx width
-    div  leftx 2
-    move rightx leftx
-    add  leftx 1
-    jump find_halfheight
-    label split_width
-    move leftx width
-    div  leftx 2
-    move rightx leftx
-    label find_halfheight
-    move halfheight height
-    mod  halfheight 2
-    jumpz split_height
-    ; as above
-    move topy height
-    div  topy 2
-    move bottomy topy
-    add  topy 1
-    jump done_halves
-    label split_height
-    move topy height
-    div  topy 2
-    move bottomy topy
-    label done_halves
-
-    ; check collisions with pit boundaries
-    ; check top
-    cmp y 0
-    jumpg check_pit_bottom
-    jumpz check_pit_bottom
-    or collided COLLIDED_TOP
-
-    label check_pit_bottom
-    move piecey y
-    add  piecey height
-    cmp  piecey PIT_HEIGHT
-    jumpl check_pit_left
-    jumpz check_pit_left
-    or collided COLLIDED_BOTTOM
-
-    label check_pit_left
-    cmp x 0
-    jumpg check_pit_right
-    jumpz check_pit_right
-    or collided COLLIDED_LEFT
-
-    label check_pit_right
-    move piecex x
-    add  piecex width
-    cmp  piecex PIT_WIDTH
-    jumpl check_pit
-    jumpz check_pit
-    or collided COLLIDED_RIGHT
-
-    label check_pit
-    ; initial pit position
-    move pitpos y
-    mul  pitpos PIT_WIDTH
-    add  pitpos x
-
-    move piecepos pos
-    move piecey 0
-    move pity y
-    label y
-        cmp pity 0
-        jumpl skip_y
-        cmp pity PIT_HEIGHT
-        jumpg end
-        jumpz end
-
-        move piecex 0
-        move pitx x
-        label x
-            cmp pitx 0
-            jumpl skip_x
-            cmp pitx PIT_WIDTH
-            jumpg skip_x
-            jumpz skip_x
-
-            move pieceval pieces:piecepos
-            and  pieceval pit:pitpos
-            jumpz no_collision
-
-            ; determine what halves a collision happened on
-            ; left side
-            cmp piecex leftx
-            jumpg check_right
-            jumpz check_right
-            or collided COLLIDED_LEFT
-            label check_right
-            cmp piecex rightx
-            jumpl check_top
-            or collided COLLIDED_RIGHT
-            label check_top
-            cmp piecey topy
-            jumpg check_bottom
-            jumpz check_bottom
-            or collided COLLIDED_TOP
-            label check_bottom
-            cmp piecey bottomy
-            jumpl no_collision
-            or collided COLLIDED_BOTTOM
-            label no_collision
-
-            label skip_x
-            add piecepos 1
-            add pitpos 1
-            add pitx 1
-            add piecex 1
-            cmp piecex width
-        jumpl x
-
-        sub pitpos width
-        label skip_y
-        add pitpos PIT_WIDTH
-        add pity 1
-        add piecey 1
-        cmp piecey height
-    jumpl y
-
-    label end
-ret
-
-proc try_resolve_piece_movement piece rotation x y xmove ymove dir
-    local pos
-    local oldwidth
-    local oldheight
-    local width
-    local height
-    local xbias
-    local ybias
-    local newrotation
-    local widthdiff
-    local heightdiff
-    local leftgrowth
-    local rightgrowth
-    local topgrowth
-    local bottomgrowth
-    local checkx
-    local checky
-    local collided
-    local priority
-
-    ; get the current and desired new piece stats
-    call populate_piece_values piece rotation pos oldwidth oldheight
-    move newrotation rotation
-    call rotate xbias ybias piece newrotation dir
-    call populate_piece_values piece newrotation pos width height
-
-    ; try to do the full move
-    move checkx x
-    add  checkx xmove
-    add  checkx xbias
-    move checky y
-    add  checky ymove
-    add  checky ybias
-    call check_collision priority checkx checky pos width height
-    cmp priority
-    jumpz update_all
-
-    ; compare them to see if we need to check for left/right or up/down kicks,
-    ; there can only be one or the other or neither for the O piece or if no
-    ; rotation happened anyway
-    move widthdiff width
-    sub  widthdiff oldwidth
-    move heightdiff height
-    sub  heightdiff oldheight
-
-    cmp widthdiff 0
-    jumpg horz_kick
-    cmp heightdiff 0
-    jumpg vert_kick
-    ; no rotation occurred or the piece doesn't occupy additional space so it
-    ; doesn't need to kick, still update rotation anyway.
-    move rotation newrotation
-    jump no_kick
-
-    label horz_kick
-        ; piece is "jammed", don't try
-        and priority COLLIDED_LEFT_RIGHT
-        cmp priority COLLIDED_LEFT_RIGHT
-        jumpz no_kick
-
-        move leftgrowth widthdiff
-        move rightgrowth widthdiff
-
-        ; apply drop, if any, as well as bias
-        move checky y
-        add  checky ybias
-        add  checky ymove
-
-        ; try searching outwards up to the difference in width until a
-        ; collision is found, if so, back off one and use that
-        label horz_kick_loop
-            cmp leftgrowth 0
-            jumpg horz_loop_continue
-            jumpz horz_loop_continue
-            cmp rightgrowth 0
-            jumpg horz_loop_continue
-            jumpz horz_loop_continue
-            ; all possibilities were tried and nothing was found, don't update
-            ; anything, but try to see if the piece will move without rotation
-            jump horz_loop_break
-            label horz_loop_continue
-                and priority COLLIDED_LEFT
-                jumpn try_left
-
-            label try_right
-                cmp rightgrowth 0
-                jumpl continue_right
-
-                ; try moving right incrementally until a collision
-                move checkx 0
-                sub  checkx rightgrowth
-                add  checkx x
-
-                call check_collision collided checkx checky pos width height
-                ; subtract it now because if it collided it needs to be updated
-                ; anyway, otherwise it doesn't matter
-                sub rightgrowth 1
-                cmp collided
-                jumpz continue_right
-                ; check to see if the collision happened on the right side
-                and collided COLLIDED_RIGHT
-                jumpz continue_right
-                ; step back 1 and use that value
-                sub checkx 1
-                ; check if it's still a collision, indicating there's simply
-                ; not enough space to fit.
-                call check_collision collided checkx checky pos width height
-                cmp collided
-                jumpn no_kick
-            jump update_all
-            label continue_right
-                and priority COLLIDED_LEFT
-                jumpn horz_kick_loop
-
-            label try_left
-                cmp leftgrowth 0
-                jumpl continue_left
-
-                ; same as above
-                move checkx widthdiff
-                mul  checkx -1
-                add  checkx leftgrowth
-                add  checkx x
-                
-                call check_collision collided checkx checky pos width height
-                ; same as above
-                sub leftgrowth 1
-                cmp collided
-                jumpz continue_left
-                and collided COLLIDED_LEFT
-                jumpz continue_left
-
-                add checkx 1
-                ; check if it's still a collision, indicating there's simply
-                ; not enough space to fit.
-                call check_collision collided checkx checky pos width height
-                cmp collided
-                jumpn no_kick
-            jump update_all
-            label continue_left
-                and priority COLLIDED_LEFT
-                jumpn try_right
-            jump horz_kick_loop
-
-        label horz_loop_break
-    jump no_kick
-
-    label vert_kick
-        ; piece is "jammed", don't try
-        and priority COLLIDED_TOP_BOTTOM
-        cmp priority COLLIDED_TOP_BOTTOM
-        jumpz no_kick
-
-        move topgrowth heightdiff
-        move bottomgrowth heightdiff
-
-        ; apply drop, if any, as well as bias
-        move checkx x
-        add  checkx xbias
-        add  checkx xmove
-
-        ; try searching outwards up to the difference in height until a
-        ; collision is found, if so, back off one and use that
-        label vert_kick_loop
-            cmp topgrowth 0
-            jumpg vert_loop_continue
-            jumpz vert_loop_continue
-            cmp bottomgrowth 0
-            jumpg vert_loop_continue
-            jumpz vert_loop_continue
-            ; all possibilities were tried and nothing was found, don't update
-            ; anything, but try to see if the piece will move without rotation
-            jump vert_loop_break
-            label vert_loop_continue
-                and priority COLLIDED_TOP
-                jumpn try_top
-
-            label try_bottom
-                cmp bottomgrowth 0
-                jumpl continue_bottom
-
-                ; try moving bottom incrementally until a collision
-                move checky 0
-                sub  checky bottomgrowth
-                add  checky y
-
-                call check_collision collided checkx checky pos width height
-                ; subtract it now because if it collided it needs to be updated
-                ; anyway, otherwise it doesn't matter
-                sub bottomgrowth 1
-                cmp collided
-                jumpz continue_bottom
-                ; check to see if the collision happened on the bottom side
-                and collided COLLIDED_BOTTOM
-                jumpz continue_bottom
-                ; step back 1 and use that value
-                sub checky 1
-                ; check if it's still a collision, indicating there's simply
-                ; not enough space to fit.
-                call check_collision collided checkx checky pos width height
-                ERR_NL collided
-                cmp collided
-                jumpn no_kick
-            jump update_all
-            label continue_bottom
-                and priority COLLIDED_TOP
-                jumpn vert_kick_loop
-
-            label try_top
-                cmp topgrowth 0
-                jumpl continue_top
-
-                ; same as above
-                move checky heightdiff
-                mul  checky -1
-                add  checky topgrowth
-                add  checky y
-                
-                call check_collision collided checkx checky pos width height
-                ; same as above
-                sub topgrowth 1
-                cmp collided
-                jumpz continue_top
-                and collided COLLIDED_TOP
-                jumpz continue_top
-
-                add checky 1
-                ; check if it's still a collision, indicating there's simply
-                ; not enough space to fit.
-                call check_collision collided checkx checky pos width height
-                cmp collided
-                jumpn no_kick
-            jump update_all
-            label continue_top
-                and priority COLLIDED_TOP
-                jumpn try_bottom
-            jump vert_kick_loop
-
-        label vert_loop_break
- 
-    label no_kick
-        ; recalculate original position, width and height as they may have
-        ; changed to a rotated state
-        call populate_piece_values piece rotation pos width height
-
-        ; try to move the piece in both requested directions
-        move checkx x
-        add  checkx xmove
-        move checky y
-        add  checky ymove
-        call check_collision collided checkx checky pos width height
-        cmp collided
-        jumpz update_pos
-        ; if either is 0, don't repeat an unnecessary test
-        cmp xmove 0
-        jumpz end
-        cmp ymove 0
-        jumpz end
-
-        ; try to move the piece down only
-        cmp ymove 0
-        jumpz no_down_only
-            move checkx x
-            move checky y
-            add  checky ymove
-            call check_collision collided checkx checky pos width height
-            cmp collided
-            jumpz update_pos
-        label no_down_only
-
-        ; try to move piece only laterally
-        cmp xmove 0
-        jumpz no_lateral_only
-            move checkx x
-            add  checkx xmove
-            move checky y
-            call check_collision collided checkx checky pos width height
-            cmp collided
-            jumpz update_pos
-        label no_lateral_only
-    jump end
-
-    label update_all
-        move rotation newrotation
-    label update_pos
-        move x checkx
-        move y checky
-    label end
-ret
-
-proc update_pit_map piece rotation x y
-    local piecex
-    local pos
-    local width
-    local height
-    local pitpos
-
-    call populate_piece_values piece rotation pos width height
-
-    ; initial pit position
-    move pitpos y
-    mul  pitpos PIT_WIDTH
-    add  pitpos x
-
-    label y
-        move piecex width
-
-        label x
-            cmp pieces:pos
-            jumpz no_update
-                move pit:pitpos piece
-            label no_update
-
-            add pos 1
-            add pitpos 1
-            sub piecex 1
-        jumpg x
-
-        ; advance to the next row of the pit
-        sub pitpos width
-        add pitpos PIT_WIDTH
-        sub height 1
-    jumpg y
-ret
-
-proc update_pit_tilemaps x y w h
-    local i
-    local j
-    local startptr
-    local ptr
-    local pitval
-
-    move startptr y
-    mul  startptr PIT_WIDTH
-    add  startptr x
-
-    move ptr startptr
-    move j h
-    label y
-        move i w
-        label x
-            move pitval pit:ptr
-            mul  pitval TILEMAP_WIDTH
-            move pit_map0_tiles:ptr PIECE_TILEMAP:pitval
-            move pit_map0_colormod:ptr PIECE_COLORMOD:pitval
-            add  pitval 1
-            move pit_map1_tiles:ptr PIECE_TILEMAP:pitval
-            move pit_map1_colormod:ptr PIECE_COLORMOD:pitval
-            add  pitval 1
-            move pit_map2_tiles:ptr PIECE_TILEMAP:pitval
-            move pit_map2_colormod:ptr PIECE_COLORMOD:pitval
-            sub  pitval 2
-
-            add ptr 1
-            sub i 1
-        jumpg x
-        sub ptr w
-        add ptr PIT_WIDTH
-        sub j 1
-    jumpg y
-
-    ; set tiles and attributes then update
-    call gfx_set_tilemap_map3 pit_tilemap_id0 pit_map0_tiles:startptr x y PIT_WIDTH w h
-    call gfx_set_tilemap_attr_colormod3 pit_tilemap_id0 pit_map0_colormod:startptr x y PIT_WIDTH w h
-    call gfx_update_tilemap2 pit_tilemap_id0 x y w h
-    call gfx_set_tilemap_map3 pit_tilemap_id1 pit_map1_tiles:startptr x y PIT_WIDTH w h
-    call gfx_set_tilemap_attr_colormod3 pit_tilemap_id1 pit_map1_colormod:startptr x y PIT_WIDTH w h
-    call gfx_update_tilemap2 pit_tilemap_id1 x y w h
-    call gfx_set_tilemap_map3 pit_tilemap_id2 pit_map2_tiles:startptr x y PIT_WIDTH w h
-    call gfx_set_tilemap_attr_colormod3 pit_tilemap_id2 pit_map2_colormod:startptr x y PIT_WIDTH w h
-    call gfx_update_tilemap2 pit_tilemap_id2 x y w h
-ret
-
-proc update_pit_tilemaps_from_piece piece rotation x y
-    local pos
-    local width
-    local height
-
-    call populate_piece_values piece rotation pos width height
-    call update_pit_tilemaps x y width height
-ret
-
-proc drop_line line
-    local block
-    local curline
-    local pitpos
-    local abovepitpos
-
-    move curline line
-
-    ; start at the end of the line
-    move pitpos line
-    mul  pitpos PIT_WIDTH
-    add  pitpos PIT_WIDTH
-    sub  pitpos 1
-    ; end of line above to copy from
-    move abovepitpos pitpos
-    sub  abovepitpos PIT_WIDTH
-
-    label line
-        move block PIT_WIDTH
-        label block
-            cmp abovepitpos 0
-            jumpl set_zero
-            move pit:pitpos pit:abovepitpos
-            jump done_set
-            label set_zero
-            move pit:pitpos 0
-            label done_set
-
-            sub pitpos 1
-            sub abovepitpos 1
-            sub block 1
-        jumpg block
-
-        sub curline 1
-    jumpg line
-    jumpz line
-ret
-
-proc check_lines lines y height
-    local pitpos
-    local line
-    local maxline
-    local block
-    local blocks
-
-    move lines 0
-
-    move maxline y
-    add  maxline height
-
-    move pitpos y
-    mul  pitpos PIT_WIDTH
-
-    move line y
-    label line
-        move block PIT_WIDTH
-        move blocks 0
-        label block
-            cmp pit:pitpos
-            jumpz noblock
-            add blocks 1
-            label noblock
-
-            add pitpos 1
-            sub block 1
-        jumpg block
-        cmp PIT_WIDTH blocks
-        jumpg noclear
-        call drop_line line
-        add lines 1
-        label noclear
-
-        add line 1
-        cmp line maxline
-    jumpl line
-ret
 
 proc draw_pit
     move gfx_draw_layer pit_shadow_layer_id
@@ -769,6 +102,163 @@ proc draw_piece layer_id piece rotation x y
         add position:1 scaled_tile
         sub height 1
     jumpg y 
+ret
+
+static high_score_names string "\
+          \
+          \
+          \
+          \
+          \
+          \
+          \
+          \
+          \
+          "
+static high_scores ints HIGH_SCORE_COUNT
+static high_lines  ints HIGH_SCORE_COUNT
+static high_levels ints HIGH_SCORE_COUNT
+
+proc init_high_scores
+    local i
+
+    move i INIT_HIGH_SCORE_NAMES:
+    sub i 1
+    label copy_names
+        move high_score_names:i INIT_HIGH_SCORE_NAMES:i
+        sub i 1
+        jumpl done_copy_names
+    jump copy_names
+    label done_copy_names
+
+    move i INIT_HIGH_SCORES:
+    sub i 1
+    label copy_scores
+        move high_scores:i INIT_HIGH_SCORES:i
+        sub i 1
+        jumpl done_copy_scores
+    jump copy_scores
+    label done_copy_scores
+
+    move i INIT_HIGH_LINES:
+    sub i 1
+    label copy_lines
+        move high_lines:i INIT_HIGH_LINES:i
+        sub i 1
+        jumpl done_copy_lines
+    jump copy_lines
+    label done_copy_lines
+
+    move i INIT_HIGH_LEVELS:
+    sub i 1
+    label copy_levels
+        move high_levels:i INIT_HIGH_LEVELS:i
+        sub i 1
+        jumpl done_copy_levels
+    jump copy_levels
+    label done_copy_levels
+ret
+
+proc load_high_scores
+    local ok
+    local i
+
+    call savedata_check ok
+    cmp ok
+    jumpn load
+    call init_high_scores
+    jump end
+    label load
+
+    move savedata_seek 0
+
+    move i high_score_names:
+    sub i 1
+    label copy_names
+        move high_score_names:i savedata_read_char
+        sub i 1
+        jumpl done_copy_names
+    jump copy_names
+    label done_copy_names
+
+    move i high_scores:
+    sub i 1
+    label copy_scores
+        move high_scores:i savedata_read_int
+        sub i 1
+        jumpl done_copy_scores
+    jump copy_scores
+    label done_copy_scores
+
+    move i high_lines:
+    sub i 1
+    label copy_lines
+        move high_lines:i savedata_read_int
+        sub i 1
+        jumpl done_copy_lines
+    jump copy_lines
+    label done_copy_lines
+
+    move i high_levels:
+    sub i 1
+    label copy_levels
+        move high_levels:i savedata_read_int
+        sub i 1
+        jumpl done_copy_levels
+    jump copy_levels
+    label done_copy_levels
+
+    label end
+ret
+
+proc save_high_scores
+    local i
+    local sum
+    local sumbyte string " "
+
+    move savedata_seek 0
+
+    move i high_score_names:
+    sub i 1
+    label copy_names
+        move savedata_write high_score_names:i
+        sub i 1
+        jumpl done_copy_names
+    jump copy_names
+    label done_copy_names
+
+    move i high_scores:
+    sub i 1
+    label copy_scores
+        move savedata_write high_scores:i
+        sub i 1
+        jumpl done_copy_scores
+    jump copy_scores
+    label done_copy_scores
+
+    move i high_lines:
+    sub i 1
+    label copy_lines
+        move savedata_write high_lines:i
+        sub i 1
+        jumpl done_copy_lines
+    jump copy_lines
+    label done_copy_lines
+
+    move i high_levels:
+    sub i 1
+    label copy_levels
+        move savedata_write high_levels:i
+        sub i 1
+        jumpl done_copy_levels
+    jump copy_levels
+    label done_copy_levels
+
+    call savedata_calc_sum sum
+    move sumbyte sum
+
+    move savedata_seek SAVEDATA_CHECKSUM_POS
+    move savedata_write sumbyte
 ret
 
 static gfx_id
@@ -853,84 +343,7 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
-    local tempc string " "
-
-    move savedata_seek 512
-    move temp:0 512
-    div  temp:0 SIZEOF_FLOAT
-    move tempf:0 0
-    move tempf:1 3
-    div  tempf:1 2
-    label loop_float
-        cmp temp:0 0
-        jumpz done_float
-        move savedata_write tempf:0
-        add tempf:0 tempf:1
-        sub temp:0 1
-    jump loop_float
-    label done_float
-
-    move savedata_seek 256
-    move temp:0 256
-    div  temp:0 SIZEOF_INT
-    move temp:1 0
-    label loop_int
-        cmp temp:0 0
-        jumpz done_int
-        move savedata_write temp:1
-        add temp:1 255
-        sub temp:0 1
-    jump loop_int
-    label done_int
-
-    move savedata_seek 0
-    move temp:0 256
-    move tempc 0
-    label loop_char
-        cmp temp:0 0
-        jumpz done_char
-        move savedata_write tempc
-        add tempc 1
-        sub temp:0 1
-    jump loop_char
-    label done_char
-
-    move savedata_seek 0
-    move temp:0 256
-    label read_chars
-        cmp temp:0 0
-        jumpz done_read_chars
-        move tempc savedata_read_char
-        move temp:1 tempc
-        ERR_SPC temp:1
-        sub temp:0 1
-    jump read_chars
-    label done_read_chars
-    move err NL
-
-    move temp:0 256
-    div  temp:0 SIZEOF_INT
-    label read_ints
-        cmp temp:0 0
-        jumpz done_read_ints
-        move temp:1 savedata_read_int
-        ERR_SPC temp:1
-        sub temp:0 1
-    jump read_ints
-    label done_read_ints
-    move err NL
-
-    move temp:0 512
-    div  temp:0 SIZEOF_FLOAT
-    label read_floats
-        cmp temp:0 0
-        jumpz done_read_floats
-        move tempf:0 savedata_read_float
-        ERR_SPC tempf:0
-        sub temp:0 1
-    jump read_floats
-    label done_read_floats
-    move err NL
+    call load_high_scores
 
     call set_video_mode temp videomode
     cmp temp
@@ -1075,6 +488,9 @@ proc init
     move temp LABELS_TILEMAP_WIDTH
     mul  temp NEXT_POS
     call text_string_to_tilemap background_pattern:temp NEXT_TEXT: 1 NEXT_TEXT: NEXT_TEXT
+    move temp LABELS_TILEMAP_WIDTH
+    mul  temp NAME_POS
+    call text_string_to_tilemap background_pattern:temp NAME_TEXT: 1 NAME_TEXT: NAME_TEXT
     call gfx_set_tilemap_map labels_tilemap_id background_pattern 
     call gfx_update_tilemap labels_tilemap_id
     call gfx_add_layer labels_tilemap_id labels_layer0_id
@@ -1242,7 +658,7 @@ macro ADVANCE_BGSCROLL VAR DIR MAX
     label wrap_VAR_done
 endmacro ADVANCE_BGSCROLL
 
-macro DRAW_LABEL LPOS WIDTH HEIGHT SCREENPOS
+macro DRAW_LABEL LPOS WIDTH HEIGHT XPOS YPOS
     move temp:0 WIDTH
     mul  temp:0 FONT_SIDE
     move temp:1 HEIGHT
@@ -1254,10 +670,8 @@ macro DRAW_LABEL LPOS WIDTH HEIGHT SCREENPOS
     mul  temp:1 FONT_SIDE
     move gfx_set_layer_scroll_pos:labels_layer0_id temp
     move gfx_set_layer_scroll_pos:labels_layer1_id temp
-    move temp:0 FONT_SIDE
-    move temp:1 SCREENPOS
-    mul  temp:1 FONT_SCALED_SIDE
-    add  temp:1 FONT_SIDE
+    move temp:0 XPOS
+    move temp:1 YPOS
     OBJECTS_SET_POS labels0_obj temp:0 temp:1
     add  temp:0 1
     add  temp:1 1
@@ -1266,7 +680,7 @@ macro DRAW_LABEL LPOS WIDTH HEIGHT SCREENPOS
     move gfx_draw_layer labels_layer0_id
 endmacro DRAW_LABEL
 
-macro DRAW_NUMBER NUM SCREENPOS
+macro DRAW_NUMBER NUM XPOS YPOS
     call text_integer_to_string numlen tempnum NUM
     call text_string_to_tilemap tempnummap numlen 1 MAX_INTEGER_SIZE tempnum
     call gfx_set_tilemap_map3 number_tilemap_id tempnummap 0 0 numlen numlen 1
@@ -1276,14 +690,7 @@ macro DRAW_NUMBER NUM SCREENPOS
     move temp:1 FONT_SIDE
     move gfx_set_layer_window:number_layer0_id temp
     move gfx_set_layer_window:number_layer1_id temp
-    move temp SCREENPOS
-    mul  temp FONT_SCALED_SIDE
-    add  temp FONT_SIDE
-    OBJECTS_SET_POS number0_obj FONT_SIDE temp
-    add temp:0 1
-    add temp:1 1
-    OBJECTS_SET_POS number1_obj FONT_SIDE temp
-    move gfx_draw_layer number_layer1_id
+    OBJECTS_SET_POS number0_obj XPOS YPOS
     move gfx_draw_layer number_layer0_id
 endmacro DRAW_NUMBER
 
@@ -1309,9 +716,7 @@ proc text_anim_next start dir
     add  start dir
 ret
 
-proc draw_screen
-    local elapsed
-
+proc draw_screen elapsed
     call timers_check elapsed bgscroll_timer_id
     cmp elapsed
     jumpz no_bgscroll
@@ -1530,11 +935,15 @@ static lines_cleared
 static nextlines
 static score
 
-expr GAME_MODE_PLAYING 0
-expr GAME_MODE_ENDED   1
-expr GAME_MODE_TITLE   2
+expr GAME_MODE_PLAYING  0
+expr GAME_MODE_ENDED    1
+expr GAME_MODE_TITLE    2
+expr GAME_MODE_SHOWHIGH 3
 
 static game_mode GAME_MODE_TITLE
+
+static title_cycle 0
+expr TITLE_CYCLE_LENGTH "10 * 60"
 
 proc do_title_frame
     local temp ints 4
@@ -1547,9 +956,10 @@ proc do_title_frame
     local shadey
     local titlew
     local titlex
+    local elapsed
 
     call pit_effect
-    call draw_screen
+    call draw_screen elapsed
     call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
     move gfx_draw_layer title_layer_id
 
@@ -1574,6 +984,139 @@ proc do_title_frame
 
     call draw_shade shadex shadey shadew shadeh
     call draw_text characters_obj textx texty textw FONT_SCALED_SIDE PRESS_ENTER_TEXT 1
+
+    cmp elapsed
+    jumpz end
+        add title_cycle 1
+        cmp title_cycle TITLE_CYCLE_LENGTH
+        jumpl no_switch
+            move game_mode GAME_MODE_SHOWHIGH
+            move title_cycle 0
+        label no_switch
+    label end
+ret
+
+proc do_showhigh_frame
+    local temp ints 2
+    local elapsed
+    local i 0
+    local y
+    local namepos
+    local tempnum string "           "
+    local tempnummap ints MAX_INTEGER_SIZE
+    local numlen
+
+    call pit_effect
+    call draw_screen elapsed
+    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
+
+    CENTER temp:0 SCREEN_TILES_WIDTH HIGH_SCORE_TITLE:
+    mul    temp:0 FONT_SCALED_SIDE
+    move temp:1 HIGH_SCORE_TITLE:
+    mul  temp:1 FONT_SCALED_SIDE
+    call draw_text characters_obj temp:0 HIGH_SCORE_TITLE_POS temp:1 FONT_SCALED_SIDE HIGH_SCORE_TITLE 1
+
+    move gfx_set_layer_colormod:labels_layer0_id C_WHT
+    move gfx_set_layer_colormod:number_layer0_id C_WHT
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_NAME_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 NAME_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 NAME_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_LEVEL_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 LEVEL_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 LEVEL_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_LINES_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 LINES_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 LINES_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_SCORE_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 SCORE_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 SCORE_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+
+    move namepos 0
+    label loop
+        move y FONT_SCALED_SIDE
+        add  y FONT_SIDE
+        mul  y i
+        add  y HIGH_SCORE_START_POS
+        call draw_text characters_obj HIGH_SCORE_NAME_POS y HIGH_SCORE_NAME_PXLENGTH FONT_SCALED_SIDE high_score_names:namepos 0
+        add namepos HIGH_SCORE_NAME_LENGTH
+        DRAW_NUMBER high_levels:i HIGH_SCORE_LEVEL_POS y
+        DRAW_NUMBER high_lines:i HIGH_SCORE_LINES_POS y
+        DRAW_NUMBER high_scores:i HIGH_SCORE_SCORE_POS y
+
+        add i 1
+        cmp i HIGH_SCORE_COUNT
+    jumpl loop
+
+    cmp elapsed
+    jumpz end
+        add title_cycle 1
+        cmp title_cycle TITLE_CYCLE_LENGTH
+        jumpl no_switch
+            move game_mode GAME_MODE_TITLE
+            move title_cycle 0
+        label no_switch
+    label end
+ret
+ 
+proc draw_game_stats
+    local temp ints 3
+    local tempnum string "           "
+    local tempnummap ints MAX_INTEGER_SIZE
+    local numlen
+
+    move temp:2 CONTROLS_TEXT_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT FONT_SIDE temp:2
+    move temp:2 LINES_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL LINES_POS LINES_TEXT: 1 FONT_SIDE temp:2
+    move temp:2 LINES_NUM_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_NUMBER lines_cleared FONT_SIDE temp:2
+    move temp:2 LEVEL_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL LEVEL_POS LEVEL_TEXT: 1 FONT_SIDE temp:2
+    move temp:2 LEVEL_NUM_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_NUMBER level FONT_SIDE temp:2
+    move temp:2 SCORE_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL SCORE_POS SCORE_TEXT: 1 FONT_SIDE temp:2
+    move temp:2 SCORE_NUM_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_NUMBER score FONT_SIDE temp:2
+    move temp:2 NEXT_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL NEXT_POS NEXT_TEXT: 1 FONT_SIDE temp:2
+    call draw_piece block_layer_id nextpiece 0 FONT_SIDE NEXT_PIECE_POS
 ret
 
 proc do_game_frame
@@ -1726,16 +1269,8 @@ proc do_game_frame
         move curpiece 0
 
     label done_update
-        call draw_screen
-
-        DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT CONTROLS_TEXT_SCREEN_POS
-        DRAW_LABEL LINES_POS LINES_TEXT: 1 LINES_SCREEN_POS
-        DRAW_NUMBER lines_cleared LINES_NUM_SCREEN_POS
-        DRAW_LABEL LEVEL_POS LEVEL_TEXT: 1 LEVEL_SCREEN_POS
-        DRAW_NUMBER level LEVEL_NUM_SCREEN_POS
-        DRAW_LABEL SCORE_POS SCORE_TEXT: 1 SCORE_SCREEN_POS
-        DRAW_NUMBER score SCORE_NUM_SCREEN_POS
-        DRAW_LABEL NEXT_POS NEXT_TEXT: 1 NEXT_SCREEN_POS
+        call draw_screen temp
+        call draw_game_stats
 
         move xmove xpos
         mul  xmove TILE_SIDE
@@ -1744,11 +1279,13 @@ proc do_game_frame
         mul  ymove TILE_SIDE
         add  ymove pitypos
         call draw_piece block_layer_id curpiece currotation xmove ymove
-        call draw_piece block_layer_id nextpiece 0 FONT_SIDE NEXT_PIECE_POS
 ret
 
 proc do_gameover_frame
-    call draw_screen
+    local temp
+
+    call draw_screen temp
+    call draw_game_stats
 ret
 
 proc frame
@@ -1760,6 +1297,8 @@ proc frame
     jumpz do_game
     cmp game_mode GAME_MODE_ENDED
     jumpz do_gameover
+    cmp game_mode GAME_MODE_SHOWHIGH
+    jumpz do_showhigh
     jump end
     label do_title
         call do_title_frame
@@ -1769,6 +1308,9 @@ proc frame
     jump end
     label do_gameover
         call do_gameover_frame
+    jump end
+    label do_showhigh
+        call do_showhigh_frame
     label end
 
     ; always do random
@@ -1823,6 +1365,7 @@ proc generic_event keycode
     jump end
 
     label quit
+        call save_high_scores
         move set_running 0
         move keycode -1
     label end
@@ -1936,6 +1479,9 @@ ret
 
 proc event
     cmp game_mode GAME_MODE_TITLE
+    jumpz do_title
+    cmp game_mode GAME_MODE_SHOWHIGH
+    ; part of the title/endgame attract mode
     jumpz do_title
     cmp game_mode GAME_MODE_PLAYING
     jumpz do_game

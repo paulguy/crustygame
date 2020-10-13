@@ -5896,10 +5896,10 @@ int write_string_to(void *priv,
         return(-1);
     }
 
-    if(fwrite(&(((char *)ptr)[index]),
+    if(fwrite((char *)ptr,
               1,
-              size - index,
-              (FILE *)priv) < size - index) {
+              size,
+              (FILE *)priv) < size) {
         return(-1);
     }
 
