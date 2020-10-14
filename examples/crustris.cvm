@@ -261,6 +261,46 @@ proc save_high_scores
     move savedata_write sumbyte
 ret
 
+proc update_high_score_tilemap tilemap_id
+    local tilemap ints HIGH_SCORE_TILEMAP_SIZE
+    local pos 0
+    local namepos
+    local namestrpos 0
+    local temp
+    local i 0
+
+    label clear
+        move tilemap:i SPC
+        add i 1
+        cmp i HIGH_SCORE_TILEMAP_SIZE
+    jumpl clear
+
+    move i 0
+    label loop
+        move namepos 0
+        label copy_name
+            move tilemap:pos high_score_names:namestrpos
+            add pos 1
+            add namestrpos 1
+            add namepos 1
+            cmp namepos HIGH_SCORE_NAME_LENGTH
+        jumpl copy_name
+
+        call text_integer_to_string temp tilemap:pos high_levels:i
+        add pos HIGH_SCORE_LEVEL_LENGTH
+        call text_integer_to_string temp tilemap:pos high_lines:i
+        add pos HIGH_SCORE_LINES_LENGTH
+        call text_integer_to_string temp tilemap:pos high_scores:i
+        add pos HIGH_SCORE_SCORE_LENGTH
+
+        add i 1
+        cmp i HIGH_SCORE_COUNT
+    jumpl loop
+
+    call gfx_set_tilemap_map tilemap_id tilemap
+    call gfx_update_tilemap tilemap_id
+ret
+
 static gfx_id
 static font_id
 static title_id
@@ -287,14 +327,13 @@ static pit_pattern1_layer_id
 static labels_tilemap_id
 static labels_layer0_id
 static labels_layer1_id
-static number_tilemap_id
-static number_layer0_id
-static number_layer1_id
 static title_tilemap_id
 static title_layer_id
 static shade_layer_id
 static characters_tilemap_id
 static characters_layer_id
+static high_score_tilemap_id
+static high_score_layer_id
 
 static block_obj
 static pit0_obj
@@ -314,6 +353,7 @@ static number1_obj
 static title_obj
 static shade_obj
 static characters_obj
+static high_score_obj
 
 static pitxpos
 static pitypos
@@ -326,7 +366,6 @@ macro UPDATE_LEVEL
     move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
     move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
     move gfx_set_layer_colormod:labels_layer0_id LEVEL_BG_SHADOW_COLOR:level
-    move gfx_set_layer_colormod:number_layer0_id LEVEL_BG_SHADOW_COLOR:level
 endmacro UPDATE_LEVEL
 
 static fps_timer_id
@@ -521,17 +560,6 @@ proc init
     call objects_get_free characters_obj characters_layer_id
     OBJECTS_SET_SCALE characters_obj FONT_SCALE FONT_SCALE
 
-    call gfx_add_tilemap MAX_INTEGER_SIZE 1 number_tilemap_id
-    move gfx_set_tilemap_tileset:number_tilemap_id font_id
-    call gfx_add_layer number_tilemap_id number_layer0_id
-    call gfx_add_layer number_tilemap_id number_layer1_id
-    move gfx_set_layer_blendmode:number_layer1_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:number_layer1_id C_BG_PATTERN_SHADOW
-    call objects_get_free number0_obj number_layer0_id
-    call objects_get_free number1_obj number_layer1_id
-    OBJECTS_SET_SCALE number0_obj FONT_SCALE FONT_SCALE
-    OBJECTS_SET_SCALE number1_obj FONT_SCALE FONT_SCALE
-
     call gfx_add_tilemap 1 1 title_tilemap_id
     move gfx_set_tilemap_tileset:title_tilemap_id title_id
     move temp 0
@@ -543,6 +571,13 @@ proc init
     mul  tempf:1 TITLE_SCALE
     CENTER tempf:0 SCREEN_WIDTH tempf:1
     OBJECTS_SET_POS_AND_SCALE title_obj tempf:0 tempf:0 TITLE_SCALE TITLE_SCALE
+
+    call gfx_add_tilemap HIGH_SCORE_TILEMAP_WIDTH HIGH_SCORE_COUNT high_score_tilemap_id
+    move gfx_set_tilemap_tileset:high_score_tilemap_id font_id
+    call gfx_add_layer high_score_tilemap_id high_score_layer_id
+    call objects_get_free high_score_obj high_score_layer_id
+    OBJECTS_SET_SCALE high_score_obj FONT_SCALE FONT_SCALE
+    call update_high_score_tilemap high_score_tilemap_id
 
     ; center the pit
     CENTER tempf:0 SCREEN_WIDTH PIT_PXWIDTH
@@ -996,7 +1031,7 @@ proc do_title_frame
 ret
 
 proc do_showhigh_frame
-    local temp ints 2
+    local temp ints 5
     local elapsed
     local i 0
     local y
@@ -1013,7 +1048,6 @@ proc do_showhigh_frame
     call draw_text characters_obj temp:0 HIGH_SCORE_TITLE_POS temp:1 FONT_SCALED_SIDE HIGH_SCORE_TITLE 1
 
     move gfx_set_layer_colormod:labels_layer0_id C_WHT
-    move gfx_set_layer_colormod:number_layer0_id C_WHT
     OBJECTS_SET_POS labels0_obj HIGH_SCORE_NAME_POS HIGH_SCORE_HEADING_POS
     move temp:0 0
     move temp:1 NAME_POS
@@ -1055,17 +1089,56 @@ proc do_showhigh_frame
     move gfx_set_layer_window:labels_layer0_id temp
     move gfx_draw_layer labels_layer0_id
 
-    move namepos 0
     label loop
-        move y FONT_SCALED_SIDE
-        add  y FONT_SIDE
-        mul  y i
+        move y i
+        mul  y HIGH_SCORE_SPACING
         add  y HIGH_SCORE_START_POS
-        call draw_text characters_obj HIGH_SCORE_NAME_POS y HIGH_SCORE_NAME_PXLENGTH FONT_SCALED_SIDE high_score_names:namepos 0
-        add namepos HIGH_SCORE_NAME_LENGTH
-        call draw_number high_levels:i HIGH_SCORE_LEVEL_POS y
-        call draw_number high_lines:i HIGH_SCORE_LINES_POS y
-        call draw_number high_scores:i HIGH_SCORE_SCORE_POS y
+        move temp:3 i
+        mul  temp:3 FONT_SIDE
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_NAME_POS y
+        move temp:0 HIGH_SCORE_NAME_PXLENGTH
+        ; need to unscale because pxlength is in scaled screen dimensions
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        move temp:4 0
+        move temp:2 0
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_LEVEL_POS y
+        move temp:0 HIGH_SCORE_LEVEL_PXLENGTH
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        add  temp:4 HIGH_SCORE_NAME_LENGTH
+        move temp:2 temp:4
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_LINES_POS y
+        move temp:0 HIGH_SCORE_LINES_PXLENGTH
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        add  temp:4 HIGH_SCORE_LEVEL_LENGTH
+        move temp:2 temp:4
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_SCORE_POS y
+        move temp:0 HIGH_SCORE_SCORE_PXLENGTH
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        add  temp:4 HIGH_SCORE_LINES_LENGTH
+        move temp:2 temp:4
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
 
         add i 1
         cmp i HIGH_SCORE_COUNT
