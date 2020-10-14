@@ -70,6 +70,14 @@ typedef struct LayerList_t {
     int blendWarned;
 } LayerList;
 
+static unsigned int find_power_of_two(unsigned int val) {
+    unsigned int i;
+
+    for(i = 1; i < val; i *= 2);
+
+    return(i);
+}
+
 static int debug_show_texture(LayerList *ll,
                               SDL_Texture *texture) {
     SDL_Rect src, dest;
@@ -189,10 +197,12 @@ int tilemap_add_tileset(LayerList *ll,
                         unsigned int tw,
                         unsigned int th) {
     Tileset *temp;
-    SDL_Surface *surface;
+    SDL_Surface *surface, *surface2;
     SDL_Texture *tex;
     unsigned int i, j;
     unsigned int maxx, maxy;
+    unsigned int texw, texh;
+    SDL_Rect src, dest;
 
     /* tiles should at least be 1x1 */
     if(tw == 0 || th == 0) {
@@ -224,17 +234,47 @@ int tilemap_add_tileset(LayerList *ll,
         return(-1);
     }
 
+    /* make sure the texture ends up being a power of two */
+    texw = find_power_of_two(w);
+    texh = find_power_of_two(h);
+    if(w != texw || h != texh) {
+        surface2 = SDL_CreateRGBSurface(0,
+                                        texw,
+                                        texh,
+                                        32,
+                                        TILEMAP_RMASK,
+                                        TILEMAP_GMASK,
+                                        TILEMAP_BMASK,
+                                        TILEMAP_AMASK);
+        if(surface2 == NULL) {
+            LOG_PRINTF(ll, "Failed to create power of two surface.\n");
+            SDL_FreeSurface(surface);
+            return(-1);
+        }
+        src.x = 0; src.y = 0; src.w = surface->w; src.h = surface->h;
+        dest.x = 0; dest.y = 0; dest.w = surface2->w; dest.h = surface2->h;
+        if(SDL_BlitSurface(surface, &src, surface2, &dest) < 0) {
+            LOG_PRINTF(ll, "Failed to copy to power of two surface.\n");
+            SDL_FreeSurface(surface);
+            SDL_FreeSurface(surface2);
+        }
+        SDL_FreeSurface(surface);
+        surface = surface2;
+    }
+
     /* create the texture */
     tex = SDL_CreateTextureFromSurface(ll->renderer, surface);
     if(tex == NULL) {
         LOG_PRINTF(ll, "Failed to create texture from surface.\n");
+        SDL_FreeSurface(surface);
         return(-1);
     }
     SDL_FreeSurface(surface);
-    
+
     /* make values overwrite existing values */
     if(SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE) < 0) {
         LOG_PRINTF(ll, "Failed to set blend mode.\n");
+        SDL_DestroyTexture(tex);
         return(-1);
     }
  
@@ -657,6 +697,7 @@ int tilemap_update_tilemap(LayerList *ll,
     Uint32 colormod;
     double angle;
     SDL_RendererFlip flip;
+    unsigned int texw, texh;
 
     /* make sure index is a valid tilemap */
     if(index >= ll->tilemapsmem ||
@@ -689,12 +730,15 @@ int tilemap_update_tilemap(LayerList *ll,
 
     /* create the surface if it doesn't exist */
     if(tilemap->tex == NULL) {
+        texw = find_power_of_two(tilemap->w * tileset->tw);
+        texh = find_power_of_two(tilemap->h * tileset->th);
+
         tilemap->tex = SDL_CreateTexture(ll->renderer,
                                          ll->format,
                                          SDL_TEXTUREACCESS_STATIC |
                                          SDL_TEXTUREACCESS_TARGET,
-                                         tilemap->w * tileset->tw,
-                                         tilemap->h * tileset->th);
+                                         texw,
+                                         texh);
         if(tilemap->tex == NULL) {
             LOG_PRINTF(ll, "Failed to create texture.\n");
             return(-1);
