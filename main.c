@@ -563,7 +563,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Program reached an exception while running: "
                         "%s\n",
                 crustyvm_statusstr(crustyvm_get_status(cvm)));
-        crustyvm_debugtrace(cvm, 0);
+        crustyvm_debugtrace(cvm, 1);
         goto error_ll;
     }
 

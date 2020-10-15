@@ -66,7 +66,7 @@ int write_string_to(void *priv,
         out = stderr;
     }
 
-    if(fwrite((char *)ptr, 1, size - index, out) < size - index) {
+    if(fwrite((char *)ptr, 1, size, out) < size) {
         fprintf(stderr, "Failed to print string.\n");
         return(-1);
     }

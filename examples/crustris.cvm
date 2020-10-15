@@ -301,6 +301,127 @@ proc update_high_score_tilemap tilemap_id
     call gfx_update_tilemap tilemap_id
 ret
 
+proc draw_high_score_table titlestr
+    local temp ints 5
+    local y 0
+    local i 0
+
+    CENTER temp:0 SCREEN_TILES_WIDTH titlestr:
+    mul    temp:0 FONT_SCALED_SIDE
+    move temp:1 titlestr:
+    mul  temp:1 FONT_SCALED_SIDE
+    call draw_text characters_obj temp:0 HIGH_SCORE_TITLE_POS temp:1 FONT_SCALED_SIDE titlestr 1
+
+    move gfx_set_layer_colormod:labels_layer0_id C_WHT
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_NAME_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 NAME_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 NAME_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_LEVEL_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 LEVEL_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 LEVEL_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_LINES_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 LINES_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 LINES_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+    OBJECTS_SET_POS labels0_obj HIGH_SCORE_SCORE_POS HIGH_SCORE_HEADING_POS
+    move temp:0 0
+    move temp:1 SCORE_POS
+    mul  temp:1 FONT_SIDE
+    move gfx_set_layer_scroll_pos:labels_layer0_id temp
+    move temp:0 SCORE_TEXT:
+    mul  temp:0 FONT_SIDE
+    move temp:1 FONT_SIDE
+    move gfx_set_layer_window:labels_layer0_id temp
+    move gfx_draw_layer labels_layer0_id
+
+    label loop
+        move y i
+        mul  y HIGH_SCORE_SPACING
+        add  y HIGH_SCORE_START_POS
+        move temp:3 i
+        mul  temp:3 FONT_SIDE
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_NAME_POS y
+        move temp:0 HIGH_SCORE_NAME_PXLENGTH
+        ; need to unscale because pxlength is in scaled screen dimensions
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        move temp:4 0
+        move temp:2 0
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_LEVEL_POS y
+        move temp:0 HIGH_SCORE_LEVEL_PXLENGTH
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        add  temp:4 HIGH_SCORE_NAME_LENGTH
+        move temp:2 temp:4
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_LINES_POS y
+        move temp:0 HIGH_SCORE_LINES_PXLENGTH
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        add  temp:4 HIGH_SCORE_LEVEL_LENGTH
+        move temp:2 temp:4
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        OBJECTS_SET_POS high_score_obj HIGH_SCORE_SCORE_POS y
+        move temp:0 HIGH_SCORE_SCORE_PXLENGTH
+        div  temp:0 FONT_SCALE
+        move temp:1 FONT_SIDE
+        move gfx_set_layer_window:high_score_layer_id temp
+        add  temp:4 HIGH_SCORE_LINES_LENGTH
+        move temp:2 temp:4
+        mul  temp:2 FONT_SIDE
+        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
+        move gfx_draw_layer high_score_layer_id
+
+        add i 1
+        cmp i HIGH_SCORE_COUNT
+    jumpl loop
+ret
+
+proc check_high_score pos pscore
+    move pos 0
+
+    label loop
+        cmp pscore high_scores:pos
+        jumpg done
+        add pos 1
+        cmp pos HIGH_SCORE_COUNT
+    jumpl loop
+    label done
+ret
+
 static gfx_id
 static font_id
 static title_id
@@ -776,6 +897,36 @@ proc draw_screen elapsed
     call draw_pit
 ret
 
+proc draw_game_stats
+    local temp ints 3
+
+    move temp:2 CONTROLS_TEXT_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT FONT_SIDE temp:2
+    move temp:2 LINES_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL LINES_POS LINES_TEXT: 1 FONT_SIDE temp:2
+    move temp:2 LINES_NUM_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    call draw_number lines_cleared FONT_SIDE temp:2
+    move temp:2 LEVEL_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL LEVEL_POS LEVEL_TEXT: 1 FONT_SIDE temp:2
+    move temp:2 LEVEL_NUM_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    call draw_number level FONT_SIDE temp:2
+    move temp:2 SCORE_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL SCORE_POS SCORE_TEXT: 1 FONT_SIDE temp:2
+    move temp:2 SCORE_NUM_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    call draw_number score FONT_SIDE temp:2
+    move temp:2 NEXT_SCREEN_POS
+    mul  temp:2 FONT_SCALED_SIDE
+    DRAW_LABEL NEXT_POS NEXT_TEXT: 1 FONT_SIDE temp:2
+    call draw_piece block_layer_id nextpiece 0 FONT_SIDE NEXT_PIECE_POS
+ret
+
 proc draw_shade x y w h
     local temp ints 2
 
@@ -968,13 +1119,15 @@ static rotate
 static lines_cleared
 static nextlines
 static score
+static highscorepos
 
-expr GAME_MODE_PLAYING  0
-expr GAME_MODE_ENDED    1
-expr GAME_MODE_TITLE    2
-expr GAME_MODE_SHOWHIGH 3
+expr GAME_MODE_PLAYING   0
+expr GAME_MODE_ENDED     1
+expr GAME_MODE_TITLE     2
+expr GAME_MODE_SHOWHIGH  3
+expr GAME_MODE_ENTERHIGH 4
 
-static game_mode GAME_MODE_TITLE
+static game_mode GAME_MODE_ENTERHIGH
 
 static title_cycle 0
 expr TITLE_CYCLE_LENGTH "10 * 60"
@@ -1031,118 +1184,12 @@ proc do_title_frame
 ret
 
 proc do_showhigh_frame
-    local temp ints 5
     local elapsed
-    local i 0
-    local y
-    local namepos
 
     call pit_effect
     call draw_screen elapsed
     call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
-
-    CENTER temp:0 SCREEN_TILES_WIDTH HIGH_SCORE_TITLE:
-    mul    temp:0 FONT_SCALED_SIDE
-    move temp:1 HIGH_SCORE_TITLE:
-    mul  temp:1 FONT_SCALED_SIDE
-    call draw_text characters_obj temp:0 HIGH_SCORE_TITLE_POS temp:1 FONT_SCALED_SIDE HIGH_SCORE_TITLE 1
-
-    move gfx_set_layer_colormod:labels_layer0_id C_WHT
-    OBJECTS_SET_POS labels0_obj HIGH_SCORE_NAME_POS HIGH_SCORE_HEADING_POS
-    move temp:0 0
-    move temp:1 NAME_POS
-    mul  temp:1 FONT_SIDE
-    move gfx_set_layer_scroll_pos:labels_layer0_id temp
-    move temp:0 NAME_TEXT:
-    mul  temp:0 FONT_SIDE
-    move temp:1 FONT_SIDE
-    move gfx_set_layer_window:labels_layer0_id temp
-    move gfx_draw_layer labels_layer0_id
-    OBJECTS_SET_POS labels0_obj HIGH_SCORE_LEVEL_POS HIGH_SCORE_HEADING_POS
-    move temp:0 0
-    move temp:1 LEVEL_POS
-    mul  temp:1 FONT_SIDE
-    move gfx_set_layer_scroll_pos:labels_layer0_id temp
-    move temp:0 LEVEL_TEXT:
-    mul  temp:0 FONT_SIDE
-    move temp:1 FONT_SIDE
-    move gfx_set_layer_window:labels_layer0_id temp
-    move gfx_draw_layer labels_layer0_id
-    OBJECTS_SET_POS labels0_obj HIGH_SCORE_LINES_POS HIGH_SCORE_HEADING_POS
-    move temp:0 0
-    move temp:1 LINES_POS
-    mul  temp:1 FONT_SIDE
-    move gfx_set_layer_scroll_pos:labels_layer0_id temp
-    move temp:0 LINES_TEXT:
-    mul  temp:0 FONT_SIDE
-    move temp:1 FONT_SIDE
-    move gfx_set_layer_window:labels_layer0_id temp
-    move gfx_draw_layer labels_layer0_id
-    OBJECTS_SET_POS labels0_obj HIGH_SCORE_SCORE_POS HIGH_SCORE_HEADING_POS
-    move temp:0 0
-    move temp:1 SCORE_POS
-    mul  temp:1 FONT_SIDE
-    move gfx_set_layer_scroll_pos:labels_layer0_id temp
-    move temp:0 SCORE_TEXT:
-    mul  temp:0 FONT_SIDE
-    move temp:1 FONT_SIDE
-    move gfx_set_layer_window:labels_layer0_id temp
-    move gfx_draw_layer labels_layer0_id
-
-    label loop
-        move y i
-        mul  y HIGH_SCORE_SPACING
-        add  y HIGH_SCORE_START_POS
-        move temp:3 i
-        mul  temp:3 FONT_SIDE
-
-        OBJECTS_SET_POS high_score_obj HIGH_SCORE_NAME_POS y
-        move temp:0 HIGH_SCORE_NAME_PXLENGTH
-        ; need to unscale because pxlength is in scaled screen dimensions
-        div  temp:0 FONT_SCALE
-        move temp:1 FONT_SIDE
-        move gfx_set_layer_window:high_score_layer_id temp
-        move temp:4 0
-        move temp:2 0
-        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
-        move gfx_draw_layer high_score_layer_id
-
-        OBJECTS_SET_POS high_score_obj HIGH_SCORE_LEVEL_POS y
-        move temp:0 HIGH_SCORE_LEVEL_PXLENGTH
-        div  temp:0 FONT_SCALE
-        move temp:1 FONT_SIDE
-        move gfx_set_layer_window:high_score_layer_id temp
-        add  temp:4 HIGH_SCORE_NAME_LENGTH
-        move temp:2 temp:4
-        mul  temp:2 FONT_SIDE
-        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
-        move gfx_draw_layer high_score_layer_id
-
-        OBJECTS_SET_POS high_score_obj HIGH_SCORE_LINES_POS y
-        move temp:0 HIGH_SCORE_LINES_PXLENGTH
-        div  temp:0 FONT_SCALE
-        move temp:1 FONT_SIDE
-        move gfx_set_layer_window:high_score_layer_id temp
-        add  temp:4 HIGH_SCORE_LEVEL_LENGTH
-        move temp:2 temp:4
-        mul  temp:2 FONT_SIDE
-        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
-        move gfx_draw_layer high_score_layer_id
-
-        OBJECTS_SET_POS high_score_obj HIGH_SCORE_SCORE_POS y
-        move temp:0 HIGH_SCORE_SCORE_PXLENGTH
-        div  temp:0 FONT_SCALE
-        move temp:1 FONT_SIDE
-        move gfx_set_layer_window:high_score_layer_id temp
-        add  temp:4 HIGH_SCORE_LINES_LENGTH
-        move temp:2 temp:4
-        mul  temp:2 FONT_SIDE
-        move gfx_set_layer_scroll_pos:high_score_layer_id temp:2
-        move gfx_draw_layer high_score_layer_id
-
-        add i 1
-        cmp i HIGH_SCORE_COUNT
-    jumpl loop
+    call draw_high_score_table HIGH_SCORE_TITLE
 
     cmp elapsed
     jumpz end
@@ -1153,39 +1200,6 @@ proc do_showhigh_frame
             move title_cycle 0
         label no_switch
     label end
-ret
- 
-proc draw_game_stats
-    local temp ints 3
-    local tempnum string "           "
-    local tempnummap ints MAX_INTEGER_SIZE
-    local numlen
-
-    move temp:2 CONTROLS_TEXT_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    DRAW_LABEL CONTROLS_TEXT_POS CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT FONT_SIDE temp:2
-    move temp:2 LINES_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    DRAW_LABEL LINES_POS LINES_TEXT: 1 FONT_SIDE temp:2
-    move temp:2 LINES_NUM_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    call draw_number lines_cleared FONT_SIDE temp:2
-    move temp:2 LEVEL_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    DRAW_LABEL LEVEL_POS LEVEL_TEXT: 1 FONT_SIDE temp:2
-    move temp:2 LEVEL_NUM_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    call draw_number level FONT_SIDE temp:2
-    move temp:2 SCORE_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    DRAW_LABEL SCORE_POS SCORE_TEXT: 1 FONT_SIDE temp:2
-    move temp:2 SCORE_NUM_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    call draw_number score FONT_SIDE temp:2
-    move temp:2 NEXT_SCREEN_POS
-    mul  temp:2 FONT_SCALED_SIDE
-    DRAW_LABEL NEXT_POS NEXT_TEXT: 1 FONT_SIDE temp:2
-    call draw_piece block_layer_id nextpiece 0 FONT_SIDE NEXT_PIECE_POS
 ret
 
 proc do_game_frame
@@ -1198,10 +1212,7 @@ proc do_game_frame
     local ymove
     local collided
     local lines
-    local temp ints 2
-    local tempnum string "           "
-    local tempnummap ints MAX_INTEGER_SIZE
-    local numlen
+    local temp
 
     cmp curpiece
     jumpn have_piece
@@ -1219,9 +1230,16 @@ proc do_game_frame
         call check_collision collided xpos ymove pos width height
         cmp collided
         jumpz have_piece
-        move game_mode GAME_MODE_ENDED
         call update_pit_map curpiece currotation xpos ypos
         call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
+
+        call check_high_score highscorepos score
+        cmp temp HIGH_SCORE_COUNT
+        jumpz no_high_score
+            move game_mode GAME_MODE_ENTERHIGH
+        jump done_update
+        label no_high_score
+            move game_mode GAME_MODE_ENDED
         jump done_update
     label have_piece
 
@@ -1350,6 +1368,48 @@ proc do_game_frame
         call draw_piece block_layer_id curpiece currotation xmove ymove
 ret
 
+proc draw_keyboard
+    local x
+    local y
+    local i 0
+    local pos ints 2
+    local tmpos ints 2
+
+    move pos:0 FONT_SIDE
+    move pos:1 FONT_SIDE
+    move gfx_set_layer_window:characters_layer_id pos
+
+    move pos:1 SCREEN_KEYBOARD_YPOS
+    move tmpos:1 0
+    move y SCREEN_KEYBOARD_HEIGHT
+    label y
+        move pos:0 SCREEN_KEYBOARD_XPOS
+        move x SCREEN_KEYBOARD_WIDTH
+        label x
+            move tmpos:0 SCREEN_KEYBOARD:i
+            mul  tmpos:0 FONT_SIDE
+            move gfx_set_layer_scroll_pos:characters_layer_id tmpos
+            OBJECTS_SET_POS characters_obj pos:0 pos:1
+            move gfx_draw_layer characters_layer_id
+            add i 1
+            add pos:0 SCREEN_KEYBOARD_HSPACING
+            sub x 1
+        jumpg x
+
+        add pos:1 SCREEN_KEYBOARD_VSPACING
+        sub y 1
+    jumpg y
+ret
+
+proc do_enterhigh_frame
+    local temp
+
+    call draw_screen temp
+    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
+    call draw_high_score_table GOT_HIGH_SCORE_TITLE
+    call draw_keyboard
+ret
+
 proc do_gameover_frame
     local temp
 
@@ -1364,6 +1424,8 @@ proc frame
     jumpz do_title
     cmp game_mode GAME_MODE_PLAYING
     jumpz do_game
+    cmp game_mode GAME_MODE_ENTERHIGH
+    jumpz do_enterhigh
     cmp game_mode GAME_MODE_ENDED
     jumpz do_gameover
     cmp game_mode GAME_MODE_SHOWHIGH
@@ -1374,6 +1436,9 @@ proc frame
     jump end
     label do_game
         call do_game_frame
+    jump end
+    label do_enterhigh
+        call do_enterhigh_frame
     jump end
     label do_gameover
         call do_gameover_frame
@@ -1551,6 +1616,8 @@ proc event
     jumpz do_title
     cmp game_mode GAME_MODE_SHOWHIGH
     ; part of the title/endgame attract mode
+    jumpz do_title
+    cmp game_mode GAME_MODE_ENTERHIGH
     jumpz do_title
     cmp game_mode GAME_MODE_PLAYING
     jumpz do_game
