@@ -1,0 +1,367 @@
+BUILDING
+    To compile crustygame, just type `make`.  You'll need SDL 2 and gcc, but
+aside from that, there should be no other dependencies.  To optionally compile
+the BMP converter, use `make -f Makefile.bmpconvert`.
+
+RUNNING
+`./crustygame [-D<var>=<value> ...] <scriptname>`
+
+    Some scripts may define variables to be set on the command line for
+modifying various options.
+
+METADATA
+    Metadata may be provided to crustygame in a comment on the absolute
+beginning of the program.  the comment must read ";crustygame ", and only data
+provided on this one line will be used as metadata.  There is only one
+metadata item supported at the moment:
+
+save:<size>
+    Specify that the script should have persistent save storage of <size>
+bytes.
+
+THE LANGUAGE
+    Before anything is done, a pass is made to find all the tokens in the
+program.  Quoted strings act as a single token.  Comments are thrown out at
+this stage.  Comments begin with a ; and include everything following.  Quoted
+strings may contain ;s though.  At this point, only one statement is meaningful:
+
+include <filename>
+    Read in the file <filename> in the root directory of the script and start
+parsing tokens in from this file.  Care is taken that files above the script
+directory should be inaccessible to be included in to a script for safety
+reasons, but don't rely on it for security.  Make reasonably sure like any
+other program or script that you trust where it came from.
+
+Preprocesor Statements
+    The first step to a program running (after it's tokenized) is to run
+through and interpret the preprocessor statements, which are responsible for
+defining preprocessor-time variables, and rewriting statements based on those.
+Any time a single argument is needed to have spaces, it must be enclosed in
+quotes, otherwise it'll be interpreted as multiple arguments.  Quoted strings
+support the following escape sequences:
+\r  carriage return
+\n  new line
+\<carriage return>  ignore a carriage return in the string.  A following
+new line is also ignored
+\<new line>  ignore a new line in the string.  A following carriage return is
+also ignored
+\\  a literal \ (backslash)
+\xNN - a two digit hex number representing a byte literal
+\"  a literal " (quote)
+
+macro <name> [arguments ...]
+    Start a macro definition.  From here, lines will be passed over until
+until and endmacro statement with the same name is reached, at which time
+normal interpretation will resume.  The arguments are a list of symbols which
+when the macro is evaluated, will be replaced by whatever values were passed
+in when invoked.
+
+endmacro <name>
+    End the named macro definition.  Normal interpretation will resume.
+
+if <number> <name> [arguments ...]
+    If <number> is non-zero, start copying the named macro with the listed
+arguments.  <number> may also be an expression which is to be replaced by an
+expression or a macro argument, or it may also be a variable passed in on the
+command line with -D, in this case, it'll always evaluate to true, even if the
+variable is specified to be 0.
+
+expr <variable> <expression>
+    Evaluate an expression down to a numerical value and assign it to
+<variable>.  At that point, any time <variable> appears in the program, it'll
+be replaced by the value which the expression evaluated to.  An expression can
+only accept integer values and all operations are done as integers and the
+result is an integer.  Expressions are arithmetic statements and support the
+following operators:
+*  multiplication
+/  division
+%  modulo
++  addition
+-  subtraction
+<<  binary shift left
+>>  binary shift right
+<  logical less than
+<=  logical less than or equal
+>  logical greater than
+>=  logical greater than or equal
+==  logical equals
+!=  logical not equals
+&  bitwise AND
+!&  bitwise NAND
+|  bitwise OR
+!|  bitwise NOR
+^  bitwise XOR
+!^ bitwise XNOR
+Parentheses are also supported for grouping, otherwise it follows the
+precedence followed is similar to that of C arithmetic parsing precedence.
+
+<macroname> <arguments ...>
+    Start evaluaing (copying) from macro and continue until the matched endmacro
+is reached.  Replacing any argument values with the arguments passed in.  All
+arguments specified must be provided.
+
+Symbol Definition Statements
+    Following the preprocessing stage, the resulting code is scanned to find
+symbol definitions:  procedures, global (static) variables and procedure
+(local) variables.  Before this begins though, any callback variables defined
+by the VM will be added in as globals.
+
+proc <name> [arguments ...]
+    Defines the start of procedure <name> and specifies which arguments, if
+any, it accepts.  Those arguments become local variables which reference the
+memory of the variables passed in, that is, any modifications to them in the
+procedure will persist when the procedure returns.
+
+ret
+    Return from procedure.  Marks the end of a procedure.
+
+static <name> [N | ints <N | "N ..."> | floats <N | "N ..."> | string "..."]
+    Define a global (static) variable <name>.  If a single number is provided,
+it will act as a single integer initializer.  If a type is specified, a single
+value may be provided to create an array of that size, otherwise, multiple
+arguments may be specified in quotes, separated by spaces or tabs, to create
+an array of the size of values given and initialized with those values.  The
+exception is string, which can only be initialized with a single argument,
+quoted or not.  Values are initialized once, on VM start.  These may be
+specified anywhere, procedure or not.
+
+local <name> [N | ints <N | "N ..."> | floats <N | "N ..."> | string "..."]
+    Define a procedure (local) variable <name>.  The initializer is specified
+in the same way as global variables.  These values are initialized on each
+call to a procedure.  These can only be defined inside procedures.  Procedure
+variables must have unique names to global variables.
+
+stack
+    Not a real instruction, just indicate to accumulate stack.
+
+label
+    Define a label within a procedure to jump to.  Label names are scoped
+locally to procedures.
+
+binclude <name> <chars | ints | floats> <filename> [start] [length]
+    Read in <filename> to be the initializer for a global variable <name>.  The
+type must be defined as chars (a string), ints (integer array) or floats
+(double array).  A start byte and length byte may be specified to include only
+a particular range of the file.  As many items of the size of type which fit
+within the file or provided length will be read in and used as the array
+initializer.  Like include, some care is taken to prevent arbitrary files
+above the script's directory from being read in.  The same warning applies.
+
+Program Instructions
+    The final stage is parsing instructions and generating bytecode.  The
+language supports a fairly limited set of instructions, but ones which vaguely
+represent the selection of instructions one may have available on a more
+primitive platform, just with some added feature and artistic license for the
+sake of simplciity and safety, but bugs can certainly still come up.
+
+move <destionation>[:<index>] <source>[:<index>]
+    Simply move a value from source to destination.  Source may be a variable,
+an integer immediate or a callback with the index passed to it, which will
+return a value.  Values will be converted to the type destination is before
+being stored.  If destination is a callback itself, it will be passed a
+reference to the source at the index provided, assuming it's not also a
+callback or an immediate, in which case only the single value ia passed in.
+All indexes are range checked to avoid hidden out of bounds accesses, in which
+case the program is terminated.  A read or write callback indicating an error
+will also terminate execution.  An index of 0 is implied if it's excluded.
+
+add <destination>[:<index>] <source>[:<index>]
+    Add <destionation> at <index> and <source at <index> then store the value
+in <destination>.  Source may be a callback in this case but destination
+cannot be, even if a callback may otherwise be readable and writeable.  If
+either destination or source is a float value, the operation will be done as
+if they are floats, but will be converted to the type of the destination,
+truncated to the range/precision of the type.  All other arithmetic operations
+follow similar rules.
+
+sub <destination>[:<index>] <source>[:<index>]
+    Subtract.
+
+mul <destination>[:<index>] <source>[:<index>]
+    Multiply.
+
+div <destination>[:<index>] <source>[:<index>]
+    Divide.
+
+mod <destination>[:<index>] <source>[:<index>]
+    Modulo (remainder).
+
+and <destination>[:<index>] <source>[:<index>]
+    Bitwise AND.  Bitwise instructions follow similar access rules as
+arithmetic expressions, but they are restricted to operating on integer or
+string types.  A character of a string is converted to a 32 bit integer and
+padded out with 0s in its most significant bits.
+
+or <destination>[:<index>] <source>[:<index>]
+    Bitwise OR.
+
+xor <destination>[:<index>] <source>[:<index>]
+    Bitwise XOR.
+
+shr <destination>[:<index>] <source>[:<index>]
+    Bitwise shift right.  <source> may be a float, but the value will of course
+be converted to an integer.
+ 
+shl <destination>[:<index>] <source>[:<index>]
+    Bitwise shift left.
+
+cmp <destination>[:<index>] <source>[:<index>]
+    Compare (subtract) <destination> at <index> and <source> at <index>, but
+don't store it, simply hold on to the result for use with conditional jumps.
+Neither value necessarily needs to be writable, that is, either side or both
+sides can be an immediate or a read-only callback.  In reality, any value
+which would be written or passed on to a destination is stored as the result
+from any of the above operations, for use on a following conditional jump, but
+it is only 1 value, and it is always replaced on one of these operations,
+regardless.
+
+jump <label>
+    Jump to a label.
+
+jumpn <label>
+    Jump to a label if result is not zero.  From a cmp operation, this
+indicates that the two values were different.
+(cmp a b -> a != b)
+
+jumpz <label>
+    Jump to a label if the result is zero.  From a cmp operation, this
+indicates that the two values are equal.
+(cmp a b -> a == b)
+
+jumpl <label>
+    jump to a label if the result is less than zero/negative.  From a cmp
+operation, this indicates that the left value is less than the right value.
+(cmp a b -> a < b)
+
+jumpg <label>
+    Jump to a label if the result is greater than zero/positive.  From a cmp
+operation, this indicates that the left value is greater than the right value.
+(cmp a b -> a > b)
+
+call <procedure> <arguments ...>
+    Call a procedure.  All arguments indicated by the procedure must be
+provided and are passed in as reference to the procedure and may be changed
+once the procedure returns.
+
+PROCEDURES
+    CrustyGame requires of your script that it has 3 procedures, init, event
+and frame.  They can not accept any arguments.
+
+init
+    Called once before the execution loop starts.
+
+event
+    Called on each event received, at which point callbacks may be used to
+inspect what the event was and its relevant values.
+
+frame
+    Called after all queued events have been processed.  Typically rendering
+should be done here.  Each frame starts blank and must be fully redrawn.
+Vsync is on by default, but don't expect it to be on, so this procedure may be
+called irregularly, or the user's display may have a different refresh rate
+from yours.
+
+CALLBACKS
+    The callbacks are the interface between a script and the crustygame
+engine.  They are simply used like a variable, with some caveats addressed
+above in the description of the move operation.  They may have general
+purposes, relate to data, video, input and hopefully (though not yet) audio.
+
+General Callbacks
+out (W)
+    A single value may be written to it.  It will be output to standard
+output.  A character in a string will be output as a byte and an int or float
+will be output as a numerical value.
+
+err (W)
+    Like out but standard error.
+
+string_out (W)
+    Write a whole character string to standard out in one go.
+
+string_err (W)
+    Like string_out, but standard error.
+
+get_ticks (R)
+    Get roughly the number of milliseconds since SDL was initialized.  Your
+only way to track the passage of time.
+
+set_running (W)
+    Set to 0 to indicate the program should stop after this frame.  Can be
+reset to non-zero before a frame is finished.
+
+get_random (R)
+    Get a random number from the rand() function, seeded at program start with
+the current UNIX time.  If you need something more repeatable or with other
+special characteristics, you can always implement your own, but this is a
+quick convenience.
+
+Graphics Callbacks
+    The way graphics works in CrustyGame is really part of the gimmick of it.
+It is a fairly flexible, tile and layer based system.  Tilesets must be
+provided to the engine, then tilemaps must be created and populated with tiles
+and optional attributes, then layers must be created and assigned tilemaps.
+Many layers may have the same tilemap.  Then layer parameters should be
+specified and finally indicated to be drawn to the screen.
+
+gfx_set_buffer (W)
+    Pass in a buffer to be used by a following callback which needs a buffer.
+The reference provided is held on to.  One can use local variables, but on
+return the reference will go stale, resulting in undefined data being
+referenced.  This won't result in a program crash as the whole stack is always
+accessible, but you might get unexpected results if a callback which uses the
+reference is then called.
+
+gfx_get_return (R)
+    Read in a value returned by a write callback, where a structure will have
+been passed in and processed somehow.
+
+gfx_add_tileset (W)
+    Add a tileset from a buffer provided by gfx_set_buffer.  This callback
+takes a buffer of 5 ints.  Width of the graphic, in pixels, height of the
+graphic, in pixels, the pitch of the graphic, in bytes, the width of each
+tile, in pixels and the width of each tile in pixels.  The graphics data must
+be 32 bit color in A8R8G8B8 order, with the origin pixel on the top-left, then
+proceeding row by row.  A bmpconvert utility is provided.  The GIMP (and
+possibly others) are able to output BMPs with alpha channel, usable with this
+program.  The result is a super-simplified format that is easy to use by
+scripts.  See examples/crustygame.inc for helper definitions.  Tiles are
+broken out from the texture also starting from the top left corner and
+proceeding row by row, starting at 0 and increasing from there.  As many tiles
+as can fit the image are indexable.  The id will be returned through
+gfx_get_return.
+
+gfx_free_tileset (W)
+    Free the tileset and any resouces.  Accepts an id of a tileset as an int.
+This id will now be free and invalid.  The id may be returned again at a later
+time.
+
+gfx_add_tilemap (W)
+    Add a tilemap.  Accepts a buffer of 2 ints.  The width in tiles of the
+tilemap and the height in tiles of the tilemap.  The id will be returned
+through gfx_get_return.
+
+gfx_free_tilemap (W)
+    Free a tilemap.  Accepts an id of a tilemap as an int.  Same rules as
+freed tilesets.
+
+gfx_set_tilemap_tileset (W)
+    Provide tilemap data to be copied in to the tilemap's own data.  Accepts 5
+ints.  X position of where to start copying to, in tiles.  Y position of where
+to start copying to, in tiles.  The pitch, in tiles
+gfx_set_tilemap_map (W)
+gfx_set_tilemap_attr_flags (W)
+gfx_set_tilemap_attr_colormod (W)
+gfx_update_tilemap (W)
+gfx_add_layer (W)
+gfx_free_layer (W)
+gfx_set_layer_pos (W)
+gfx_set_layer_window (W)
+gfx_set_layer_scroll_pos (W)
+gfx_set_layer_scale (W)
+gfx_set_layer_colormod (W)
+gfx_set_layer_blendmode (W)
+gfx_set_video_mode (W)
+gfx_get_width (R)
+gfx_get_height (R)
+
