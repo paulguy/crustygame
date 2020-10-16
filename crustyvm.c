@@ -591,7 +591,7 @@ static int compare_token_and_token(CrustyVM *cvm,
 #define LOG_PRINTF_TOK(CVM, FMT, ...) \
     (CVM)->log_cb((CVM)->log_priv, "%s:%s:%u: " FMT, \
         (CVM)->stage, \
-        &((CVM)->tokenmem[MODULE]), \
+        TOKENVAL(MODULE), \
         LINE, \
         ##__VA_ARGS__)
 
@@ -600,7 +600,7 @@ static int tokenize(CrustyVM *cvm,
                     char *safepath,
                     const char *programdata,
                     unsigned long programdatalen) {
-    unsigned int i;
+    unsigned int i, j;
     CrustyLine *temp;
     unsigned long linelen, lineend;
     unsigned long cursor;
@@ -824,11 +824,20 @@ static int tokenize(CrustyVM *cvm,
                 }
 
                 /* make sure the same file isn't included from cyclicly */
-                for(i = 0; i < includestackptr; i++) {
+                for(i = 0; i <= includestackptr; i++) {
                     if(compare_token_and_token(cvm,
                                                GET_TOKEN_OFFSET(cvm->lines, 1),
-                                               includemodule[i])) {
+                                               includemodule[i]) == 0) {
                         LOG_PRINTF_TOK(cvm, "Circular includes.\n");
+                        LOG_PRINTF_TOK(cvm, "%s\n", TOKENVAL(includemodule[0]));
+                        for(j = 1; j <= includestackptr; j++) {
+                            LOG_PRINTF_TOK(cvm, "-> %d include %s\n",
+                                                includeline[j],
+                                                TOKENVAL(includemodule[j]));
+                        }
+                        LOG_PRINTF_TOK(cvm, "!! %d include %s\n",
+                                            cvm->lines,
+                                            GET_TOKEN(cvm->lines, 1));
                         return(-1);
                     }
                 }
