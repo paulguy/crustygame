@@ -422,6 +422,52 @@ proc check_high_score pos pscore
     label done
 ret
 
+proc bump_high_score pos
+    local i
+    local j
+    local k
+    local srcpos
+    local destpos
+
+    move j HIGH_SCORE_COUNT
+    sub  j 1
+    move i HIGH_SCORE_COUNT
+    sub  i 2
+
+    label loop
+        cmp j pos
+        jumpz done
+
+        move srcpos i
+        mul  srcpos HIGH_SCORE_NAME_LENGTH
+        move destpos j
+        mul  destpos HIGH_SCORE_NAME_LENGTH
+        move k HIGH_SCORE_NAME_LENGTH
+        label loop2
+            move high_score_names:destpos high_score_names:srcpos
+            add srcpos 1
+            add destpos 1
+            sub k 1
+        jumpg loop2
+        move high_lines:j  high_lines:i
+        move high_levels:j high_levels:i
+        move high_scores:j high_scores:i
+
+        sub i 1
+        sub j 1
+    jump loop
+    label done
+
+    move destpos pos
+    mul  destpos HIGH_SCORE_NAME_LENGTH
+    move k HIGH_SCORE_NAME_LENGTH
+    label loop3
+        move high_score_names:destpos SPC
+        add destpos 1
+        sub k 1
+    jumpg loop3
+ret
+
 static gfx_id
 static font_id
 static title_id
@@ -590,7 +636,6 @@ proc init
     call objects_get_free shade_obj shade_layer_id
     OBJECTS_SET_SCALE shade_obj 1 1
     move gfx_set_layer_blendmode:shade_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:shade_layer_id C_BG_PATTERN_SHADOW
 
     call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
 
@@ -607,7 +652,7 @@ proc init
     move gfx_set_layer_window:window_pattern0_layer_id temp
     move gfx_set_layer_window:window_pattern1_layer_id temp
     move gfx_set_layer_blendmode:window_pattern1_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:window_pattern1_layer_id C_BG_PATTERN_SHADOW
+    move gfx_set_layer_colormod:window_pattern1_layer_id SHADOW_SHADE
     call objects_get_free win_pat0_obj window_pattern0_layer_id
     OBJECTS_SET_POS win_pat0_obj 0 0
     call objects_get_free win_pat1_obj window_pattern1_layer_id
@@ -628,7 +673,7 @@ proc init
     move gfx_set_layer_window:pit_pattern0_layer_id temp
     move gfx_set_layer_window:pit_pattern1_layer_id temp
     move gfx_set_layer_blendmode:pit_pattern1_layer_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:pit_pattern1_layer_id C_BG_PATTERN_SHADOW
+    move gfx_set_layer_colormod:pit_pattern1_layer_id SHADOW_SHADE
     call objects_get_free pit_pat0_obj pit_pattern0_layer_id
     call objects_get_free pit_pat1_obj pit_pattern1_layer_id
 
@@ -656,7 +701,7 @@ proc init
     call gfx_add_layer labels_tilemap_id labels_layer0_id
     call gfx_add_layer labels_tilemap_id labels_layer1_id
     move gfx_set_layer_blendmode:labels_layer1_id GFX_BLENDMODE_SUB
-    move gfx_set_layer_colormod:labels_layer1_id C_BG_PATTERN_SHADOW
+    move gfx_set_layer_colormod:labels_layer1_id SHADOW_SHADE
     call objects_get_free labels0_obj labels_layer0_id
     call objects_get_free labels1_obj labels_layer1_id
     OBJECTS_SET_SCALE labels0_obj FONT_SCALE FONT_SCALE
@@ -798,6 +843,182 @@ proc pit_effect
     call update_pit_tilemaps_from_piece piece rotation x y
 ret
 
+proc draw_shade x y w h shade
+    local temp ints 2
+
+    OBJECTS_SET_POS shade_obj x y
+    move temp:0 w
+    move temp:1 h
+    move gfx_set_layer_window:shade_layer_id temp
+    move gfx_set_layer_colormod:shade_layer_id shade
+    move gfx_draw_layer shade_layer_id
+ret
+
+proc draw_text obj x y width height string animated
+    local temp ints 2
+    local stringpos 0
+    local xpos 0
+    local ypos
+    local no_advance
+    local layer_id
+    local wordstart
+    local wordlen
+    local remain
+    local anim_offset
+    local anim_offset_dir
+
+    move anim_offset text_anim_start
+    move anim_offset_dir text_anim_dir
+
+    OBJECTS_GET_LAYER_ID layer_id obj
+
+    move ypos FONT_SCALED_SIDE
+    label do_word
+        move no_advance 0
+        ; eat any leading spaces or newlines
+        label eat_whitespace
+            cmp stringpos string:
+            jumpz end
+
+            cmp string:stringpos SPC
+            jumpz eat_space
+            cmp string:stringpos NL
+            jumpz eat_newline
+        jump done_eat_whitespace
+        label eat_space
+            cmp no_advance
+            jumpn eat_whitespace
+
+            add xpos FONT_SCALED_SIDE
+            cmp xpos width
+            jumpl no_wrap
+                cmp ypos height
+                jumpg end
+                jumpz end
+                add ypos FONT_SCALED_SIDE
+                move xpos 0
+
+                move no_advance 1
+            label no_wrap
+
+            add stringpos 1
+        jump eat_whitespace
+        label eat_newline
+            add ypos FONT_SCALED_SIDE
+            cmp ypos height
+            jumpz end
+
+            move no_advance 0
+            move xpos 0
+            add stringpos 1
+        jump eat_whitespace
+        label done_eat_whitespace
+
+        ; find the length of the word that needs to be copied
+        move wordstart stringpos
+        label find_wordend
+            cmp string:stringpos SPC
+            jumpz found_wordend
+            cmp string:stringpos NL
+            jumpz found_wordend
+            ; this one is special because the procedure shouldn't just quit at
+            ; the end of the string, but consider this the end of the word
+            add stringpos 1
+            cmp stringpos string:
+            jumpz found_wordend
+        jump find_wordend
+        label found_wordend
+
+        ; if the word doesn't fit and tilemapx is 0, just copy the word
+        ; character by character advancing the character each time. if tilemapx
+        ; isn't 0, jump to the next line then try the check again. if it still
+        ; doesn't fit, it'll just revert to fully copying.
+
+        move wordlen stringpos
+        ; reset the string position to the start of the word after it's done
+        ; with the value
+        move stringpos wordstart
+        sub  wordlen wordstart
+        label retry_word
+        move remain width
+        sub  remain xpos
+        div  remain FONT_SCALED_SIDE
+        cmp  wordlen remain
+        jumpg try_new_line
+
+        label copy_word
+            move temp:0 string:stringpos
+            mul  temp:0 FONT_SIDE
+            move temp:1 0
+            move gfx_set_layer_scroll_pos:layer_id temp
+            move temp:0 xpos
+            add  temp:0 x
+            move temp:1 ypos
+            add  temp:1 y
+            sub  temp:1 FONT_SCALED_SIDE
+            cmp animated
+            jumpz no_animation
+                add temp:1 anim_offset
+                call text_anim_next anim_offset anim_offset_dir
+            label no_animation
+            OBJECTS_SET_POS obj temp:0 temp:1
+            move gfx_draw_layer layer_id
+
+            add xpos FONT_SCALED_SIDE
+            cmp xpos width
+            jumpl no_wrap2
+                cmp ypos height
+                jumpg end
+                jumpz end
+                add ypos FONT_SCALED_SIDE
+                move xpos 0
+            label no_wrap2
+
+            add stringpos 1
+            sub wordlen 1
+        jumpg copy_word
+        jump do_word_continue
+
+        label try_new_line
+            ; check if already at the start of the line
+            cmp xpos 0
+            jumpz copy_line
+            cmp ypos height
+            jumpg end
+            jumpz end
+            add ypos FONT_SCALED_SIDE
+            move xpos 0
+            jump retry_word
+
+        label copy_line
+            move temp:0 string:stringpos
+            mul  temp:0 FONT_SIDE
+            move temp:1 0
+            move gfx_set_layer_scroll_pos:layer_id temp
+            move temp:0 xpos
+            add  temp:0 x
+            move temp:1 ypos
+            add  temp:1 y
+            sub  temp:1 FONT_SCALED_SIDE
+            OBJECTS_SET_POS obj temp:0 temp:1
+            move gfx_draw_layer layer_id
+
+            add xpos FONT_SCALED_SIDE
+            add stringpos 1
+            sub remain 1
+        jumpg copy_line
+
+        cmp ypos height
+        jumpg end
+        jumpz end
+        add ypos FONT_SCALED_SIDE
+        move xpos 0
+
+        label do_word_continue
+    jumpz do_word
+    label end
+ret
+
 macro ADVANCE_BGSCROLL VAR DIR MAX
     add VAR DIR
     cmp VAR MAX
@@ -927,182 +1148,37 @@ proc draw_game_stats
     call draw_piece block_layer_id nextpiece 0 FONT_SIDE NEXT_PIECE_POS
 ret
 
-proc draw_shade x y w h
-    local temp ints 2
+proc draw_keyboard
+    local x
+    local y
+    local i 0
+    local pos ints 2
+    local tmpos ints 2
 
-    OBJECTS_SET_POS shade_obj x y
-    move temp:0 w
-    move temp:1 h
-    move gfx_set_layer_window:shade_layer_id temp
-    move gfx_draw_layer shade_layer_id
-ret
+    move pos:0 FONT_SIDE
+    move pos:1 FONT_SIDE
+    move gfx_set_layer_window:characters_layer_id pos
 
-proc draw_text obj x y width height string animated
-    local temp ints 2
-    local stringpos 0
-    local xpos 0
-    local ypos
-    local no_advance
-    local layer_id
-    local wordstart
-    local wordlen
-    local remain
-    local anim_offset
-    local anim_offset_dir
+    move pos:1 SCREEN_KEYBOARD_YPOS
+    move tmpos:1 0
+    move y SCREEN_KEYBOARD_HEIGHT
+    label y
+        move pos:0 SCREEN_KEYBOARD_XPOS
+        move x SCREEN_KEYBOARD_WIDTH
+        label x
+            move tmpos:0 SCREEN_KEYBOARD:i
+            mul  tmpos:0 FONT_SIDE
+            move gfx_set_layer_scroll_pos:characters_layer_id tmpos
+            OBJECTS_SET_POS characters_obj pos:0 pos:1
+            move gfx_draw_layer characters_layer_id
+            add i 1
+            add pos:0 SCREEN_KEYBOARD_HSPACING
+            sub x 1
+        jumpg x
 
-    move anim_offset text_anim_start
-    move anim_offset_dir text_anim_dir
-
-    OBJECTS_GET_LAYER_ID layer_id obj
-
-    move ypos FONT_SCALED_SIDE
-    label do_word
-        move no_advance 0
-        ; eat any leading spaces or newlines
-        label eat_whitespace
-            cmp stringpos string:
-            jumpz end
-
-            cmp string:stringpos SPC
-            jumpz eat_space
-            cmp string:stringpos NL
-            jumpz eat_newline
-        jump done_eat_whitespace
-        label eat_space
-            cmp no_advance
-            jumpn eat_whitespace
-
-            add xpos FONT_SCALED_SIDE
-            cmp xpos width
-            jumpl no_wrap
-                add ypos FONT_SCALED_SIDE
-                cmp ypos height
-                jumpg end
-                jumpz end
-
-                move no_advance 1
-                move xpos 0
-            label no_wrap
-
-            add stringpos 1
-        jump eat_whitespace
-        label eat_newline
-            add ypos FONT_SCALED_SIDE
-            cmp ypos height
-            jumpz end
-
-            move no_advance 0
-            move xpos 0
-            add stringpos 1
-        jump eat_whitespace
-        label done_eat_whitespace
-
-        ; find the length of the word that needs to be copied
-        move wordstart stringpos
-        label find_wordend
-            cmp string:stringpos SPC
-            jumpz found_wordend
-            cmp string:stringpos NL
-            jumpz found_wordend
-            ; this one is special because the procedure shouldn't just quit at
-            ; the end of the string, but consider this the end of the word
-            add stringpos 1
-            cmp stringpos string:
-            jumpz found_wordend
-        jump find_wordend
-        label found_wordend
-
-        ; if the word doesn't fit and tilemapx is 0, just copy the word
-        ; character by character advancing the character each time. if tilemapx
-        ; isn't 0, jump to the next line then try the check again. if it still
-        ; doesn't fit, it'll just revert to fully copying.
-
-        move wordlen stringpos
-        ; reset the string position to the start of the word after it's done
-        ; with the value
-        move stringpos wordstart
-        sub  wordlen wordstart
-        label retry_word
-        move remain width
-        sub  remain xpos
-        div  remain FONT_SCALED_SIDE
-        cmp  wordlen remain
-        jumpg try_new_line
-
-        label copy_word
-            move temp:0 string:stringpos
-            mul  temp:0 FONT_SIDE
-            move temp:1 0
-            move gfx_set_layer_scroll_pos:layer_id temp
-            move temp:0 xpos
-            add  temp:0 x
-            move temp:1 ypos
-            add  temp:1 y
-            sub  temp:1 FONT_SCALED_SIDE
-            cmp animated
-            jumpz no_animation
-                add temp:1 anim_offset
-                call text_anim_next anim_offset anim_offset_dir
-            label no_animation
-            OBJECTS_SET_POS obj temp:0 temp:1
-            move gfx_draw_layer layer_id
-
-            add xpos FONT_SCALED_SIDE
-            cmp xpos width
-            jumpl no_wrap2
-                add ypos FONT_SCALED_SIDE
-                cmp ypos height
-                jumpg end
-                jumpz end
-
-                move xpos 0
-            label no_wrap2
-
-            add stringpos 1
-            sub wordlen 1
-        jumpg copy_word
-        jump do_word_continue
-
-        label try_new_line
-            cmp remain width
-            jumpz copy_line
-            add ypos FONT_SCALED_SIDE
-            cmp ypos height
-            jumpg end
-            jumpz end
-            move xpos 0
-            jump retry_word
-
-        label copy_line
-            move temp:0 string:stringpos
-            mul  temp:0 FONT_SIDE
-            move temp:1 0
-            move gfx_set_layer_scroll_pos:layer_id temp
-            move temp:0 xpos
-            add  temp:0 x
-            move temp:1 ypos
-            add  temp:1 y
-            OBJECTS_SET_POS obj temp:0 temp:1
-            move gfx_draw_layer layer_id
-
-            add xpos FONT_SCALED_SIDE
-            cmp xpos width
-            jumpl no_wrap3
-                add ypos FONT_SCALED_SIDE
-                cmp ypos height
-                jumpg end
-                jumpz end
-
-                move xpos 0
-            label no_wrap3
-
-            add stringpos 1
-            sub remain 1
-        jumpg copy_line
-
-        label do_word_continue
-    jumpz do_word
-    label end
+        add pos:1 SCREEN_KEYBOARD_VSPACING
+        sub y 1
+    jumpg y
 ret
 
 static level
@@ -1127,7 +1203,39 @@ expr GAME_MODE_TITLE     2
 expr GAME_MODE_SHOWHIGH  3
 expr GAME_MODE_ENTERHIGH 4
 
-static game_mode GAME_MODE_ENTERHIGH
+static game_mode GAME_MODE_TITLE
+
+proc setup_game
+    local i
+
+    ; reset variables
+    move level STARTING_LEVEL
+    move curpiece DEBUG_START_PIECE
+    move lastmove 0
+    move move 0
+    move tapped 0
+    move fall 0
+    move rotate 0
+    move lines_cleared 0
+    move score 0
+    move nextpiece get_random
+    mod  nextpiece PIECEINFO_PIECES
+    add  nextpiece 1
+ 
+    ; clear the pit
+    move i PIT_SIZE
+    label clear_pit
+        sub i 1
+        jumpl done_clear_pit
+        move pit:i 0
+    jump clear_pit
+    label done_clear_pit    
+    
+    ; update the whole pit
+    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
+
+    UPDATE_LEVEL
+ret
 
 static title_cycle 0
 expr TITLE_CYCLE_LENGTH "10 * 60"
@@ -1147,7 +1255,7 @@ proc do_title_frame
 
     call pit_effect
     call draw_screen elapsed
-    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
+    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT SHADOW_SHADE
     move gfx_draw_layer title_layer_id
 
     move textw PRESS_ENTER_TEXT:
@@ -1169,7 +1277,7 @@ proc do_title_frame
     move texty shadey
     add  texty FONT_SCALED_SIDE
 
-    call draw_shade shadex shadey shadew shadeh
+    call draw_shade shadex shadey shadew shadeh SHADOW_SHADE
     call draw_text characters_obj textx texty textw FONT_SCALED_SIDE PRESS_ENTER_TEXT 1
 
     cmp elapsed
@@ -1188,7 +1296,7 @@ proc do_showhigh_frame
 
     call pit_effect
     call draw_screen elapsed
-    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
+    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT SHADOW_SHADE
     call draw_high_score_table HIGH_SCORE_TITLE
 
     cmp elapsed
@@ -1234,8 +1342,16 @@ proc do_game_frame
         call update_pit_tilemaps_from_piece curpiece currotation xpos ypos
 
         call check_high_score highscorepos score
-        cmp temp HIGH_SCORE_COUNT
+        cmp highscorepos HIGH_SCORE_COUNT
         jumpz no_high_score
+            call bump_high_score highscorepos
+            move high_lines:highscorepos lines_cleared
+            move high_levels:highscorepos level
+            move high_scores:highscorepos score
+            call update_high_score_tilemap high_score_tilemap_id
+            move highscore_name_pos 0
+            move keyboard_selector_pos:0 0
+            move keyboard_selector_pos:1 0
             move game_mode GAME_MODE_ENTERHIGH
         jump done_update
         label no_high_score
@@ -1368,46 +1484,70 @@ proc do_game_frame
         call draw_piece block_layer_id curpiece currotation xmove ymove
 ret
 
-proc draw_keyboard
-    local x
-    local y
-    local i 0
-    local pos ints 2
-    local tmpos ints 2
-
-    move pos:0 FONT_SIDE
-    move pos:1 FONT_SIDE
-    move gfx_set_layer_window:characters_layer_id pos
-
-    move pos:1 SCREEN_KEYBOARD_YPOS
-    move tmpos:1 0
-    move y SCREEN_KEYBOARD_HEIGHT
-    label y
-        move pos:0 SCREEN_KEYBOARD_XPOS
-        move x SCREEN_KEYBOARD_WIDTH
-        label x
-            move tmpos:0 SCREEN_KEYBOARD:i
-            mul  tmpos:0 FONT_SIDE
-            move gfx_set_layer_scroll_pos:characters_layer_id tmpos
-            OBJECTS_SET_POS characters_obj pos:0 pos:1
-            move gfx_draw_layer characters_layer_id
-            add i 1
-            add pos:0 SCREEN_KEYBOARD_HSPACING
-            sub x 1
-        jumpg x
-
-        add pos:1 SCREEN_KEYBOARD_VSPACING
-        sub y 1
-    jumpg y
-ret
+static keyboard_selector_pos ints 2
+static highscore_name_pos
 
 proc do_enterhigh_frame
     local temp
+    local x
+    local y
 
     call draw_screen temp
-    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT
+    call draw_shade 0 0 SCREEN_WIDTH SCREEN_HEIGHT SHADOW_SHADE
     call draw_high_score_table GOT_HIGH_SCORE_TITLE
     call draw_keyboard
+
+    move x keyboard_selector_pos:0
+    mul  x SCREEN_KEYBOARD_HSPACING
+    add  x SCREEN_KEYBOARD_XPOS
+    sub  x SELECTOR_PAD
+    move y keyboard_selector_pos:1
+    mul  y SCREEN_KEYBOARD_VSPACING
+    add  y SCREEN_KEYBOARD_YPOS
+    sub  y SELECTOR_PAD
+    call draw_shade x y SCREEN_KEYBOARD_SELECTOR_SIDE SCREEN_KEYBOARD_SELECTOR_SIDE SELECTOR_SHADE
+
+    cmp highscore_name_pos HIGH_SCORE_NAME_LENGTH
+    jumpz show_confirm
+        move x highscore_name_pos
+        mul  x FONT_SCALED_SIDE
+        add  x HIGH_SCORE_NAME_POS
+        sub  x SELECTOR_PAD
+        move y highscorepos
+        mul  y HIGH_SCORE_SPACING
+        add  y HIGH_SCORE_START_POS
+        sub  y SELECTOR_PAD
+        call draw_shade x y SCREEN_KEYBOARD_SELECTOR_SIDE SCREEN_KEYBOARD_SELECTOR_SIDE SELECTOR_SHADE
+
+        move x highscore_name_pos
+        mul  x FONT_SCALED_SIDE
+        add  x HIGH_SCORE_NAME_POS
+        add  y SELECTOR_PAD
+        move temp keyboard_selector_pos:1
+        mul  temp SCREEN_KEYBOARD_WIDTH
+        add  temp keyboard_selector_pos:0
+        move temp SCREEN_KEYBOARD:temp
+        call draw_text characters_obj x y FONT_SCALED_SIDE FONT_SCALED_SIDE temp 0
+    jump end
+    label show_confirm
+        move y highscorepos
+        mul  y HIGH_SCORE_SPACING
+        add  y HIGH_SCORE_START_POS
+        sub  y SELECTOR_PAD
+        move x HIGH_SCORE_NAME_POS
+        sub  x SELECTOR_PAD
+        move temp HIGH_SCORE_NAME_PXLENGTH
+        add  temp SELECTOR_PAD
+        add  temp SELECTOR_PAD
+        call draw_shade x y temp SCREEN_KEYBOARD_SELECTOR_SIDE SELECTOR_SHADE
+    label end
+
+    move y highscorepos
+    mul  y HIGH_SCORE_SPACING
+    add  y HIGH_SCORE_START_POS
+    move temp highscorepos
+    mul  temp HIGH_SCORE_NAME_LENGTH
+    call draw_text characters_obj HIGH_SCORE_NAME_POS y HIGH_SCORE_NAME_PXLENGTH FONT_SCALED_SIDE high_score_names:temp 0
 ret
 
 proc do_gameover_frame
@@ -1450,38 +1590,6 @@ proc frame
     ; always do random
     move junk get_random
 ;    call count_fps
-ret
-
-proc setup_game
-    local i
-
-    ; reset variables
-    move level STARTING_LEVEL
-    move curpiece DEBUG_START_PIECE
-    move lastmove 0
-    move move 0
-    move tapped 0
-    move fall 0
-    move rotate 0
-    move lines_cleared 0
-    move score 0
-    move nextpiece get_random
-    mod  nextpiece PIECEINFO_PIECES
-    add  nextpiece 1
- 
-    ; clear the pit
-    move i PIT_SIZE
-    label clear_pit
-        sub i 1
-        jumpl done_clear_pit
-        move pit:i 0
-    jump clear_pit
-    label done_clear_pit    
-    
-    ; update the whole pit
-    call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
-
-    UPDATE_LEVEL
 ret
 
 proc generic_event keycode
@@ -1600,6 +1708,94 @@ proc do_game_event
     label end
 ret
 
+proc do_enterhigh_event
+    local button
+    local keyboardpos
+    local stringpos
+
+    cmp event_get_type INPUT_TYPE_KEYDOWN
+    jumpn end
+    move button event_get_button
+    call generic_event button
+    cmp button
+    jumpl end
+
+    cmp button INPUT_KEY_a
+    jumpz cursor_left
+    cmp button INPUT_KEY_d
+    jumpz cursor_right
+    cmp button INPUT_KEY_w
+    jumpz cursor_up
+    cmp button INPUT_KEY_s
+    jumpz cursor_down
+    cmp button INPUT_KEY_RETURN
+    jumpz enter_char
+    cmp button INPUT_KEY_BACKSPACE
+    jumpz backspace_char
+    jump end
+
+    label cursor_left
+        sub keyboard_selector_pos:0 1
+        jumpg end
+        jumpz end
+        move keyboard_selector_pos:0 SCREEN_KEYBOARD_WIDTH
+        sub  keyboard_selector_pos:0 1
+    jump end
+
+    label cursor_right
+        add keyboard_selector_pos:0 1
+        cmp keyboard_selector_pos:0 SCREEN_KEYBOARD_WIDTH
+        jumpl end
+        move keyboard_selector_pos:0 0
+    jump end
+
+    label cursor_up
+        sub keyboard_selector_pos:1 1
+        jumpg end
+        jumpz end
+        move keyboard_selector_pos:1 SCREEN_KEYBOARD_HEIGHT
+        sub  keyboard_selector_pos:1 1
+    jump end
+
+    label cursor_down
+        add keyboard_selector_pos:1 1
+        cmp keyboard_selector_pos:1 SCREEN_KEYBOARD_HEIGHT
+        jumpl end
+        move keyboard_selector_pos:1 0
+    jump end
+
+    label enter_char
+        cmp highscore_name_pos HIGH_SCORE_NAME_LENGTH
+        jumpz submit_score
+        move keyboardpos keyboard_selector_pos:1
+        mul  keyboardpos SCREEN_KEYBOARD_WIDTH
+        add  keyboardpos keyboard_selector_pos:0
+        move stringpos highscorepos
+        mul  stringpos HIGH_SCORE_NAME_LENGTH
+        add  stringpos highscore_name_pos
+        move high_score_names:stringpos SCREEN_KEYBOARD:keyboardpos
+        add highscore_name_pos 1
+    jump end
+
+    label backspace_char
+        cmp highscore_name_pos 0
+        jumpz end
+        sub highscore_name_pos 1
+        move stringpos highscorepos
+        mul  stringpos HIGH_SCORE_NAME_LENGTH
+        add  stringpos highscore_name_pos
+        move high_score_names:stringpos SPC
+    jump end
+
+    label submit_score
+        call update_high_score_tilemap high_score_tilemap_id
+        move title_cycle 0
+        move game_mode GAME_MODE_ENDED
+    jump end
+       
+    label end
+ret
+
 proc do_gameover_event
     local button
 
@@ -1607,6 +1803,16 @@ proc do_gameover_event
     jumpn end
     move button event_get_button
     call generic_event button
+    cmp button
+    jumpl end
+
+    cmp button INPUT_KEY_RETURN
+    jumpz start_game
+    jump end
+
+    label start_game
+        move game_mode GAME_MODE_TITLE
+    jump end
 
     label end
 ret
@@ -1618,7 +1824,7 @@ proc event
     ; part of the title/endgame attract mode
     jumpz do_title
     cmp game_mode GAME_MODE_ENTERHIGH
-    jumpz do_title
+    jumpz do_enterhigh
     cmp game_mode GAME_MODE_PLAYING
     jumpz do_game
     cmp game_mode GAME_MODE_ENDED
@@ -1626,6 +1832,9 @@ proc event
     jump end
     label do_title
         call do_title_event
+    jump end
+    label do_enterhigh
+        call do_enterhigh_event
     jump end
     label do_game
         call do_game_event

@@ -61,10 +61,10 @@ expr TILEMAP_AMASK  0x000000FF
 expr TILEMAP_ASHIFT 0
 
 macro TILEMAP_COLOR NAME CR CG CB CA
-    expr C_NAME "(CR << TILEMAP_RSHIFT) | \
-                 (CG << TILEMAP_GSHIFT) | \
-                 (CB << TILEMAP_BSHIFT) | \
-                 (CA << TILEMAP_ASHIFT)"
+    expr NAME "(CR << TILEMAP_RSHIFT) | \
+               (CG << TILEMAP_GSHIFT) | \
+               (CB << TILEMAP_BSHIFT) | \
+               (CA << TILEMAP_ASHIFT)"
 endmacro TILEMAP_COLOR
 
 expr TILEMAP_HFLIP_MASK  0x01
