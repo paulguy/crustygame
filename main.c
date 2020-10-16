@@ -472,6 +472,11 @@ int main(int argc, char **argv) {
         }
     }
 
+    if(filename == NULL) {
+        fprintf(stderr, "USAGE: %s [(<filename>|-D<var>=<value>) ...] [-- <filename>]\n", argv[0]);
+        goto error_fullpath;
+    }
+
     fullpath = NULL;
     in = crustyvm_open_file(filename, &fullpath, vprintf_cb, stderr);
     if(in == NULL) {
