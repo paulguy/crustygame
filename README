@@ -9,6 +9,10 @@ RUNNING
     Some scripts may define variables to be set on the command line for
 modifying various options.
 
+    If a script has captured the mouse, CTRL+F10 can be pressed to release it.
+CTRL+F10 will have to be pressed again to allow the script to recapture the
+mouse.
+
 METADATA
     Metadata may be provided to crustygame in a comment on the absolute
 beginning of the program.  the comment must read ";crustygame ", and only data
@@ -256,10 +260,10 @@ inspect what the event was and its relevant values.
 
 frame
     Called after all queued events have been processed.  Typically rendering
-should be done here.  Each frame starts blank and must be fully redrawn.
-Vsync is on by default, but don't expect it to be on, so this procedure may be
-called irregularly, or the user's display may have a different refresh rate
-from yours.
+should be done here.  Each frame starts blank and must be fully redrawn as the
+surface is double-buffered.  Vsync is on by default, but don't expect it to be
+on, so this procedure may be called irregularly, or the user's display may have
+a different refresh rate from yours.
 
 CALLBACKS
     The callbacks are the interface between a script and the crustygame
@@ -298,11 +302,13 @@ quick convenience.
 
 Graphics Callbacks
     The way graphics works in CrustyGame is really part of the gimmick of it.
-It is a fairly flexible, tile and layer based system.  Tilesets must be
-provided to the engine, then tilemaps must be created and populated with tiles
-and optional attributes, then layers must be created and assigned tilemaps.
-Many layers may have the same tilemap.  Then layer parameters should be
-specified and finally indicated to be drawn to the screen.
+It is a fairly flexible, tile and layer based system with some differences to
+work a bit better with more modern graphics systems.  Tilesets must be provided
+to the engine, then tilemaps must be created and populated with tiles and
+optional attributes, then layers must be created and assigned tilemaps.  Many
+layers may have the same tilemap.  Then layer parameters should be specified and
+finally indicated to be drawn to the screen.  Many of these have helpers in
+examples/crustygame.inc.
 
 gfx_set_buffer (W)
     Pass in a buffer to be used by a following callback which needs a buffer.
@@ -319,8 +325,8 @@ been passed in and processed somehow.
 gfx_add_tileset (W)
     Add a tileset from a buffer provided by gfx_set_buffer.  This callback
 takes a buffer of 5 ints.  Width of the graphic, in pixels, height of the
-graphic, in pixels, the pitch of the graphic, in bytes, the width of each
-tile, in pixels and the width of each tile in pixels.  The graphics data must
+graphic, in pixels, the row pitch of the graphic, in bytes, the width of each
+tile, in pixels and the height of each tile in pixels.  The graphics data must
 be 32 bit color in A8R8G8B8 order, with the origin pixel on the top-left, then
 proceeding row by row.  A bmpconvert utility is provided.  The GIMP (and
 possibly others) are able to output BMPs with alpha channel, usable with this
@@ -346,22 +352,146 @@ gfx_free_tilemap (W)
 freed tilesets.
 
 gfx_set_tilemap_tileset (W)
+    Assign a tileset to a tilemap.  A tileset may be used on many tilemaps.
+
+gfx_set_tilemap_map (W)
     Provide tilemap data to be copied in to the tilemap's own data.  Accepts 5
 ints.  X position of where to start copying to, in tiles.  Y position of where
-to start copying to, in tiles.  The pitch, in tiles
-gfx_set_tilemap_map (W)
-gfx_set_tilemap_attr_flags (W)
-gfx_set_tilemap_attr_colormod (W)
-gfx_update_tilemap (W)
-gfx_add_layer (W)
-gfx_free_layer (W)
-gfx_set_layer_pos (W)
-gfx_set_layer_window (W)
-gfx_set_layer_scroll_pos (W)
-gfx_set_layer_scale (W)
-gfx_set_layer_colormod (W)
-gfx_set_layer_blendmode (W)
-gfx_set_video_mode (W)
-gfx_get_width (R)
-gfx_get_height (R)
+to start copying to, in tiles.  The row pitch of the whole tilemap data, in
+tiles.  The width of the tilset data to be copied, in tiles and the height of
+the tileset data to be copied, in tiles.  The data is copied from the buffer
+provided with gfx_set_buffer.  Each item takes an int.  A 0 may be passed in
+to the width or height to indicate the full width or full height and a -1 may
+be passed in for pitch to specify that the width is the same.
 
+gfx_set_tilemap_attr_flags (W)
+    Provide an array of tile attribute flags.  Arguments are the same as
+gfx_set_tilemap_map.  Each item is an int, with the following flags, defined
+in examples/crustygame.inc:
+TILEMAP_HFLIP_MASK  Flip the tile horizontally.
+TILEMAP_VFLIP_MASK  Flip the tile vertically.
+TILEMAP_BFLIP_MASK  Flip the tile in both directions.
+TILEMAP_ROTATE_90   Rotate the tile 90 degrees.  Square tiles only.
+TILEMAP_ROTATE_180  Rotate the tile 180 degrees.
+TILEMAP_ROTATE_270  Rotate the tile 270 degrees.  Square tiles only.
+
+gfx_set_tilemap_attr_colormod (W)
+    Provide an array of tile color modulations.  Arguments are the same as
+gfx_set_tilemap_map.  Each item is an int, describing a 32 bit color in ARGB
+format.  See the TILEMAP_COLOR macro in examples/crustygame.inc.  The tile's
+colors will be proportionally scaled down by however much the color value is
+lower than 255, so for example, 127 would halve the value, 63 would quarter
+the value, etc.
+
+gfx_update_tilemap (W)
+    Actually create or update the tilemap based on the tileset, map and
+attributes provided.  A part of the tilemap can be updated without the whole
+thing being updated.  This takes four arguments: The start X position to
+update in tiles, the start Y position to update in tiles, the width to update
+in tiles and the height to update in tiles.
+
+gfx_add_layer (W)
+    Create a layer and return an id.
+
+gfx_free_layer (W)
+    Free a layer id.  Same rules as the other free calls.
+
+gfx_set_layer_pos (W)
+    Set the position the layer will be drawn at.  It accepts an array of 2
+ints: The X position in pixels and the Y position in pixels.
+
+gfx_set_layer_window (W)
+    Set the window size within the tilemap to draw.  Accepts an array of 2
+ints, X position in pixels and y position in pixels.  Window can be 1,1 to the
+full size of the tilemap.  A 0 may be passed in for an axis reset to full size.
+
+gfx_set_layer_scroll_pos (W)
+    Set the scroll position within the tilemap to start drawing.  This
+coincides closely with the layer window size.  The restriction is that while
+it will tile out past the right edge, bottom edge and bottom-right corner, it
+won't do this infinitely, only once, so the bottom-right corner must be within
+1 to 1 less than twice the total length of an axis.
+
+gfx_set_layer_scale (W)
+    Set the scale of a layer to be drawn.  Accepts 2 floats, the X scale and
+the Y scale.
+
+gfx_set_layer_colormod (W)
+    Sets the color modulation for drawing this layer.  May be combined with
+tilemap attribute colormod, it'll just be stacked.  Accepts the same format.
+
+gfx_set_layer_blendmode (W)
+    Sets the layer blend mode.  Accepts a single integer.  Defines are in
+examples/crustygame.inc, which include:
+GFX_BLENDMODE_BLEND  Alpha blend the layer on top of the image.  Colors will
+be blended between the background and the layer proportional to the alpha
+value of the pixel, including the colormod.
+GFX_BLENDMODE_ADD  Layer colors will be added to the existing colors behind
+it, proportional to the layer alpha, including colormod.
+GFX_BLENDMODE_MOD  Like colormod.  Color values will be proportionally
+reduced.  Alpha is ignored in this case.
+GFX_BLENDMODE_MUL  I'm not really sure what this is supposed to do, just one
+of the ones SDL comes with and its description isn't very clear.
+GFX_BLENDMODE_SUB  Like add, just subtracts the layer colors from the layer
+behind it, proportional to alpha, colormod included.
+
+gfx_set_video_mode (W)
+    Set the video mode.  Accepts a string formatted as <width>x<height> to
+change the size of the window.  Also accepts fullscreen, to fill the screen at
+the desktop resolution.  This never actually attempts to change desktop
+display modes, so you'll need to find the width and height after fullscreening
+and act accordingly.
+
+gfx_get_width (R)
+    Get the width of the window in pixels, useful for getting the resolution
+when fullscreened.
+
+gfx_get_height (R)
+    Get the width of the window in pixels.
+
+event_get_type (R)
+    Gets the type of an event received.  Defines for event types are in
+examples/crustygame.inc.
+
+event_get_time (R)
+    Gets the timestamp of the event, in milliseconds.
+
+event_get_button (R)
+    Gets the button an event happened on.  Either what key, mouse button or
+controller button.  Also tells which axis or POV hat an axis event happened
+on.
+
+event_get_x (R)
+    Gets the X motion of an action.  Gets the direction of a POV hat press.
+Gets mouse click positions as well as motion positions.  When the mouse is
+locked to the window, it will get a relative mouse movement, if the mouse is
+not locked, it'll just get the absolute position within the window the corsur
+moved to.  Also gets controller axis motions indicated by the axis in
+event_get_button.
+ 
+event_get_y (R)
+    Gets the Y motion of an action, like event_get_x but a bit more limited.
+Doesn't respond to hats or controller axes.
+
+event_set_mouse_capture (W)
+    Write a non-zero value to capture the mouse, write a 0 to uncapture the
+mouse.  The user may force uncapture the mouse with CTRL+F10, and the mouse
+won't be able to be captured again until the user presses CTRL+F10 a second
+time.
+
+savedata_seek (W)
+    Seek to a position in save data storage.
+
+savedata_write (W)
+    Write a value in the save data storage.  Enough space after the position
+in the storage needs to be present for the write to complete.  A string
+character is 1 byte, an int is 4 bytes and a float is 8 bytes.
+
+savedata_read_char (R)
+    Read a char value from save data storage.
+
+savedata_read_int (R)
+    Read an int value from save data storage.
+
+savedata_read_float (R)
+    Read a flat value from save data storage.
