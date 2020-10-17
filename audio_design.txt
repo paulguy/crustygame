@@ -1,0 +1,57 @@
+audio_get_rate -> (int)
+audio_get_channels -> (int)
+audio_get_fragment_size -> (int)
+audio_set_fragments (int)count
+audio_set_enabled (int)enabled
+
+audio_set_buffer (int/float)buffer
+audio_get_return (int)return
+
+(first N buffers are the audio channels, where N is the number of channels...
+will figure out channel order, but it'll probably just be whatever it is in
+SDL.)
+audio_add_buffer format (int)size
+    AUDIO_FORMAT_INT
+    AUDIO_FORMAT_FLOAT
+    AUDIO_USE_BUFFER
+audio_free_buffer (int)id
+
+audio_add_envelope -> id
+audio_free_envelope (int)id
+audio_set_envelope_pos (int)pos
+audio_set_envelope_output (int)id
+audio_add_envelope_node (int)pos (float)amp (float)slope (int)length
+audio_set_envelope_node (int)num (int)pos (float)amp (float)slope (int)length
+audio_set_envelope_mode mode
+    AUDIO_MODE_ONESHOT
+    AUDIO_MODE_LOOP_FORWARD
+    AUDIO_MODE_LOOP_PINGPONG
+audio_set_envelope_loop_start (int)pos
+audio_set_envelope_loop_end (int)pos (if==start, end)
+
+audio_add_player -> id
+audio_free_player (int)id
+audio_set_player_pos (int)pos
+audio_set_player_input_buffer (int)id
+audio_set_player_output_buffer (int)id
+audio_set_player_volume_source_type type
+    AUDIO_SOURCE_CONSTANT
+    AUDIO_SOURCE_BUFFER (int/float)
+audio_set_player_volume_source (int)id/(float)volume
+    (if float, volume is just multiplied to produce the output, if int, output
+is amplitude modulated with the volume source.)
+audio_set_player_mode mode
+    (same as audio_set_envelope_mode, in addition to-)
+    AUDIO_MODE_PHASE_SOURCE
+audio_set_player_phase_source (int)id
+    (only used for AUDIO_MODE_PHASE_SOURCE)
+    (if float, range is 0.0 to 1.0 to indicate start to end, otherwise if it's
+an int source, it'll be an absolute position)
+audio_set_player_speed (float)speed
+    (not used if audio_set_player_mode is AUDIO_MODE_PHASE_SOURCE)
+audio_set_player_speed_modulator_type type
+    (same as audio_set_player_volume_source_type)
+audio_set_player_speed_modulator (int)id
+audio_start_player (int)samples -> samples
+
+hopefully eventually effects to operate on buffers
