@@ -1070,6 +1070,27 @@ int savedata_read_float(void *priv, void *val, unsigned int index) {
     return(0);
 }
 
+int set_window_title(void *priv,
+                     CrustyType type,
+                     unsigned int size,
+                     void *ptr,
+                     unsigned int index) {
+    CrustyGame *state = (CrustyGame *)priv;
+
+    if(type != CRUSTY_TYPE_CHAR) {
+        fprintf(stderr, "Wrong type.\n");
+        return(-1);
+    }
+
+    char title[size + 1];
+    memcpy(title, ptr, size + 1);
+    title[size] = '\0';
+ 
+    SDL_SetWindowTitle(state->win, title);
+
+    return(0);
+}
+
 CrustyCallback cb[] = {
     {
         .name = "out", .length = 1, .readType = CRUSTY_TYPE_NONE,
@@ -1314,6 +1335,12 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_FLOAT,
         .read = savedata_read_float, .readpriv = &state,
         .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "set_window_title", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = set_window_title, .writepriv = &state
     }
 };
 

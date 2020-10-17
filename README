@@ -300,6 +300,10 @@ the current UNIX time.  If you need something more repeatable or with other
 special characteristics, you can always implement your own, but this is a
 quick convenience.
 
+set_window_title (W)
+    Sets the window title.  Accepts a string.  Doesn't need to be null
+terminated.
+
 Graphics Callbacks
     The way graphics works in CrustyGame is really part of the gimmick of it.
 It is a fairly flexible, tile and layer based system with some differences to

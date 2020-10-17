@@ -549,6 +549,8 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
+    move set_window_title WINDOW_TITLE
+
     call load_high_scores
 
     call set_video_mode temp videomode

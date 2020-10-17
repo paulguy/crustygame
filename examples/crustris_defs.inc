@@ -1,3 +1,5 @@
+static WINDOW_TITLE string "Crustris"
+
 expr STARTING_LEVEL 0
 expr LINES_PER_LEVEL 10
 expr MAX_LEVEL 20
