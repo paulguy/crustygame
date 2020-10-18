@@ -1,0 +1,22 @@
+All the content in this directory is released in to the public domain, use it
+as you wish to reference or copy.
+
+Running Crustris
+Run crustris.cvm with crustygame from within the directory containing its
+other files.  It can accept a parameter VIDEOMODE to set the video mode, for
+example: `../crustygame crustris.cvm -DVIDEOMODE=1280x960`
+
+Controls for Crustris
+Q - Counter Clockwise Rotation
+E - Clockwise Rotation
+A - Move Left
+S - Move Down Faster
+D - Move Right
+F - Toggle Fullscreen
+WASD - High Score Screen Cursor
+ENTER - Start Game, Continue from Game Over, Select Letter on High Score
+Screen, Confirm High Score
+ESC - Quit
+
+Otherwise, it's like that other game with the 4 block pieces that you make
+and clear lines with.
