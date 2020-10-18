@@ -23,12 +23,6 @@ audio_set_envelope_output (int)id
 audio_set_envelope_output_pos (int)pos
 audio_add_envelope_node (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_node (int)num (int)pos (float)amp (float)slope (int)length
-audio_set_envelope_mode mode
-    AUDIO_MODE_ONESHOT
-    AUDIO_MODE_ONESHOT_BACKWARD
-    AUDIO_MODE_LOOP_FORWARD
-    AUDIO_MODE_LOOP_BACKWARD
-    AUDIO_MODE_LOOP_PINGPONG
 audio_set_envelope_loop_start (int)pos
 audio_set_envelope_loop_end (int)pos (if==start, end)
 
@@ -38,7 +32,11 @@ audio_set_player_input_buffer (int)id
 audio_set_player_input_buffer_pos (int)id
     (overridden when audio_set_player_mode is AUDIO_MODE_PHASE_SOURCE)
 audio_set_player_output_buffer (int)id
-audio_seT_player_output_buffer_pos (int)pos
+audio_set_player_output_buffer_pos (int)pos
+audio_set_player_output_mode mode
+    AUDIO_OUTPUT_REPLACE
+    AUDIO_OUTPUT_ADD
+    AUDIO_OUTPUT_SUB
 audio_set_player_volume_source_type type
     AUDIO_SOURCE_CONSTANT
     AUDIO_SOURCE_BUFFER (int/float)
@@ -46,7 +44,7 @@ audio_set_player_volume_source (int)id/(float)volume
     (if float, volume is just multiplied to produce the output, if int, output
 is amplitude modulated with the volume source.)
 audio_set_player_mode mode
-    (same as audio_set_envelope_mode, in addition to-)
+    AUDIO_MODE_SPEED
     AUDIO_MODE_PHASE_SOURCE
 audio_set_player_phase_source (int)id
     (only used for AUDIO_MODE_PHASE_SOURCE)
@@ -57,7 +55,140 @@ audio_set_player_speed (float)speed
 audio_set_player_speed_modulator_type type
     (same as audio_set_player_volume_source_type)
 audio_set_player_speed_modulator (int)id
+    (ignored if audio_Set_speed_modulator_type is AUDIO_SOURCE_CONSTANT)
+audio_set_player_speed_modulator_scale (float)scale
+    (scale for integer speed modulator buffer)
 audio_start_player (int)samples -> samples
     (audio player stops if any source buffer runs out)
+
+Player logic overview:  The hope is to figure out all the conditions first and
+have the call to generate resolve to a tight for loop.
+*
+for samples < requested_samples &&
+    outpos < outsize
+mode SPEED
+for inpos < size &&
+    inpos >= 0
+ speed modulator type CONSTANT
+ inpos += speed
+  volume mode CONSTANT
+  sample *= volume
+   input buffer type int output buffer type int
+   sample = sample
+    output mode REPLACE
+    outbuffer[pos] = sample * volume
+    output mode ADD
+    outbuffer[pos] += sample * volume
+    output mode SUB
+    outbuffer[pos -= sample * volume
+   input buffer type int output buffer type float
+   sample = (float)sample / 32768.0
+    output mode REPLACE
+    outbuffer[pos] = sample * volume / 32768.0
+    output mode ADD
+    outbuffer[pos] += sample * volume / 32768.0
+    output mode SUB
+    outbuffer[pos -= sample * volume / 32768.0
+   input buffer type float output buffer type int
+   sample = sample * 32767.0
+    output mode REPLACE
+    outbuffer[pos] = sample * volume * 32767.0
+    output mode ADD
+    outbuffer[pos] += sample * volume * 32767.0
+    output mode SUB
+    outbuffer[pos -= sample * volume * 32767.0
+   input buffer type float output buffer type float
+   sample = sample
+    output mode REPLACE
+    outbuffer[pos] = sample * volume
+    output mode ADD
+    outbuffer[pos] += sample * volume
+    output mode SUB
+    outbuffer[pos -= sample * volume
+  volume mode BUFFER
+  for volbufferpos < volbuffersize
+  volbufferpos++
+   volume buffer type int
+   sample *= volbuffer[volbufferpos] / 32768.0
+    input buffer type int output buffer type int
+    sample = sample
+     output mode REPLACE
+     outbuffer[pos] = sample * (volbuffer[vulbufferpos] / 32768.0)
+     output mode ADD
+     outbuffer[pos] += sample * (volbuffer[vulbufferpos] / 32768.0)
+     output mode SUB
+     outbuffer[pos -= sample * (volbuffer[vulbufferpos] / 32768.0)
+    input buffer type int output buffer type float
+    sample = (float)sample / 32768.0
+     output mode REPLACE
+     outbuffer[pos] = sample * (volbuffer[vulbufferpos] / 32768.0) / 32768.0
+     output mode ADD
+     outbuffer[pos] += sample * (volbuffer[vulbufferpos] / 32768.0) / 32768.0
+     output mode SUB
+     outbuffer[pos -= sample * (volbuffer[vulbufferpos] / 32768.0) / 32768.0
+    input buffer type float output buffer type int
+    sample = sample * 32767.0
+     output mode REPLACE
+     outbuffer[pos] = sample * (volbuffer[vulbufferpos] / 32768.0) * 32767.0
+     output mode ADD
+     outbuffer[pos] += sample * (volbuffer[vulbufferpos] / 32768.0) * 32767.0
+     output mode SUB
+     outbuffer[pos -= sample * (volbuffer[vulbufferpos] / 32768.0) * 32767.0
+    input buffer type float output buffer type float
+    sample = sample
+     output mode REPLACE
+     outbuffer[pos] = sample * (volbuffer[vulbufferpos] / 32768.0)
+     output mode ADD
+     outbuffer[pos] += sample * (volbuffer[vulbufferpos] / 32768.0)
+     output mode SUB
+     outbuffer[pos -= sample * (volbuffer[vulbufferpos] / 32768.0)
+   volume buffer type float
+   sample *= volbuffer[volbufferpos]
+    input buffer type int output buffer type int
+    sample = sample
+     output mode REPLACE
+     outbuffer[pos] = sample * volume
+     output mode ADD
+     outbuffer[pos] += sample * volume
+     output mode SUB
+     outbuffer[pos -= sample * volume
+    input buffer type int output buffer type float
+    sample = (float)sample / 32768.0
+     output mode REPLACE
+     outbuffer[pos] = sample * volume / 32768.0
+     output mode ADD
+     outbuffer[pos] += sample * volume / 32768.0
+     output mode SUB
+     outbuffer[pos -= sample * volume / 32768.0
+    input buffer type float output buffer type int
+    sample = sample * 32767.0
+     output mode REPLACE
+     outbuffer[pos] = sample * volume * 32767.0
+     output mode ADD
+     outbuffer[pos] += sample * volume * 32767.0
+     output mode SUB
+     outbuffer[pos -= sample * volume * 32767.0
+    input buffer type float output buffer type float
+    sample = sample
+     output mode REPLACE
+     outbuffer[pos] = sample * volume
+     output mode ADD
+     outbuffer[pos] += sample * volume
+     output mode SUB
+     outbuffer[pos -= sample * volume
+ speed modulator type BUFFER
+ for speedbufferpos < speedbuffersize
+ speedbufferpos++
+  speed modulator buffer type int
+  inpos += speed * (speedbuffer[speedbufferpos] / 32768.0 * speedscale)
+  speed modulator buffer type float
+  inpos += speed * speedbuffer[speedbufferpos]
+mode PHASE_SOURCE
+for phasebufferpos < phasebuffersize
+phasebufferpos++
+ phase buffer type int
+ inpos = phasebuffer[phasebufferpos]
+ phase buffer type float
+ inpos = insize * phasebuffer[phasebufferpos]
 
 hopefully eventually effects to operate on buffers
