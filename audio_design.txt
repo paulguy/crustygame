@@ -20,20 +20,25 @@ audio_add_envelope -> id
 audio_free_envelope (int)id
 audio_set_envelope_pos (int)pos
 audio_set_envelope_output (int)id
+audio_set_envelope_output_pos (int)pos
 audio_add_envelope_node (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_node (int)num (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_mode mode
     AUDIO_MODE_ONESHOT
+    AUDIO_MODE_ONESHOT_BACKWARD
     AUDIO_MODE_LOOP_FORWARD
+    AUDIO_MODE_LOOP_BACKWARD
     AUDIO_MODE_LOOP_PINGPONG
 audio_set_envelope_loop_start (int)pos
 audio_set_envelope_loop_end (int)pos (if==start, end)
 
 audio_add_player -> id
 audio_free_player (int)id
-audio_set_player_pos (int)pos
 audio_set_player_input_buffer (int)id
+audio_set_player_input_buffer_pos (int)id
+    (overridden when audio_set_player_mode is AUDIO_MODE_PHASE_SOURCE)
 audio_set_player_output_buffer (int)id
+audio_seT_player_output_buffer_pos (int)pos
 audio_set_player_volume_source_type type
     AUDIO_SOURCE_CONSTANT
     AUDIO_SOURCE_BUFFER (int/float)
@@ -53,5 +58,6 @@ audio_set_player_speed_modulator_type type
     (same as audio_set_player_volume_source_type)
 audio_set_player_speed_modulator (int)id
 audio_start_player (int)samples -> samples
+    (audio player stops if any source buffer runs out)
 
 hopefully eventually effects to operate on buffers
