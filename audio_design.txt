@@ -3,6 +3,8 @@ audio_get_channels -> (int)
 audio_get_fragment_size -> (int)
 audio_set_fragments (int)count
 audio_set_enabled (int)enabled
+audio_get_samples_needed -> (int)
+audio_has_underrun -> (int)
 
 audio_set_buffer (int/float)buffer
 audio_get_return (int)return
@@ -21,6 +23,7 @@ audio_free_envelope (int)id
 audio_set_envelope_pos (int)pos
 audio_set_envelope_output (int)id
 audio_set_envelope_output_pos (int)pos
+    (make sure channel buffer positions can't be set)
 audio_add_envelope_node (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_node (int)num (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_loop_start (int)pos
@@ -33,6 +36,7 @@ audio_set_player_input_buffer_pos (int)id
     (overridden when audio_set_player_mode is AUDIO_MODE_PHASE_SOURCE)
 audio_set_player_output_buffer (int)id
 audio_set_player_output_buffer_pos (int)pos
+    (make sure channel buffer positions can't be set)
 audio_set_player_output_mode mode
     AUDIO_OUTPUT_REPLACE
     AUDIO_OUTPUT_ADD
@@ -62,7 +66,12 @@ audio_start_player (int)samples -> samples
     (audio player stops if any source buffer runs out)
 
 Player logic overview:  The hope is to figure out all the conditions first and
-have the call to generate resolve to a tight for loop.
+have the call to generate resolve to a tight for loop, so this whole decision
+tree thing will probably be more or less inverted, or at least all the
+relevant for conditions will be at the lowest level, and the rest of the
+conditions will lead up to that, so there's probably going to be something
+like 50 for loops or something.  Actually it's something like 24 * 3 so it's
+closer to 72 I guess.
 *
 for samples < requested_samples &&
     outpos < outsize
