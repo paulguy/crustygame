@@ -54,12 +54,11 @@
                                        (CA << TILEMAP_ASHIFT))
 
 typedef struct LayerList_t LayerList;
+typedef void (*layerlist_log_cb_t)(void *priv, const char *fmt, ...);
 
 LayerList *layerlist_new(SDL_Renderer *renderer,
                          Uint32 format,
-                         void (*log_cb)(void *priv,
-                                        const char *fmt,
-                                        ...),
+                         layerlist_log_cb_t log_cb,
                          void *log_priv);
 void layerlist_free(LayerList *ll);
 
