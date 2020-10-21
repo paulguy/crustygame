@@ -23,7 +23,6 @@ audio_free_envelope (int)id
 audio_set_envelope_pos (int)pos
 audio_set_envelope_output (int)bufferid
 audio_set_envelope_output_pos (int)pos
-    (make sure channel buffer positions can't be set)
 audio_add_envelope_node (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_node (int)num (int)pos (float)amp (float)slope (int)length
 audio_set_envelope_loop_start (int)pos

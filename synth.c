@@ -2,6 +2,8 @@
 #include <string.h>
 #include <SDL2.h>
 
+#include "synth.h"
+
 #define DEFAULT_RATE (48000)
 /* try to determine a sane size which is roughly half a frame long at 60 FPS. 48000 / 120 = 400, nearest power of two is 512, user can set more fragments if they need */
 #define DEFAULT_FRAGMENT_SIZE (512)
@@ -11,19 +13,23 @@
     FMT, \
     ##__VA_ARGS__)
 
-#define SYNTH_STOPPED (0)
-#define SYNTH_ENABLED (1)
-#define SYNTH_RUNNING (2)
-
-typedef int (*synth_frame_cb_t)(void *priv);
-typedef void (*synth_log_cb_t)(void *priv, const char *fmt, ...);
-
-/* most common formats */
 typedef enum {
-    SYNTH_TYPE_U8,
-    SYNTH_TYPE_S16,
-    SYNTH_TYPE_F32
-} SynthImportType;
+    SYNTH_STOPPED,
+    SYNTH_ENABLED,
+    SYNTH_RUNNING
+} SynthState;
+
+typedef struct {
+    float *data;
+    unsigned int size;
+    unsigned int ref;
+} SynthBuffer;
+
+typedef struct {
+} SynthPlayer;
+
+typedef struct {
+} SynthEffect;
 
 typedef struct {
     unsigned int rate;
@@ -36,7 +42,7 @@ typedef struct {
     unsigned int bufferfilled;
     unsigned int buffersize;
     int underrun;
-    unsigned int enable;
+    SynthState state;
     int needconversion;
     SDL_AudioCVT converter;
 
@@ -49,18 +55,15 @@ typedef struct {
     SynthBuffer *buffer;
     unsigned int buffersmem;
 
+    SynthPlayer *player;
+    unsigned int playersmem;
+
+    SynthEffect *effect;
+    unsigned int effectsmem;
+
     synth_log_cb_t synth_log_cb;
     void *synth_log_priv;
 } Synth;
-
-typedef struct {
-    float *data;
-    unsigned int size;
-    unsigned int ref;
-} SynthBuffer;
-
-typedef struct {
-} SynthPlayer;
 
 /* implement a simple but hardly transparent ring buffer.
  * Guarantee that only up to the cursor or the end of the buffer may be
@@ -128,8 +131,8 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
         todo = length > available ? available : length;
         /* convert in-place, because it can only be shrunken from 32 bits to
          * 16 bits, or just left as-is as 32 bits. */
-        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
         s->converter.len = todo * sizeof(float);
+        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
         /* ignore return value because the documentation indicates the only
          * fail state is that buf is NULL, which it won't be. */
         SDL_ConvertAudio(&(s->converter));
@@ -143,8 +146,8 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             /* more to do, so do the same thing again */
             available = get_samples_available(s);
             todo = length > available ? available : length;
-            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
             s->converter.len = todo * sizeof(float);
+            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
             SDL_ConvertAudio(&(s->converter));
             memcpy(stream,
                    &(s->channelbuffers[0].data[readcursor]),
@@ -161,57 +164,64 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
         /* much like mono, just do it to both channels and zipper them in to
          * the output */
         todo = length > available ? available : length;
-        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
         s->converter.len = todo * sizeof(float);
+        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
         SDL_ConvertAudio(&(s->converter));
         s->converter.buf = &(s->channelbuffers[1].data[readcursor]);
         SDL_ConvertAudio(&(s->converter));
         /* this is probably slow */
         if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
-            for(i = 0; i < todo / sizeof(Sint32); i++) {
+            for(i = 0; i < todo; i++) {
                 ((Sint32 *)stream)[i * 2] =
                     ((Sint32 *)(s->channelbuffers[0].data))[readcursor + i];
                 ((Sint32 *)stream)[i * 2 + 1] =
                     ((Sint32 *)(s->channelbuffers[1].data))[readcursor + i];
             }
+            /* clear used buffer so the converted data isn't reconverted from
+             * garbage possibly producing horrible noises */
+            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
-            for(i = 0; i < todo / sizeof(Sint16); i++) {
+            for(i = 0; i < todo; i++) {
                 ((Sint16 *)stream)[i * 2] =
                     ((Sint16 *)(s->channelbuffers[0].data))[readcursor + i];
                 ((Sint16 *)stream)[i * 2 + 1] =
                     ((Sint16 *)(s->channelbuffers[1].data))[readcursor + i];
             }
-        } else { /* 8 */
+            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint16));
+        } else { /* 8, very unlikely */
             for(i = 0; i < todo; i++) {
                 stream[i * 2] =
                     (char *)(s->channelbuffers[0].data)[readcursor + i];
                 stream[i * 2 + 1] =
                     (char *)(s->channelbuffers[1].data)[readcursor + i];
             }
+            memset(s->channelbuffers[0].data, 0, todo);
         }
         update_samples_available(s, todo);
         length -= todo;
         if(length > 0) {
             todo = length > available ? available : length;
-            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
             s->converter.len = todo * sizeof(float);
+            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
             SDL_ConvertAudio(&(s->converter));
             s->converter.buf = &(s->channelbuffers[1].data[readcursor]);
             SDL_ConvertAudio(&(s->converter));
             if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
-                for(i = 0; i < todo / sizeof(Sint32); i++) {
+                for(i = 0; i < todo; i++) {
                     ((Sint32 *)stream)[i * 2] =
                         ((Sint32 *)(s->channelbuffers[0].data))[readcursor + i];
                     ((Sint32 *)stream)[i * 2 + 1] =
                         ((Sint32 *)(s->channelbuffers[1].data))[readcursor + i];
                 }
+                memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
-                for(i = 0; i < todo / sizeof(Sint16); i++) {
+                for(i = 0; i < todo; i++) {
                     ((Sint16 *)stream)[i * 2] =
                         ((Sint16 *)(s->channelbuffers[0].data))[readcursor + i];
                     ((Sint16 *)stream)[i * 2 + 1] =
                         ((Sint16 *)(s->channelbuffers[1].data))[readcursor + i];
                 }
+                memset(s->channelbuffers[0].data, 0, todo);
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     stream[i * 2] =
@@ -219,6 +229,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     stream[i * 2 + 1] =
                         (char *)(s->channelbuffers[1].data)[readcursor + i];
                 }
+                memset(s->channelbuffers[0].data, 0, todo);
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -231,26 +242,28 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
          * a bunch of unrolled versions of this unless surround sound becomes
          * something frequently used with this.. */
         todo = length > available ? available : length;
-        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
         s->converter.len = todo * sizeof(float);
-        SDL_ConvertAudio(&(s->converter));
-        s->converter.buf = &(s->channelbuffers[1].data[readcursor]);
-        SDL_ConvertAudio(&(s->converter));
+        for(i = 0; i < s->channels; i++) {
+            s->converter.buf = &(s->channelbuffers[i].data[readcursor]);
+            SDL_ConvertAudio(&(s->converter));
+        }
         /* this is probably very slow */
         if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
-            for(i = 0; i < todo / sizeof(Sint32); i++) {
+            for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     ((Sint32 *)stream)[i * s->channels + j] =
                         ((Sint32 *)(s->channelbuffers[j].data))[readcursor + i];
                 }
             }
+            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
-            for(i = 0; i < todo / sizeof(Sint16); i++) {
+            for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     ((Sint16 *)stream)[i * s->channels + j] =
                         ((Sint16 *)(s->channelbuffers[j].data))[readcursor + i];
                 }
             }
+            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint16));
         } else { /* 8 */
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
@@ -258,30 +271,33 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                         ((char *)(s->channelbuffers[j].data))[readcursor + i];
                 }
             }
+            memset(s->channelbuffers[0].data, 0, todo);
         }
         update_samples_available(s, todo);
         length -= todo;
         if(length > 0) {
             todo = length > available ? available : length;
-            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
             s->converter.len = todo * sizeof(float);
-            SDL_ConvertAudio(&(s->converter));
-            s->converter.buf = &(s->channelbuffers[1].data[readcursor]);
-            SDL_ConvertAudio(&(s->converter));
+            for(i = 0; i < s->channels; i++) {
+                s->converter.buf = &(s->channelbuffers[i].data[readcursor]);
+                SDL_ConvertAudio(&(s->converter));
+            }
             if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
-                for(i = 0; i < todo / sizeof(Sint32); i++) {
+                for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         ((Sint32 *)stream)[i * s->channels + j] =
                             ((Sint32 *)(s->channelbuffers[j].data))[readcursor + i];
                     }
                 }
+                memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
-                for(i = 0; i < todo / sizeof(Sint16); i++) {
+                for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         ((Sint16 *)stream)[i * s->channels + j] =
                             ((Sint16 *)(s->channelbuffers[j].data))[readcursor + i];
                     }
                 }
+                memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint16));
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
@@ -289,6 +305,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                             ((char *)(s->channelbuffers[j].data))[readcursor + i];
                     }
                 }
+                memset(s->channelbuffers[0].data, 0, todo);
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -386,8 +403,12 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
     s->channelbuffers = NULL;
     s->buffer = NULL;
     s->buffersmem = 0;
+    s->player = NULL;
+    s->playersmem = 0;
+    s->effect = NULL;
+    s->effectsmem = 0;
     s->underrun = 0;
-    s->enable = 0;
+    s->state = SYNTH_STOPPED;
     s->synth_frame_cb = synth_frame_cb;
     s->synth_frame_priv = synth_frame_priv;
 
@@ -439,7 +460,7 @@ int synth_has_underrun(Synth *s) {
 int audio_set_enabled(Synth *s, int enabled) {
     if(enabled == 0) {
         SDL_PauseAudio(1);
-        s->enabled = 0;
+        s->state = SYNTH_STOPPED;
     } else {
         if(s->channelbuffers == NULL) {
             fprintf(stderr, "Audio buffers haven't been set up.  Set fragment "
@@ -447,7 +468,7 @@ int audio_set_enabled(Synth *s, int enabled) {
             return(-1);
         }
         /* signal to enable */
-        s->enabled = SYNTH_ENABLED;
+        s->state = SYNTH_ENABLED;
     }
 
     return(0);
@@ -456,16 +477,19 @@ int audio_set_enabled(Synth *s, int enabled) {
 int synth_frame(Synth *s) {
     unsigned int needed;
 
-    if(enabled == SYNTH_ENABLED) {
+    if(s->state == SYNTH_ENABLED) {
+        /* signaled to start.  Reset everything, fill the buffer up then start
+         * the audio, so there's something to be consumed right away. */
+        /* Audio is stopped here, so no need to lock */
         s->bufferfilled = 0;
         s->readcursor = 0;
         s->writecursor = 0;
         s->underrun = 0;
         return(s->synth_frame_cb(synth_frame_priv));
         update_samples_needed(s->buffersize);
-        s->enabled == SYNTH_RUNNING;
+        s->state == SYNTH_RUNNING;
         SDL_PauseAudio(0);
-    } else if(enabled == SYNTH_RUNNING) {
+    } else if(s->state == SYNTH_RUNNING) {
         needed = synth_get_samples_needed(s);
         if(needed > 0) {
             SDL_LockAudio();
@@ -492,7 +516,7 @@ int synth_set_fragments(Synth *s,
         return(-1);
     }
     
-    if(s->enabled != SYNTH_STOPPED) {
+    if(s->state != SYNTH_STOPPED) {
         fprintf(stderr, "Synth must be stopped before changing fragment size.\n");
         return(-1);
     }
