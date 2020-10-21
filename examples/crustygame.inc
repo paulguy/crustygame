@@ -92,14 +92,14 @@ expr GFX_ADD_TILESET_TILEHEIGHT  4
 proc gfx_add_tileset DATA GWIDTH GHEIGHT PTCH TWIDTH THEIGHT OUTID
     local STORAGE ints GFX_ADD_TILESET_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_ADD_TILESET_GFXWIDTH GWIDTH
     move STORAGE:GFX_ADD_TILESET_GFXHEIGHT GHEIGHT
     move STORAGE:GFX_ADD_TILESET_PITCH PTCH
     move STORAGE:GFX_ADD_TILESET_TILEWIDTH TWIDTH
     move STORAGE:GFX_ADD_TILESET_TILEHEIGHT THEIGHT
     move gfx_add_tileset STORAGE
-    move OUTID gfx_get_return
+    move OUTID get_return
 ret
 
 expr GFX_ADD_TILEMAP_SIZE   2
@@ -112,7 +112,7 @@ proc gfx_add_tilemap TSWIDTH TSHEIGHT OUTID
     move STORAGE:GFX_ADD_TILEMAP_WIDTH TSWIDTH
     move STORAGE:GFX_ADD_TILEMAP_HEIGHT TSHEIGHT
     move gfx_add_tilemap STORAGE
-    move OUTID gfx_get_return
+    move OUTID get_return
 ret
 
 expr GFX_SET_TILEMAP_MAP_SIZE   5
@@ -125,7 +125,7 @@ expr GFX_SET_TILEMAP_MAP_HEIGHT 4
 proc gfx_set_tilemap_map TILEMAPID DATA
     local STORAGE ints GFX_SET_TILEMAP_MAP_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_MAP_X 0
     move STORAGE:GFX_SET_TILEMAP_MAP_Y 0
     move STORAGE:GFX_SET_TILEMAP_MAP_PITCH -1
@@ -137,7 +137,7 @@ ret
 proc gfx_set_tilemap_map2 TILEMAPID DATA DESTX DESTY MAPWIDTH MAPHEIGHT
     local STORAGE ints GFX_SET_TILEMAP_MAP_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_MAP_X DESTX
     move STORAGE:GFX_SET_TILEMAP_MAP_Y DESTY
     move STORAGE:GFX_SET_TILEMAP_MAP_PITCH MAPWIDTH
@@ -149,7 +149,7 @@ ret
 proc gfx_set_tilemap_map3 TILEMAPID DATA DESTX DESTY SRCPITCH MAPWIDTH MAPHEIGHT
     local STORAGE ints GFX_SET_TILEMAP_MAP_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_MAP_X DESTX
     move STORAGE:GFX_SET_TILEMAP_MAP_Y DESTY
     move STORAGE:GFX_SET_TILEMAP_MAP_PITCH SRCPITCH
@@ -168,7 +168,7 @@ expr GFX_SET_TILEMAP_ATTRS_HEIGHT 4
 proc gfx_set_tilemap_attr_flags TILEMAPID DATA
     local STORAGE ints GFX_SET_TILEMAP_ATTRS_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_ATTRS_X 0
     move STORAGE:GFX_SET_TILEMAP_ATTRS_Y 0
     move STORAGE:GFX_SET_TILEMAP_ATTRS_PITCH -1
@@ -180,7 +180,7 @@ ret
 proc gfx_set_tilemap_attr_flags2 TILEMAPID DATA DESTX DESTY MAPWIDTH MAPHEIGHT
     local STORAGE ints GFX_SET_TILEMAP_ATTRS_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_ATTRS_X DESTX
     move STORAGE:GFX_SET_TILEMAP_ATTRS_Y DESTY
     move STORAGE:GFX_SET_TILEMAP_ATTRS_PITCH MAPWIDTH
@@ -192,7 +192,7 @@ ret
 proc gfx_set_tilemap_attr_flags3 TILEMAPID DATA DESTX DESTY SRCPITCH MAPWIDTH MAPHEIGHT
     local STORAGE ints GFX_SET_TILEMAP_ATTRS_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_ATTRS_X DESTX
     move STORAGE:GFX_SET_TILEMAP_ATTRS_Y DESTY
     move STORAGE:GFX_SET_TILEMAP_ATTRS_PITCH SRCPITCH
@@ -204,7 +204,7 @@ ret
 proc gfx_set_tilemap_attr_colormod TILEMAPID DATA
     local STORAGE ints GFX_SET_TILEMAP_ATTRS_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_ATTRS_X 0
     move STORAGE:GFX_SET_TILEMAP_ATTRS_Y 0
     move STORAGE:GFX_SET_TILEMAP_ATTRS_PITCH -1
@@ -216,7 +216,7 @@ ret
 proc gfx_set_tilemap_attr_colormod2 TILEMAPID DATA DESTX DESTY MAPWIDTH MAPHEIGHT
     local STORAGE ints GFX_SET_TILEMAP_ATTRS_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_ATTRS_X DESTX
     move STORAGE:GFX_SET_TILEMAP_ATTRS_Y DESTY
     move STORAGE:GFX_SET_TILEMAP_ATTRS_PITCH MAPWIDTH
@@ -228,7 +228,7 @@ ret
 proc gfx_set_tilemap_attr_colormod3 TILEMAPID DATA DESTX DESTY SRCPITCH MAPWIDTH MAPHEIGHT
     local STORAGE ints GFX_SET_TILEMAP_ATTRS_SIZE
 
-    move gfx_set_buffer DATA
+    move set_buffer DATA
     move STORAGE:GFX_SET_TILEMAP_ATTRS_X DESTX
     move STORAGE:GFX_SET_TILEMAP_ATTRS_Y DESTY
     move STORAGE:GFX_SET_TILEMAP_ATTRS_PITCH SRCPITCH
@@ -265,7 +265,7 @@ ret
 
 proc gfx_add_layer TILEMAPID OUTID
     move gfx_add_layer TILEMAPID
-    move OUTID gfx_get_return
+    move OUTID get_return
 ret
 
 expr GFX_BLENDMODE_BLEND    0

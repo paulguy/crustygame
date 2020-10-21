@@ -94,11 +94,11 @@ int write_string_to(void *priv,
 }
 
 /* setting/getting general state */
-int gfx_set_buffer(void *priv,
-                   CrustyType type,
-                   unsigned int size,
-                   void *ptr,
-                   unsigned int index) {
+int set_buffer(void *priv,
+               CrustyType type,
+               unsigned int size,
+               void *ptr,
+               unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
     state->buffer = ptr;
@@ -112,7 +112,7 @@ int gfx_set_buffer(void *priv,
     return(0);
 }
 
-int gfx_get_return(void *priv, void *val, unsigned int index) {
+int get_return(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
     *((int *)val) = state->ret;
@@ -1134,15 +1134,15 @@ CrustyCallback cb[] = {
         .write = write_string_to, .writepriv = &CRUSTY_STDERR
     },
     {
-        .name = "gfx_set_buffer", .length = 1,
+        .name = "set_buffer", .length = 1,
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
-        .write = gfx_set_buffer, .writepriv = &state
+        .write = set_buffer, .writepriv = &state
     },
     {
-        .name = "gfx_get_return", .length = 1,
+        .name = "get_return", .length = 1,
         .readType = CRUSTY_TYPE_INT,
-        .read = gfx_get_return, .readpriv = &state,
+        .read = get_return, .readpriv = &state,
         .write = NULL, .writepriv = NULL
     },
     {

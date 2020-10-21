@@ -304,6 +304,18 @@ set_window_title (W)
     Sets the window title.  Accepts a string.  Doesn't need to be null
 terminated.
 
+set_buffer (W)
+    Pass in a buffer to be used by a following callback which needs a buffer.
+The reference provided is held on to.  One can use local variables, but on
+return the reference will go stale, resulting in undefined data being
+referenced.  This won't result in a program crash as the whole stack is always
+accessible, but you might get unexpected results if a callback which uses the
+reference is then called.
+
+get_return (R)
+    Read in a value returned by a write callback, where a structure will have
+been passed in and processed somehow.
+
 Graphics Callbacks
     The way graphics works in CrustyGame is really part of the gimmick of it.
 It is a fairly flexible, tile and layer based system with some differences to
@@ -313,18 +325,6 @@ optional attributes, then layers must be created and assigned tilemaps.  Many
 layers may have the same tilemap.  Then layer parameters should be specified and
 finally indicated to be drawn to the screen.  Many of these have helpers in
 examples/crustygame.inc.
-
-gfx_set_buffer (W)
-    Pass in a buffer to be used by a following callback which needs a buffer.
-The reference provided is held on to.  One can use local variables, but on
-return the reference will go stale, resulting in undefined data being
-referenced.  This won't result in a program crash as the whole stack is always
-accessible, but you might get unexpected results if a callback which uses the
-reference is then called.
-
-gfx_get_return (R)
-    Read in a value returned by a write callback, where a structure will have
-been passed in and processed somehow.
 
 gfx_add_tileset (W)
     Add a tileset from a buffer provided by gfx_set_buffer.  This callback
