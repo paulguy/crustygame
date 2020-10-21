@@ -20,15 +20,6 @@
 #ifndef _CRUSTYVM_H
 #define _CRUSTYVM_H
 
-#define CRUSTY_IO_READ_FUNC_DECL(X)   int (*X)(void *priv, \
-                                               void *val, \
-                                               unsigned int index)
-#define CRUSTY_IO_WRITE_FUNC_DECL(X)  int (*X)(void *priv, \
-                                               CrustyType type, \
-                                               unsigned int size, \
-                                               void *ptr, \
-                                               unsigned int index)
-
 #define CRUSTY_FLAG_DEFAULTS (0)
 #ifdef CRUSTY_TEST
 #define CRUSTY_FLAG_OUTPUT_PASSES (1<<0)
@@ -54,14 +45,24 @@ typedef enum {
     CRUSTY_TYPE_FLOAT
 } CrustyType;
 
+typedef int (*crusty_io_read_func_t)(void *priv,
+                                     void *val,
+                                     unsigned int index);
+typedef int (*crusty_io_write_func_t)(void *priv,
+                                      CrustyType type,
+                                      unsigned int size,
+                                      void *ptr,
+                                      unsigned int index);
+
+
 typedef struct {
     const char *name;
     unsigned int length;
     CrustyType readType;
 
-    CRUSTY_IO_READ_FUNC_DECL(read);
+    crusty_io_read_func_t read;
     void *readpriv;
-    CRUSTY_IO_WRITE_FUNC_DECL(write);
+    crusty_io_write_func_t write;
     void *writepriv;
 } CrustyCallback;
 

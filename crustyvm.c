@@ -97,9 +97,9 @@ typedef struct {
                             position in global stack (from 0) if global */
 
     /* callbacks for IO, both NULL if not IO */
-    CRUSTY_IO_READ_FUNC_DECL(read);
+    crusty_io_read_func_t read;
     void *readpriv;
-    CRUSTY_IO_WRITE_FUNC_DECL(write);
+    crusty_io_write_func_t write;
     void *writepriv;
 } CrustyVariable;
 
