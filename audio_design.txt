@@ -21,6 +21,10 @@ audio_free_buffer (int)id
 audio_add_envelope -> id
 audio_free_envelope (int)id
 audio_set_envelope_pos (int)pos
+audio_set_envelope_mode mode
+    AUDIO_MODE_ONCE
+    AUDIO_MODE_LOOP
+    AUDIO_MODE_PINGPONG
 audio_set_envelope_output (int)bufferid
 audio_set_envelope_output_pos (int)pos
 audio_add_envelope_node (int)pos (float)amp (float)slope (int)length
@@ -40,14 +44,15 @@ audio_set_player_output_buffer_pos (int)pos
 audio_set_player_output_mode mode
     AUDIO_OUTPUT_REPLACE
     AUDIO_OUTPUT_ADD
-    AUDIO_OUTPUT_SUB
 audio_set_player_volume (int)bufferid/(float)volume
     (if type is int, assume it's a buffer id, if type is float, assume it's a
 constant volume multiplier)
 audio_set_player_volume_source_scale (float)scale
     (factor to multiply volume buffer by)
 audio_set_player_mode mode
-    AUDIO_MODE_SPEED
+    AUDIO_MODE_ONCE
+    AUDIO_MODE_LOOP
+    AUDIO_MODE_PINGPONG
     AUDIO_MODE_PHASE_SOURCE
 audio_set_player_phase_source (int)phaseid
     (only used for AUDIO_MODE_PHASE_SOURCE)
@@ -56,23 +61,38 @@ audio_set_player_speed (int)bufferid/(float)speed
     (same as audio_set_player_volume)
 audio_set_player_speed_source_scale
     (factor to multiply speed buffer by)
-audio_start_player (int)samples -> samples
+audio_run_player (int)samples -> samples
     (audio player stops if any source buffer runs out)
 
-Player logic overview:  The hope is to figure out all the conditions first and
-have the call to generate resolve to a tight for loop, so this whole decision
-tree thing will probably be more or less inverted, or at least all the
-relevant for conditions will be at the lowest level, and the rest of the
-conditions will lead up to that, so there's probably going to be something
-like 50 for loops or something.  Actually it's something like 24 * 3 so it's
-closer to 72 I guess.
-Update: Simplified version should be considerably more sane!
+input indexing modes (7)
+ONCE CONSTANT
+ONCE MODULATED
+LOOP CONSTANT
+LOOP MODULATED
+PINGPONG CONSTANT
+PINGPONG MODULATED
+PHASE_MODULATED
+
+output volume modes (2)
+CONSTANT
+MODULATED
+
+output operation modes (2)
+REPLACE
+ADD
+
+total permutations 7 * 2 * 2 = 28
+
 *
 for samples < requested_samples &&
     outpos < outsize
-mode SPEED
-for inpos < size &&
-    inpos >= 0
+mode ONCE
+if inpos == 0 || inpos == size -> stop
+mode LOOP
+if inpos == 0 -> inpos = size
+if inpos == size -> inpos = 0
+mode PINGPONG
+if inpos == 0 || inpos == size -> speed = -speed;
  outpos++
  speed modulator type CONSTANT
  inpos += speed
@@ -82,8 +102,6 @@ for inpos < size &&
    outbuffer[pos] = sample * volume * volumescale
    output mode ADD
    outbuffer[pos] += sample * volume * volumescale
-   output mode SUB
-   outbuffer[pos -= sample * volume * volumescale
   volume mode BUFFER
   for volbufferpos < volbuffersize
   volbufferpos++
@@ -92,8 +110,6 @@ for inpos < size &&
     outbuffer[pos] = sample * volbuffer[volbufferpos] * volumescale
     output mode ADD
     outbuffer[pos] += sample * volbuffer[volbufferpos] * volumescale
-    output mode SUB
-    outbuffer[pos -= sample * volbuffer[volbufferpos] * volumescale
  speed modulator type BUFFER
  for speedbufferpos < speedbuffersize
  speedbufferpos++
@@ -101,8 +117,6 @@ for inpos < size &&
 mode PHASE_SOURCE
 for phasebufferpos < phasebuffersize
 phasebufferpos++
- phase buffer type int
- inpos = phasebuffer[phasebufferpos]
  phase buffer type float
  inpos = insize * phasebuffer[phasebufferpos]
 
