@@ -54,6 +54,8 @@ audio_set_player_mode mode
     AUDIO_MODE_LOOP
     AUDIO_MODE_PINGPONG
     AUDIO_MODE_PHASE_SOURCE
+audio_set_player_loop_start (int)pos
+audio_set_player_loop_end (int)pos
 audio_set_player_phase_source (int)phaseid
     (only used for AUDIO_MODE_PHASE_SOURCE)
     (range is 0.0 to 1.0 to indicate start to end)
@@ -89,10 +91,11 @@ for samples < requested_samples &&
 mode ONCE
 if inpos == 0 || inpos == size -> stop
 mode LOOP
-if inpos == 0 -> inpos = size
-if inpos == size -> inpos = 0
+if inpos >= loopend && speed > 0 -> inpos = loopstart
+if inpos >= loopstart && speed < 0 -> inpos = loopend
 mode PINGPONG
-if inpos == 0 || inpos == size -> speed = -speed;
+if inpos >= loopstart && speed < 0 ||
+   inpos <= loopend && speed > 0 -> speed = -speed;
  outpos++
  speed modulator type CONSTANT
  inpos += speed
