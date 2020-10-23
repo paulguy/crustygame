@@ -51,7 +51,7 @@ audio_set_player_volume_source_scale (float)scale
 audio_set_player_mode mode
     AUDIO_MODE_ONCE
     AUDIO_MODE_LOOP
-    AUDIO_MODE_PINGPONG
+    AUDIO_MODE_PINGPONG (speed scale may become negated)
     AUDIO_MODE_PHASE_SOURCE
 audio_set_player_loop_start (int)pos
 audio_set_player_loop_end (int)pos

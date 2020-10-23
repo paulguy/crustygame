@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <SDL2.h>
 
 #include "synth.h"
@@ -12,6 +13,8 @@
     (SYNTH)->synth_log_cb((SYNTH)->synth_log_priv, \
     FMT, \
     ##__VA_ARGS__)
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 typedef enum {
     SYNTH_STOPPED,
@@ -1314,16 +1317,478 @@ int synth_set_player_speed_source_scale(Synth *s,
     return(0);
 }
 
+/* another heckin' chonky overcomplicated function.  My approach here is to
+ * try to figure out as many conditions and values ahead of time to keep the
+ * loops tight and small and hopefully that'll help the compiler figure out
+ * how to make them faster? */
 int synth_run_player(Synth *s,
                      unsigned int index,
                      unsigned int reqSamples) {
+    unsigned int samples;
+    unsigned int todo;
+    SynthPlayer *p;
+    SynthBuffer *i;
+    SynthBuffer *o;
+    float *o;
+    unsigned int os;
+    SynthBuffer *sp;
+    SynthBuffer *v;
+    SynthBuffer *ph;
+
     if(index > s->playersmem ||
        s->player[index].inBuffer == 0) {
         fprintf(stderr, "Invalid player index.\n");
         return(-1);
     }
+    p = &(s->player[index]);
+    i = &(s->buffer[p->inBuffer]);
+    if(p->outBuffer < s->channels) {
+        o = &(s->channelbuffers[p->outBuffer].data[s->writecursor]);
+        os = synth_get_samples_needed(s);
+        if(p->outPos >= os) {
+            return(0);
+        }
+    } else {
+        o = s->buffer[s->player[index].outBuffer - s->channels].data;
+        os = s->buffer[s->player[index].outBuffer - s->channels].size;
+    }
 
     /* TODO actual player logic */
+    samples = 0;
+    todo = reqSamples;
+    if(p->mode == SYNTH_MODE_ONCE &&
+       p->speedMode == SYNTH_SPEED_CONSTANT) {
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            todo = MIN(todo, ((float)(i->size) - p->inPos) /
+                             p->speed);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos += p->speed;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            todo = MIN(todo, ((float)(i->size) - p->inPos) /
+                             p->speed);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos += p->speed;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            todo = MIN(todo, ((float)(i->size) - p->inPos) /
+                             p->speed);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos += p->speed;
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            todo = MIN(todo, ((float)(i->size) - p->inPos) /
+                             p->speed);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos += p->speed;
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+    } else if(p->mode == SYNTH_MODE_ONCE &&
+              p->speedMode == SYNTH_SPEED_SOURCE) {
+        sp = &(s->buffer[p->speedBuffer]);
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    break;
+                }
+                p->speedPos = (p->speedPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    break;
+                }
+                p->speedPos = (p->speedPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    break;
+                }
+                p->speedPos = (p->speedPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    break;
+                }
+                p->speedPos = (p->speedPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+    } else if(p->mode == SYNTH_MODE_LOOP &&
+              p->speedMode == SYNTH_SPEED_CONSTANT) {
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+    } else if(p->mode == SYNTH_MODE_LOOP &&
+              p->speedMode == SYNTH_SPEED_SOURCE) {
+        sp = &(s->buffer[p->speedBuffer]);
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                p->speedPos = (p->speedPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                p->speedPos = (p->speedPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                p->speedPos = (p->speedPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                p->speedPos = (p->speedPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+    } else if(p->mode == SYNTH_MODE_PINGPONG &&
+              p->speedMode == SYNTH_SPEED_CONSTANT) {
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos = p->inPos + p->speed;
+                /* dunno if a purely mathematical way to do this, nor am I sure
+                 * such a thing would be faster?  Certainly would be more
+                 * confusing. */
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos = p->inPos + p->speed;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos = p->inPos + p->speed;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos = p->inPos + p->speed;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+    } else if(p->mode == SYNTH_MODE_PINGPONG &&
+              p->speedMode == SYNTH_SPEED_SOURCE) {
+        sp = &(s->buffer[p->speedBuffer]);
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speedScale = -(p->speedScale);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speedScale = -(p->speedScale);
+                }
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * p->volume;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->inPos += sp->data[p->speedPos] * p->speedScale;
+                if(p->inPos >= i->size) {
+                    p->inPos -= i->size;
+                    p->speed = -(p->speed);
+                } else if(p->inPos < 0) {
+                    p->inPos += i->size;
+                    p->speed = -(p->speed);
+                }
+                p->volPos = (p->volPos + 1) % sp->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+    } else if(p->mode == SYNTH_MODE_PHASE_SOURCE) {
+        ph = &(s->buffer[p->phaseBuffer]);
+        if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+           p->outOp == SYNTH_OUTPUT_REPLACE) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                    p->volume;
+                p->outPos++;
+                p->phasePos = (p->phasePos + 1) % ph->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                    p->volume;
+                p->outPos++;
+                p->phasePos = (p->phasePos + 1) % ph->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_REPLACE) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] =
+                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                    v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->volPos = (p->volPos + 1) % sp->size;
+                p->phasePos = (p->phasePos + 1) % ph->size;
+            }
+        } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
+                  p->outOp == SYNTH_OUTPUT_ADD) {
+            v = &(s->buffer[p->volBuffer]);
+            todo = MIN(todo, os - p->outPos);
+            for(samples = 0; samples < todo; samples++) {
+                o->data[p->outPos] +=
+                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                    v->data[p->volPos] * p->volScale;
+                p->outPos++;
+                p->volPos = (p->volPos + 1) % sp->size;
+                p->phasePos = (p->phasePos + 1) % ph->size;
+            }
+        } else {
+            fprintf(stderr, "Invalid output mode.\n");
+            return(-1);
+        }
+ 
+    } else {
+        fprintf(stderr, "Invalid player mode.\n");
+        return(-1);
+    }
 
-    return(reqSamples);
+    return(samples);
 }
