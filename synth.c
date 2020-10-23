@@ -73,6 +73,9 @@ typedef struct {
 } SynthPlayer;
 
 typedef struct {
+} SynthEnvelope;
+
+typedef struct {
 } SynthEffect;
 
 typedef struct {
@@ -98,6 +101,9 @@ typedef struct {
 
     SynthBuffer *buffer;
     unsigned int buffersmem;
+
+    SynthEnvelope *envelope;
+    unsigned int envelopesmem;
 
     SynthPlayer *player;
     unsigned int playersmem;
@@ -447,6 +453,8 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
     s->channelbuffers = NULL;
     s->buffer = NULL;
     s->buffersmem = 0;
+    s->envelope = NULL;
+    s->envelopesmem = 0;
     s->player = NULL;
     s->playersmem = 0;
     s->effect = NULL;
@@ -475,6 +483,22 @@ void synth_free(Synth *s) {
             }
         }
         free(s->channelbuffers);
+    }
+
+    if(s->buffer != NULL) {
+        free(s->buffer);
+    }
+
+    if(s->envelope != NULL) {
+        free(s->envelope);
+    }
+
+    if(s->player != NULL) {
+        free(s->player);
+    }
+
+    if(s->effect != NULL) {
+        free(s->effect);
     }
 
     free(s);
