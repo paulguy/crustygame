@@ -40,7 +40,6 @@ audio_set_player_input_buffer_pos (int)pos
     (overridden when audio_set_player_mode is AUDIO_MODE_PHASE_SOURCE)
 audio_set_player_output_buffer (int)bufferid
 audio_set_player_output_buffer_pos (int)pos
-    (make sure channel buffer positions can't be set)
 audio_set_player_output_mode mode
     AUDIO_OUTPUT_REPLACE
     AUDIO_OUTPUT_ADD
