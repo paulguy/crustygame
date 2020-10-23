@@ -162,15 +162,24 @@ static high_score_obj
 static pitxpos
 static pitypos
 
-macro UPDATE_LEVEL
+proc update_level
+    local levelindex
+
+    move levelindex level
+    cmp levelindex MAX_LEVEL
+    jumpl no_clamp
+    move levelindex MAX_LEVEL
+    sub  levelindex 1
+    label no_clamp
+
     move nextlines level
     add  nextlines 1
     mul  nextlines LINES_PER_LEVEL
-    TIMERS_SET_RATE piece_timer_id LEVEL_CHANGE_RATES:level
-    move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:level
-    move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:level
-    move gfx_set_layer_colormod:labels_layer0_id LEVEL_BG_SHADOW_COLOR:level
-endmacro UPDATE_LEVEL
+    TIMERS_SET_RATE piece_timer_id LEVEL_CHANGE_RATES:levelindex
+    move gfx_set_layer_colormod:window_background_layer_id LEVEL_BG_COLOR:levelindex
+    move gfx_set_layer_colormod:pit_shadow_layer_id LEVEL_BG_SHADOW_COLOR:levelindex
+    move gfx_set_layer_colormod:labels_layer0_id LEVEL_BG_SHADOW_COLOR:levelindex
+ret
 
 static fps_timer_id
 static piece_timer_id
@@ -873,7 +882,7 @@ proc setup_game
     ; update the whole pit
     call update_pit_tilemaps 0 0 PIT_WIDTH PIT_HEIGHT
 
-    UPDATE_LEVEL
+    call update_level
 ret
 
 static title_cycle 0
@@ -1098,10 +1107,7 @@ proc do_game_frame
         add  score temp
         cmp lines_cleared nextlines
         jumpl no_next_level
-        cmp level MAX_LEVEL
-        jumpz no_next_level
-        add level 1
-        UPDATE_LEVEL
+        call update_level
         label no_next_level
         ; update the pit up to the line the piece fell to
         add height ypos
