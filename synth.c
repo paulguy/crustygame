@@ -25,7 +25,51 @@ typedef struct {
     unsigned int ref;
 } SynthBuffer;
 
+typedef enum {
+    SYNTH_OUTPUT_REPLACE,
+    SYNTH_OUTPUT_ADD
+} SynthOutputOperation;
+
+typedef enum {
+    SYNTH_VOLUME_CONSTANT,
+    SYNTH_VOLUME_SOURCE
+} SynthVolumeMode;
+
+typedef enum {
+    SYNTH_SPEED_CONSTANT,
+    SYNTH_SPEED_SOURCE
+} SynthSpeedMode;
+
+typedef enum {
+    SYNTH_MODE_ONCE,
+    SYNTH_MODE_LOOP,
+    SYNTH_MODE_PINGPONG,
+    SYNTH_MODE_PHASE_SOURCE
+} SynthPlayerMode;
+
 typedef struct {
+    unsigned int inBuffer;
+    unsigned int outBuffer;
+
+    unsigned int inPos;
+    unsigned int outPos;
+
+    SynthOutputOperation outOp;
+
+    SynthVolumeMode volMode;
+    float volume;
+    unsigned int volBuffer;
+    float volScale;
+
+    SynthPlayerMode playMode;
+    unsigned int loopStart;
+    unsigned int loopEnd;
+    unsigned int phaseBuffer;
+
+    SynthSpeedMode speedMode;
+    float speed;
+    unsigned int speedBuffer;
+    float speedScale;
 } SynthPlayer;
 
 typedef struct {
@@ -641,6 +685,10 @@ int synth_add_buffer(Synth *s,
     }
     s->buffer = temp;
     s->buffersmem *= 2;
+    /* initialize empty excess buffers as empty */
+    for(j = i + 1; j < s->buffersmem; j++) {
+        s->buffer[j].size = 0;
+    }
     s->buffer[i].type = type;
     s->buffer[i].size = size;
     s->buffer[i].data = malloc(size * sizeof(float));
@@ -666,12 +714,6 @@ int synth_add_buffer(Synth *s,
         memset(s->buffer[i].data, 0, size * sizeof(float));
     }
     s->buffer[i].ref = 0;
-
-    /* initialize empty excess buffers as empty */
-    for(j = i + 1; j < s->buffersmem; j++) {
-        s->buffer[j].size = 0;
-    }
- 
     return(s->channels + i);
 }
 
@@ -687,6 +729,118 @@ int synth_free_buffer(Synth *s, unsigned int index) {
 
     free(s->buffer[index].data);
     s->buffer[index].size = 0;
+
+    return(0);
+}
+
+int synth_add_player(Synth *s, unsigned int inBuffer) {
+    unsigned int i, j;
+    SynthPlayer *temp;
+
+    if(inBuffer > s->buffersmem ||
+       s->buffer[inBuffer].size == 0) {
+        LOG_PRINTF(s, "Invalid input buffer.\n");
+        return(-1);
+    }
+
+    /* first loaded buffer, so do some initial setup */
+    if(s->playerssmem == 0) {
+        s->player = malloc(sizeof(SynthPlayer));
+        if(s->player == NULL) {
+            LOG_PRINTF(s, "Failed to allocate buffers memory.\n");
+            return(-1);
+        }
+        s->player[0].playersmem = 1;
+        s->player[0].inBuffer = inBuffer;
+        s->buffer[inBuffer].ref++; /* add a reference */
+        s->player[0].outBuffer = 0; /* A 0th buffer will have to exist at least */
+        s->player[0].inPos = 0;
+        s->player[0].outPos = 0;
+        s->player[0].outOp = SYNTH_OUTPUT_ADD;
+        s->player[0].volMode = SYNTH_VOLUME_CONSTANT;
+        s->player[0].volume = 1.0;
+        s->player[0].volBuffer = inBuffer; /* 0 is output only, so this is the only sane
+                                    default here.  It won't do anything weird.
+                                    */
+        s->player[0].volScale = 1.0;
+        s->player[0].playMode = SYNTH_MODE_ONCE;
+        s->player[0].loopStart = 0;
+        s->player[0].loopEnd = 0;
+        s->player[0].phaseBuffer = inBuffer; /* this would have some weird effect, but
+                                      at least it won't fail? */
+        s->player[0].speedMode = SYNTH_SPEED_CONSTANT;
+        s->player[0].speedBuffer = inBuffer; /* same */
+        s->player[0].speedScale = 1.0;
+        return(0);
+    }
+
+    /* find first NULL buffer and assign it */
+    for(i = 0; i < s->playersmem; i++) {
+        if(s->player[i].inBuffer == 0) {
+            s->player[i].inBuffer = inBuffer;
+            s->buffer[inBuffer].ref++;
+            s->player[i].outBuffer = 0;
+            s->player[i].inPos = 0;
+            s->player[i].outPos = 0;
+            s->player[i].outOp = SYNTH_OUTPUT_ADD;
+            s->player[i].volMode = SYNTH_VOLUME_CONSTANT;
+            s->player[i].volume = 1.0;
+            s->player[i].volBuffer = inBuffer;
+            s->player[i].volScale = 1.0;
+            s->player[i].playMode = SYNTH_MODE_ONCE;
+            s->player[i].loopStart = 0;
+            s->player[i].loopEnd = 0;
+            s->player[i].phaseBuffer = inBuffer;
+            s->player[i].speedMode = SYNTH_SPEED_CONSTANT;
+            s->player[i].speedBuffer = inBuffer;
+            s->player[i].speedScale = 1.0;
+            return(i);
+        }
+    }
+
+    /* expand buffer if there's no free slots */
+    temp = realloc(s->buffer,
+                   sizeof(SyntbBuffer) * s->buffersmem * 2);
+    if(temp == NULL) {
+        LOG_PRINTF(s, "Failed to allocate buffers memory.\n");
+        return(-1);
+    }
+    s->buffer = temp;
+    s->buffersmem *= 2;
+    /* initialize empty excess buffers as empty */
+    for(j = i + 1; j < s->buffersmem; j++) {
+        s->buffer[j].size = 0;
+    }
+    s->player[i].inBuffer = inBuffer;
+    s->buffer[inBuffer].ref++;
+    s->player[i].outBuffer = 0;
+    s->player[i].inPos = 0;
+    s->player[i].outPos = 0;
+    s->player[i].outOp = SYNTH_OUTPUT_ADD;
+    s->player[i].volMode = SYNTH_VOLUME_CONSTANT;
+    s->player[i].volume = 1.0;
+    s->player[i].volBuffer = inBuffer;
+    s->player[i].volScale = 1.0;
+    s->player[i].playMode = SYNTH_MODE_ONCE;
+    s->player[i].loopStart = 0;
+    s->player[i].loopEnd = 0;
+    s->player[i].phaseBuffer = inBuffer;
+    s->player[i].speedMode = SYNTH_SPEED_CONSTANT;
+    s->player[i].speedBuffer = inBuffer;
+    s->player[i].speedScale = 1.0;
+    return(i);
+}
+
+int synth_free_buffer(Synth *s, unsigned int index) {
+    if(index > s->playersmem ||
+       s->player[index].inBuffer == 0) {
+        fprintf(stderr, "Invalid player index.\n");
+        return(-1);
+    }
+
+    /* remove a reference */
+    s->buffer[s->player[index].inBuffer].ref--;
+    s->player[index].inBuffer = 0;
 
     return(0);
 }
