@@ -1452,7 +1452,7 @@ int synth_run_player(Synth *s,
                     break;
                 }
                 p->speedPos = (p->speedPos + 1) % sp->size;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1467,7 +1467,7 @@ int synth_run_player(Synth *s,
                     break;
                 }
                 p->speedPos = (p->speedPos + 1) % sp->size;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
@@ -1502,7 +1502,7 @@ int synth_run_player(Synth *s,
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1513,7 +1513,7 @@ int synth_run_player(Synth *s,
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
@@ -1561,7 +1561,7 @@ int synth_run_player(Synth *s,
                           (sp->data[p->speedPos] * p->speedScale),
                           i->size);
                 p->speedPos = (p->speedPos + 1) % sp->size;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1576,7 +1576,7 @@ int synth_run_player(Synth *s,
                           (sp->data[p->speedPos] * p->speedScale),
                           i->size);
                 p->speedPos = (p->speedPos + 1) % sp->size;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
@@ -1677,6 +1677,7 @@ int synth_run_player(Synth *s,
                     p->inPos += i->size;
                     p->speedScale = -(p->speedScale);
                 }
+                p->speedPos = (p->speedPos + 1) % sp->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1688,11 +1689,12 @@ int synth_run_player(Synth *s,
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
                     p->inPos -= i->size;
-                    p->speed = -(p->speed);
+                    p->speed = -(p->speedScale);
                 } else if(p->inPos < 0) {
                     p->inPos += i->size;
-                    p->speed = -(p->speed);
+                    p->speed = -(p->speedScale);
                 }
+                p->speedPos = (p->speedPos + 1) % sp->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_REPLACE) {
@@ -1705,12 +1707,13 @@ int synth_run_player(Synth *s,
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
                     p->inPos -= i->size;
-                    p->speed = -(p->speed);
+                    p->speed = -(p->speedScale);
                 } else if(p->inPos < 0) {
                     p->inPos += i->size;
-                    p->speed = -(p->speed);
+                    p->speed = -(p->speedScale);
                 }
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->speedPos = (p->speedPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1723,12 +1726,13 @@ int synth_run_player(Synth *s,
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
                     p->inPos -= i->size;
-                    p->speed = -(p->speed);
+                    p->speed = -(p->speedScale);
                 } else if(p->inPos < 0) {
                     p->inPos += i->size;
-                    p->speed = -(p->speed);
+                    p->speed = -(p->speedScale);
                 }
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->speedPos = (p->speedPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
@@ -1765,7 +1769,7 @@ int synth_run_player(Synth *s,
                     i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
                     v->data[p->volPos] * p->volScale;
                 p->outPos++;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
                 p->phasePos = (p->phasePos + 1) % ph->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
@@ -1777,14 +1781,13 @@ int synth_run_player(Synth *s,
                     i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
                     v->data[p->volPos] * p->volScale;
                 p->outPos++;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
                 p->phasePos = (p->phasePos + 1) % ph->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
             return(-1);
         }
- 
     } else {
         fprintf(stderr, "Invalid player mode.\n");
         return(-1);
