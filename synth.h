@@ -20,7 +20,7 @@ unsigned int synth_get_rate(Synth *s);
 unsigned int synth_get_channels(Synth *s);
 unsigned int synth_get_fragment_size(Synth *s);
 int synth_has_underrun(Synth *s);
-int audio_set_enabled(Synth *s, int enabled);
+int synth_set_enabled(Synth *s, int enabled);
 int synth_frame(Synth *s);
 int synth_set_fragments(Synth *s,
                         unsigned int fragments);

@@ -370,6 +370,21 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
     return(savefile);
 }
 
+int audio_frame_cb(void *priv) {
+    CrustyGame *state = priv;
+
+    result = crustyvm_run(cvm, "audio");
+    if(result < 0) {
+        fprintf(stderr, "Program reached an exception while running: "
+                        "%s\n",
+                crustyvm_statusstr(crustyvm_get_status(cvm)));
+        crustyvm_debugtrace(cvm, 1);
+        return(-1);
+    }
+
+    return(0);
+}
+
 #define CLEAN_ARGS \
     if(vars > 0) { \
         for(i = 0; i < vars; i++) { \
@@ -576,6 +591,16 @@ int main(int argc, char **argv) {
         goto error_sdl;
     }
 
+    /* initialize the audio */
+    state.s = synth_new(audio_frame_cb,
+                        &state,
+                        vprintf_cb,
+                        stderr);
+    if(state.ll == NULL) {
+        fprintf(stderr, "Failed to create synth.\n");
+        goto error_ll;
+    }
+
     /* seed random */
     srand(time(NULL));
 
@@ -588,18 +613,18 @@ int main(int argc, char **argv) {
                         "%s\n",
                 crustyvm_statusstr(crustyvm_get_status(cvm)));
         crustyvm_debugtrace(cvm, 1);
-        goto error_ll;
+        goto error_synth;
     }
 
     while(state.running) {
         if(SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
-            goto error_ll;
+            goto error_synth;
         } 
 
         if(SDL_RenderClear(state.renderer) < 0) {
             fprintf(stderr, "Failed to clear screen.\n");
-            goto error_ll;
+            goto error_synth;
         }
 
         /* needs to be transparent so tilemap updates work */
@@ -607,7 +632,7 @@ int main(int argc, char **argv) {
                                   0, 0, 0,
                                   SDL_ALPHA_TRANSPARENT) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
-            goto error_ll;
+            goto error_synth;
         } 
 
         while(SDL_PollEvent(&(state.lastEvent)) && state.running) {
@@ -672,7 +697,7 @@ int main(int argc, char **argv) {
                                         "running: %s\n",
                                 crustyvm_statusstr(crustyvm_get_status(cvm)));
                         crustyvm_debugtrace(cvm, 0);
-                        goto error_ll;
+                        goto error_synth;
                     }
                     break;
                 default:
@@ -680,13 +705,18 @@ int main(int argc, char **argv) {
             }
         }
  
+        if(synth_frame(state.s) < 0) {
+            fprintf(stderr, "Audio failed.\n");
+            goto error_synth;
+        }
+
         result = crustyvm_run(cvm, "frame");
         if(result < 0) {
             fprintf(stderr, "Program reached an exception while "
                             "running: %s\n",
                     crustyvm_statusstr(crustyvm_get_status(cvm)));
             crustyvm_debugtrace(cvm, 0);
-            goto error_ll;
+            goto error_synth;
         }
 
         SDL_RenderPresent(state.renderer);
@@ -702,6 +732,8 @@ int main(int argc, char **argv) {
 
     exit(EXIT_SUCCESS);
 
+error_synth:
+    synth_free(state.s);
 error_ll:
     layerlist_free(state.ll);
 error_sdl:

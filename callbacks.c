@@ -1110,6 +1110,189 @@ int set_window_title(void *priv,
     return(0);
 }
 
+int audio_get_samples_needed(void *priv, void *val, unsigned int index) {
+}
+
+int audio_get_rate(void *priv, void *val, unsigned int index) {
+}
+
+int audio_get_channels(void *priv, void *val, unsigned int index) {
+}
+
+int audio_get_fragment_size(void *priv, void *val, unsigned int index) {
+}
+
+int audio_has_underrun(void *priv, void *val, unsigned int index) {
+}
+
+int audio_set_enabled(void *priv,
+                      CrustyType type,
+                      unsigned int size,
+                      void *ptr,
+                      unsigned int index) {
+}
+
+int audio_set_fragments(void *priv,
+                        CrustyType type,
+                        unsigned int size,
+                        void *ptr,
+                        unsigned int index) {
+}
+
+int audio_add_buffer(void *priv,
+                     CrustyType type,
+                     unsigned int size,
+                     void *ptr,
+                     unsigned int index) {
+}
+
+int audio_free_buffer(void *priv,
+                      CrustyType type,
+                      unsigned int size,
+                      void *ptr,
+                      unsigned int index) {
+}
+
+int audio_add_player(void *priv,
+                     CrustyType type,
+                     unsigned int size,
+                     void *ptr,
+                     unsigned int index) {
+}
+
+int audio_free_player(void *priv,
+                      CrustyType type,
+                      unsigned int size,
+                      void *ptr,
+                      unsigned int index) {
+}
+
+int audio_set_player_input_buffer(void *priv,
+                                  CrustyType type,
+                                  unsigned int size,
+                                  void *ptr,
+                                  unsigned int index) {
+}
+
+int audio_set_player_input_buffer_pos(void *priv,
+                                      CrustyType type,
+                                      unsigned int size,
+                                      void *ptr,
+                                      unsigned int index) {
+}
+
+int audio_set_player_output_buffer(void *priv,
+                                   CrustyType type,
+                                   unsigned int size,
+                                   void *ptr,
+                                   unsigned int index) {
+}
+
+int audio_set_player_output_buffer_pos(void *priv,
+                                       CrustyType type,
+                                       unsigned int size,
+                                       void *ptr,
+                                       unsigned int index) {
+}
+
+int audio_set_player_output_mode(void *priv,
+                                 CrustyType type,
+                                 unsigned int size,
+                                 void *ptr,
+                                 unsigned int index) {
+}
+
+int audio_set_player_volume_mode(void *priv,
+                                 CrustyType type,
+                                 unsigned int size,
+                                 void *ptr,
+                                 unsigned int index) {
+}
+
+int audio_set_player_volume(void *priv,
+                            CrustyType type,
+                            unsigned int size,
+                            void *ptr,
+                            unsigned int index) {
+}
+
+int audio_set_player_volume_source(void *priv,
+                                   CrustyType type,
+                                   unsigned int size,
+                                   void *ptr,
+                                   unsigned int index) {
+}
+
+int audio_set_player_volume_source_scale(void *priv,
+                                         CrustyType type,
+                                         unsigned int size,
+                                         void *ptr,
+                                         unsigned int index) {
+}
+
+int audio_set_player_mode(void *priv,
+                          CrustyType type,
+                          unsigned int size,
+                          void *ptr,
+                          unsigned int index) {
+}
+
+int audio_set_player_loop_start(void *priv,
+                                CrustyType type,
+                                unsigned int size,
+                                void *ptr,
+                                unsigned int index) {
+}
+
+int audio_set_player_loop_end(void *priv,
+                              CrustyType type,
+                              unsigned int size,
+                              void *ptr,
+                              unsigned int index) {
+}
+
+int audio_set_player_phase_source(void *priv,
+                                  CrustyType type,
+                                  unsigned int size,
+                                  void *ptr,
+                                  unsigned int index) {
+}
+
+int audio_set_player_speed_mode(void *priv,
+                                CrustyType type,
+                                unsigned int size,
+                                void *ptr,
+                                unsigned int index) {
+}
+
+int audio_set_player_speed(void *priv,
+                           CrustyType type,
+                           unsigned int size,
+                           void *ptr,
+                           unsigned int index) {
+}
+
+int audio_set_player_speed_source(void *priv,
+                                  CrustyType type,
+                                  unsigned int size,
+                                  void *ptr,
+                                  unsigned int index) {
+}
+
+int audio_set_player_speed_source_scale(void *priv,
+                                        CrustyType type,
+                                        unsigned int size,
+                                        void *ptr,
+                                        unsigned int index) {
+}
+
+int audio_run_player(void *priv,
+                     CrustyType type,
+                     unsigned int size,
+                     void *ptr,
+                     unsigned int index) {
+}
+
 CrustyCallback cb[] = {
     {
         .name = "out", .length = 1, .readType = CRUSTY_TYPE_NONE,
@@ -1360,6 +1543,180 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = set_window_title, .writepriv = &state
+    },
+    {
+        .name = "audio_get_samples_needed", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = audio_get_samples_needed, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "audio_get_rate", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = audio_get_rate, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "audio_get_channels", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = audio_get_channels, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "audio_get_fragment_size", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = audio_get_fragment_size, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "audio_has_underrun", .length = 1,
+        .readType = CRUSTY_TYPE_INT,
+        .read = audio_has_underrun, .readpriv = &state,
+        .write = NULL, .writepriv = NULL
+    },
+    {
+        .name = "audio_set_enabled", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_enabled, .writepriv = &state
+    },
+    {
+        .name = "audio_set_fragments", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_fragments, .writepriv = &state
+    },
+    {
+        .name = "audio_add_buffer", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_add_buffer, .writepriv = &state
+    },
+    {
+        .name = "audio_free_buffer", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_free_buffer, .writepriv = &state
+    },
+    {
+        .name = "audio_add_player", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_add_player, .writepriv = &state
+    },
+    {
+        .name = "audio_free_player", .length = 1,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_free_player, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_input_buffer", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_input_buffer, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_input_buffer_pos", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_input_buffer_pos, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_output_buffer", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_output_buffer, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_output_buffer_pos", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_output_buffer_pos, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_output_mode", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_output_mode, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_volume_mode", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_volume_mode, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_volume", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_volume, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_volume_source", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_volume_source, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_volume_source_scale", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_volume_source_scale, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_mode", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_mode, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_loop_start", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_loop_start, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_loop_end", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_loop_end, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_phase_source", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_phase_source, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_speed_mode", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_speed_mode, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_speed", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_speed, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_source", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_source, .writepriv = &state
+    },
+    {
+        .name = "audio_set_player_source_scale", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_set_player_source_scale, .writepriv = &state
+    },
+    {
+        .name = "audio_run_player", .length = INT_MAX,
+        .readType = CRUSTY_TYPE_NONE,
+        .read = NULL, .readpriv = NULL,
+        .write = audio_run_player, .writepriv = &state
     }
 };
 

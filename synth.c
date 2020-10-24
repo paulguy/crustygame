@@ -539,7 +539,7 @@ int synth_has_underrun(Synth *s) {
     return(1);
 }
 
-int audio_set_enabled(Synth *s, int enabled) {
+int synth_set_enabled(Synth *s, int enabled) {
     if(enabled == 0) {
         SDL_PauseAudio(1);
         s->state = SYNTH_STOPPED;
@@ -567,7 +567,9 @@ int synth_frame(Synth *s) {
         s->readcursor = 0;
         s->writecursor = 0;
         s->underrun = 0;
-        return(s->synth_frame_cb(synth_frame_priv));
+        if(s->synth_frame_cb(synth_frame_priv) < 0) {
+            return(-1);
+        }
         update_samples_needed(s->buffersize);
         s->state == SYNTH_RUNNING;
         SDL_PauseAudio(0);
@@ -580,7 +582,9 @@ int synth_frame(Synth *s) {
             /* get_samples_needed() returns only the remaining contiguous
              * buffer, so it may need to be called twice */
             if(needed > 0) {
-                return(s->synth_frame_cb(synth_frame_priv));
+                if(s->synth_frame_cb(synth_frame_priv) < 0) {
+                    return(-1);
+                }
                 update_samples_needed(needed);
             }
             SDL_UnlockAudio();

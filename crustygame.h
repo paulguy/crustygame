@@ -82,6 +82,8 @@ typedef struct {
 
     unsigned int savesize;
     FILE *savefile;
+
+    Synth *s;
 } CrustyGame;
 
 extern CrustyGame state;
