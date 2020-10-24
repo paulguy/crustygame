@@ -577,7 +577,9 @@ int synth_frame(Synth *s) {
         needed = synth_get_samples_needed(s);
         if(needed > 0) {
             SDL_LockAudio();
-            return(s->synth_frame_cb(synth_frame_priv));
+            if(s->synth_frame_cb(synth_frame_priv) < 0) {
+                return(-1);
+            }
             update_samples_needed(needed);
             /* get_samples_needed() returns only the remaining contiguous
              * buffer, so it may need to be called twice */

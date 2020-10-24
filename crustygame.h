@@ -66,6 +66,10 @@
 #define CRUSTYGAME_BLENDMODE_MOD   (0x04)
 #define CRUSTYGAME_BLENDMODE_MUL   (0x08)
 
+#define CRUSTYGAME_SYNTH_TYPE_U8  (0)
+#define CRUSTYGAME_SYNTH_TYPE_S16 (1)
+#define CRUSTYGAME_SYNTH_TYPE_F32 (2)
+
 typedef struct {
     SDL_Window *win;
     SDL_Renderer *renderer;
