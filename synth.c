@@ -1164,7 +1164,7 @@ int synth_set_player_mode(Synth *s,
 
 int synth_set_player_loop_start(Synth *s,
                                 unsigned int index,
-                                int loopStart) {
+                                unsigned int loopStart) {
     if(index > s->playersmem ||
        s->player[index].inBuffer == 0) {
         fprintf(stderr, "Invalid player index.\n");
@@ -1187,7 +1187,7 @@ int synth_set_player_loop_start(Synth *s,
 
 int synth_set_player_loop_end(Synth *s,
                               unsigned int index,
-                              int loopEnd) {
+                              unsigned int loopEnd) {
     if(index > s->playersmem ||
        s->player[index].inBuffer == 0) {
         fprintf(stderr, "Invalid player index.\n");
@@ -1328,12 +1328,13 @@ int synth_run_player(Synth *s,
     unsigned int todo;
     SynthPlayer *p;
     SynthBuffer *i;
-    SynthBuffer *o;
     float *o;
     unsigned int os;
     SynthBuffer *sp;
     SynthBuffer *v;
     SynthBuffer *ph;
+    float loopLen;
+    float lastInPos;
 
     if(index > s->playersmem ||
        s->player[index].inBuffer == 0) {
@@ -1475,14 +1476,25 @@ int synth_run_player(Synth *s,
         }
     } else if(p->mode == SYNTH_MODE_LOOP &&
               p->speedMode == SYNTH_SPEED_CONSTANT) {
+        loopLen = p->loopEnd - p->loopStart;
         if(p->volMode == SYNTH_VOLUME_CONSTANT &&
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
                 o->data[p->outPos] =
-                    i->data[p->inPos] * p->volume;
+                    i->data[p->inPos + loopPos] * p->volume;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
+                /* can't do this without branching that I know of, not sure
+                 * if it matters.. make sure it only triggers on transition. */
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
             }
         } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1491,7 +1503,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_REPLACE) {
@@ -1501,7 +1521,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
                 p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
@@ -1512,7 +1540,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
                 p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
@@ -1521,6 +1557,7 @@ int synth_run_player(Synth *s,
         }
     } else if(p->mode == SYNTH_MODE_LOOP &&
               p->speedMode == SYNTH_SPEED_SOURCE) {
+        loopLen = p->loopEnd - p->loopStart;
         sp = &(s->buffer[p->speedBuffer]);
         if(p->volMode == SYNTH_VOLUME_CONSTANT &&
            p->outOp == SYNTH_OUTPUT_REPLACE) {
@@ -1529,10 +1566,18 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos =
                     fmodf(p->inPos +
                           (sp->data[p->speedPos] * p->speedScale),
                           i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
                 p->speedPos = (p->speedPos + 1) % sp->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_CONSTANT &&
@@ -1542,10 +1587,18 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos =
                     fmodf(p->inPos +
                           (sp->data[p->speedPos] * p->speedScale),
                           i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
                 p->speedPos = (p->speedPos + 1) % sp->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
@@ -1556,10 +1609,18 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos =
                     fmodf(p->inPos +
                           (sp->data[p->speedPos] * p->speedScale),
                           i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
                 p->speedPos = (p->speedPos + 1) % sp->size;
                 p->volPos = (p->volPos + 1) % v->size;
             }
@@ -1571,10 +1632,18 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
+                lastInPos = p->inPos;
                 p->inPos =
                     fmodf(p->inPos +
                           (sp->data[p->speedPos] * p->speedScale),
                           i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                }
                 p->speedPos = (p->speedPos + 1) % sp->size;
                 p->volPos = (p->volPos + 1) % v->size;
             }
@@ -1584,6 +1653,7 @@ int synth_run_player(Synth *s,
         }
     } else if(p->mode == SYNTH_MODE_PINGPONG &&
               p->speedMode == SYNTH_SPEED_CONSTANT) {
+        loopLen = p->loopEnd - p->loopStart;
         if(p->volMode == SYNTH_VOLUME_CONSTANT &&
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
@@ -1591,15 +1661,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
-                p->inPos = p->inPos + p->speed;
-                /* dunno if a purely mathematical way to do this, nor am I sure
-                 * such a thing would be faster?  Certainly would be more
-                 * confusing. */
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
+                lastInPos = p->inPos;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
                     p->speed = -(p->speed);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
                     p->speed = -(p->speed);
                 }
             }
@@ -1610,12 +1680,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
-                p->inPos = p->inPos + p->speed;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
+                lastInPos = p->inPos;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
                     p->speed = -(p->speed);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
                     p->speed = -(p->speed);
                 }
             }
@@ -1627,12 +1700,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
-                p->inPos = p->inPos + p->speed;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
+                lastInPos = p->inPos;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
                     p->speed = -(p->speed);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
                     p->speed = -(p->speed);
                 }
                 p->volPos = (p->volPos + 1) % sp->size;
@@ -1645,12 +1721,15 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
-                p->inPos = p->inPos + p->speed;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
+                lastInPos = p->inPos;
+                p->inPos = fmodf(p->inPos + p->speed, i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
                     p->speed = -(p->speed);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
                     p->speed = -(p->speed);
                 }
                 p->volPos = (p->volPos + 1) % sp->size;
@@ -1661,6 +1740,7 @@ int synth_run_player(Synth *s,
         }
     } else if(p->mode == SYNTH_MODE_PINGPONG &&
               p->speedMode == SYNTH_SPEED_SOURCE) {
+        loopLen = p->loopEnd - p->loopStart;
         sp = &(s->buffer[p->speedBuffer]);
         if(p->volMode == SYNTH_VOLUME_CONSTANT &&
            p->outOp == SYNTH_OUTPUT_REPLACE) {
@@ -1669,13 +1749,19 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
-                p->inPos += sp->data[p->speedPos] * p->speedScale;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
-                    p->speedScale = -(p->speedScale);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
-                    p->speedScale = -(p->speedScale);
+                lastInPos = p->inPos;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                    p->speed = -(p->speed);
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                    p->speed = -(p->speed);
                 }
                 p->speedPos = (p->speedPos + 1) % sp->size;
             }
@@ -1686,13 +1772,19 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * p->volume;
                 p->outPos++;
-                p->inPos += sp->data[p->speedPos] * p->speedScale;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
-                    p->speed = -(p->speedScale);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
-                    p->speed = -(p->speedScale);
+                lastInPos = p->inPos;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                    p->speed = -(p->speed);
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                    p->speed = -(p->speed);
                 }
                 p->speedPos = (p->speedPos + 1) % sp->size;
             }
@@ -1704,13 +1796,19 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] =
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
-                p->inPos += sp->data[p->speedPos] * p->speedScale;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
-                    p->speed = -(p->speedScale);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
-                    p->speed = -(p->speedScale);
+                lastInPos = p->inPos;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                    p->speed = -(p->speed);
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                    p->speed = -(p->speed);
                 }
                 p->speedPos = (p->speedPos + 1) % sp->size;
                 p->volPos = (p->volPos + 1) % v->size;
@@ -1723,13 +1821,19 @@ int synth_run_player(Synth *s,
                 o->data[p->outPos] +=
                     i->data[p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
-                p->inPos += sp->data[p->speedPos] * p->speedScale;
-                if(p->inPos >= i->size) {
-                    p->inPos -= i->size;
-                    p->speed = -(p->speedScale);
-                } else if(p->inPos < 0) {
-                    p->inPos += i->size;
-                    p->speed = -(p->speedScale);
+                lastInPos = p->inPos;
+                p->inPos =
+                    fmodf(p->inPos +
+                          (sp->data[p->speedPos] * p->speedScale),
+                          i->size);
+                if(lastInPos <= p->loopEnd &&
+                   p->inPos > p->loopEnd) {
+                    p->inPos -= loopLen;
+                    p->speed = -(p->speed);
+                } else if(lastInPos >= p->loopStart &&
+                          p->inPos < p->loopStart) {
+                    p->inPos += loopLen;
+                    p->speed = -(p->speed);
                 }
                 p->speedPos = (p->speedPos + 1) % sp->size;
                 p->volPos = (p->volPos + 1) % v->size;
