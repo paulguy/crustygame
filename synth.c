@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <SDL2.h>
+#include <SDL.h>
 
 #include "synth.h"
 
@@ -16,39 +16,11 @@
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-typedef enum {
-    SYNTH_STOPPED,
-    SYNTH_ENABLED,
-    SYNTH_RUNNING
-} SynthState;
-
 typedef struct {
     float *data;
     unsigned int size;
     unsigned int ref;
 } SynthBuffer;
-
-typedef enum {
-    SYNTH_OUTPUT_REPLACE,
-    SYNTH_OUTPUT_ADD
-} SynthOutputOperation;
-
-typedef enum {
-    SYNTH_VOLUME_CONSTANT,
-    SYNTH_VOLUME_SOURCE
-} SynthVolumeMode;
-
-typedef enum {
-    SYNTH_SPEED_CONSTANT,
-    SYNTH_SPEED_SOURCE
-} SynthSpeedMode;
-
-typedef enum {
-    SYNTH_MODE_ONCE,
-    SYNTH_MODE_LOOP,
-    SYNTH_MODE_PINGPONG,
-    SYNTH_MODE_PHASE_SOURCE
-} SynthPlayerMode;
 
 typedef struct {
     unsigned int inBuffer;
@@ -65,7 +37,7 @@ typedef struct {
     unsigned int volPos;
     float volScale;
 
-    SynthPlayerMode playMode;
+    SynthPlayerMode mode;
     unsigned int loopStart;
     unsigned int loopEnd;
     unsigned int phaseBuffer;
@@ -77,26 +49,26 @@ typedef struct {
     unsigned int speedPos;
     float speedScale;
 } SynthPlayer;
-
+/*
 typedef struct {
 } SynthEnvelope;
 
 typedef struct {
 } SynthEffect;
-
-typedef struct {
+*/
+typedef struct Synth_t {
+    SDL_AudioDeviceID audiodev;
     unsigned int rate;
     unsigned int fragmentsize;
     unsigned int fragments;
     unsigned int channels;
-    SynthBuffer *channelbuffers;
+    SynthBuffer *channelbuffer;
     unsigned int readcursor;
     unsigned int writecursor;
     unsigned int bufferfilled;
     unsigned int buffersize;
     int underrun;
     SynthState state;
-    int needconversion;
     SDL_AudioCVT converter;
 
     synth_frame_cb_t synth_frame_cb;
@@ -107,16 +79,16 @@ typedef struct {
 
     SynthBuffer *buffer;
     unsigned int buffersmem;
-
+/*
     SynthEnvelope *envelope;
     unsigned int envelopesmem;
-
+*/
     SynthPlayer *player;
     unsigned int playersmem;
-
+/*
     SynthEffect *effect;
     unsigned int effectsmem;
-
+*/
     synth_log_cb_t synth_log_cb;
     void *synth_log_priv;
 } Synth;
@@ -183,30 +155,36 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
     /* get number of samples */
     unsigned int length = len / (s->channels * sizeof(float));
 
-    if(channels == 1) {
-        todo = length > available ? available : length;
+    if(s->channels == 1) {
+        todo = MIN(length, available);
         /* convert in-place, because it can only be shrunken from 32 bits to
          * 16 bits, or just left as-is as 32 bits. */
         s->converter.len = todo * sizeof(float);
-        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
+        s->converter.buf = (Uint8 *)&(s->channelbuffer[0].data[s->readcursor]);
         /* ignore return value because the documentation indicates the only
          * fail state is that buf is NULL, which it won't be. */
         SDL_ConvertAudio(&(s->converter));
         /* copy what has been converted */
         memcpy(stream,
-               &(s->channelbuffers[0].data[readcursor]),
+               &(s->channelbuffer[0].data[s->readcursor]),
+               todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
+        memset(&(s->channelbuffer[0].data[s->readcursor]),
+               0,
                todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
         update_samples_available(s, todo);
         length -= todo;
         if(length > 0) {
             /* more to do, so do the same thing again */
             available = get_samples_available(s);
-            todo = length > available ? available : length;
+            todo = MIN(length, available);
             s->converter.len = todo * sizeof(float);
-            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
+            s->converter.buf = (Uint8 *)&(s->channelbuffer[0].data[s->readcursor]);
             SDL_ConvertAudio(&(s->converter));
             memcpy(stream,
-                   &(s->channelbuffers[0].data[readcursor]),
+                   &(s->channelbuffer[0].data[s->readcursor]),
+                   todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
+            memset(&(s->channelbuffer[0].data[s->readcursor]),
+                   0,
                    todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
             update_samples_available(s, todo);
             length -= todo;
@@ -216,76 +194,76 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 s->underrun = 0;
             }
         }
-    } else if(channels == 2) { /* hopefully faster stereo code path */
+    } else if(s->channels == 2) { /* hopefully faster stereo code path */
         /* much like mono, just do it to both channels and zipper them in to
          * the output */
-        todo = length > available ? available : length;
+        todo = MIN(length, available);
         s->converter.len = todo * sizeof(float);
-        s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
+        s->converter.buf = (Uint8 *)&(s->channelbuffer[0].data[s->readcursor]);
         SDL_ConvertAudio(&(s->converter));
-        s->converter.buf = &(s->channelbuffers[1].data[readcursor]);
+        s->converter.buf = (Uint8 *)&(s->channelbuffer[1].data[s->readcursor]);
         SDL_ConvertAudio(&(s->converter));
         /* this is probably slow */
         if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
             for(i = 0; i < todo; i++) {
                 ((Sint32 *)stream)[i * 2] =
-                    ((Sint32 *)(s->channelbuffers[0].data))[readcursor + i];
+                    ((Sint32 *)&(s->channelbuffer[0].data))[s->readcursor + i];
                 ((Sint32 *)stream)[i * 2 + 1] =
-                    ((Sint32 *)(s->channelbuffers[1].data))[readcursor + i];
+                    ((Sint32 *)&(s->channelbuffer[1].data))[s->readcursor + i];
             }
             /* clear used buffer so the converted data isn't reconverted from
              * garbage possibly producing horrible noises */
-            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
+            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
             for(i = 0; i < todo; i++) {
                 ((Sint16 *)stream)[i * 2] =
-                    ((Sint16 *)(s->channelbuffers[0].data))[readcursor + i];
+                    ((Sint16 *)&(s->channelbuffer[0].data))[s->readcursor + i];
                 ((Sint16 *)stream)[i * 2 + 1] =
-                    ((Sint16 *)(s->channelbuffers[1].data))[readcursor + i];
+                    ((Sint16 *)&(s->channelbuffer[1].data))[s->readcursor + i];
             }
-            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint16));
+            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
         } else { /* 8, very unlikely */
             for(i = 0; i < todo; i++) {
                 stream[i * 2] =
-                    (char *)(s->channelbuffers[0].data)[readcursor + i];
+                    ((char *)&(s->channelbuffer[0].data))[s->readcursor + i];
                 stream[i * 2 + 1] =
-                    (char *)(s->channelbuffers[1].data)[readcursor + i];
+                    ((char *)&(s->channelbuffer[1].data))[s->readcursor + i];
             }
-            memset(s->channelbuffers[0].data, 0, todo);
+            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
         }
         update_samples_available(s, todo);
         length -= todo;
         if(length > 0) {
-            todo = length > available ? available : length;
+            todo = MIN(length, available);
             s->converter.len = todo * sizeof(float);
-            s->converter.buf = &(s->channelbuffers[0].data[readcursor]);
+            s->converter.buf = (Uint8 *)&(s->channelbuffer[0].data[s->readcursor]);
             SDL_ConvertAudio(&(s->converter));
-            s->converter.buf = &(s->channelbuffers[1].data[readcursor]);
+            s->converter.buf = (Uint8 *)&(s->channelbuffer[1].data[s->readcursor]);
             SDL_ConvertAudio(&(s->converter));
             if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
                 for(i = 0; i < todo; i++) {
                     ((Sint32 *)stream)[i * 2] =
-                        ((Sint32 *)(s->channelbuffers[0].data))[readcursor + i];
+                        ((Sint32 *)&(s->channelbuffer[0].data))[s->readcursor + i];
                     ((Sint32 *)stream)[i * 2 + 1] =
-                        ((Sint32 *)(s->channelbuffers[1].data))[readcursor + i];
+                        ((Sint32 *)&(s->channelbuffer[1].data))[s->readcursor + i];
                 }
-                memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
+                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
                 for(i = 0; i < todo; i++) {
                     ((Sint16 *)stream)[i * 2] =
-                        ((Sint16 *)(s->channelbuffers[0].data))[readcursor + i];
+                        ((Sint16 *)&(s->channelbuffer[0].data))[s->readcursor + i];
                     ((Sint16 *)stream)[i * 2 + 1] =
-                        ((Sint16 *)(s->channelbuffers[1].data))[readcursor + i];
+                        ((Sint16 *)&(s->channelbuffer[1].data))[s->readcursor + i];
                 }
-                memset(s->channelbuffers[0].data, 0, todo);
+                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     stream[i * 2] =
-                        (char *)(s->channelbuffers[0].data)[readcursor + i];
+                        ((char *)&(s->channelbuffer[0].data))[s->readcursor + i];
                     stream[i * 2 + 1] =
-                        (char *)(s->channelbuffers[1].data)[readcursor + i];
+                        ((char *)&(s->channelbuffer[1].data))[s->readcursor + i];
                 }
-                memset(s->channelbuffers[0].data, 0, todo);
+                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -297,10 +275,10 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
         /* much like stereo, but use a loop because i don't feel like making
          * a bunch of unrolled versions of this unless surround sound becomes
          * something frequently used with this.. */
-        todo = length > available ? available : length;
+        todo = MIN(length, available);
         s->converter.len = todo * sizeof(float);
         for(i = 0; i < s->channels; i++) {
-            s->converter.buf = &(s->channelbuffers[i].data[readcursor]);
+            s->converter.buf = (Uint8 *)&(s->channelbuffer[i].data[s->readcursor]);
             SDL_ConvertAudio(&(s->converter));
         }
         /* this is probably very slow */
@@ -308,60 +286,60 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     ((Sint32 *)stream)[i * s->channels + j] =
-                        ((Sint32 *)(s->channelbuffers[j].data))[readcursor + i];
+                        ((Sint32 *)&(s->channelbuffer[j].data))[s->readcursor + i];
                 }
             }
-            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
+            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     ((Sint16 *)stream)[i * s->channels + j] =
-                        ((Sint16 *)(s->channelbuffers[j].data))[readcursor + i];
+                        ((Sint16 *)&(s->channelbuffer[j].data))[s->readcursor + i];
                 }
             }
-            memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint16));
+            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
         } else { /* 8 */
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     stream[i * s->channels + j] =
-                        ((char *)(s->channelbuffers[j].data))[readcursor + i];
+                        ((char *)&(s->channelbuffer[j].data))[s->readcursor + i];
                 }
             }
-            memset(s->channelbuffers[0].data, 0, todo);
+            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
         }
         update_samples_available(s, todo);
         length -= todo;
         if(length > 0) {
-            todo = length > available ? available : length;
+            todo = MIN(length, available);
             s->converter.len = todo * sizeof(float);
             for(i = 0; i < s->channels; i++) {
-                s->converter.buf = &(s->channelbuffers[i].data[readcursor]);
+                s->converter.buf = (Uint8 *)&(s->channelbuffer[i].data[s->readcursor]);
                 SDL_ConvertAudio(&(s->converter));
             }
             if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         ((Sint32 *)stream)[i * s->channels + j] =
-                            ((Sint32 *)(s->channelbuffers[j].data))[readcursor + i];
+                            ((Sint32 *)&(s->channelbuffer[j].data))[s->readcursor + i];
                     }
                 }
-                memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint32));
+                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         ((Sint16 *)stream)[i * s->channels + j] =
-                            ((Sint16 *)(s->channelbuffers[j].data))[readcursor + i];
+                            ((Sint16 *)&(s->channelbuffer[j].data))[s->readcursor + i];
                     }
                 }
-                memset(s->channelbuffers[0].data, 0, todo * sizeof(Sint16));
+                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         stream[i * s->channels + j] =
-                            ((char *)(s->channelbuffers[j].data))[readcursor + i];
+                            ((char *)&(s->channelbuffer[j].data))[s->readcursor + i];
                     }
                 }
-                memset(s->channelbuffers[0].data, 0, todo);
+                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -398,81 +376,95 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
     desired.samples = DEFAULT_FRAGMENT_SIZE;
     desired.callback = synth_audio_cb;
     desired.userdata = s;
-    if(SDL_OpenAudio(&desired, &obtained) < 0) {
+    s->audiodev = SDL_OpenAudioDevice(NULL,
+                                      0,
+                                      &desired,
+                                      &obtained,
+                                      SDL_AUDIO_ALLOW_ANY_CHANGE);
+    if(s->audiodev < 2) {
         fprintf(stderr, "Failed to open SDL audio.\n");
         free(s);
+        return(NULL);
     }
     /* probably impossible, but there are cases where at least one output
      * buffer is assumed, so I guess make it clear that there must be at least
      * 1. */
     if(desired.channels < 1) {
         fprintf(stderr, "No channels?\n");
-        SDL_CloseAudio();
+        SDL_CloseAudioDevice(s->audiodev);
         free(s);
+        return(NULL);
     }
 
-    if(SDL_AUDIO_BITSIZE(obtained.format) != 32 ||
-       SDL_AUDIO_BITSIZE(obtained.format) != 16 ||
+    if(SDL_AUDIO_BITSIZE(obtained.format) != 32 &&
+       SDL_AUDIO_BITSIZE(obtained.format) != 16 &&
        SDL_AUDIO_BITSIZE(obtained.format) != 8) {
         fprintf(stderr, "Unsupported format size: %d.\n",
                         SDL_AUDIO_BITSIZE(obtained.format));
-        SDL_CloseAudio();
+        SDL_CloseAudioDevice(s->audiodev);
         free(s);
+        return(NULL);
     }
 
     /* just use the obtained spec for frequency but try to convert the format.
      * Specify mono because the buffers are separate until the end. */
-    s->needconversion = SDL_BuildCVT(&(s->converter),
-                                     desired.format,
-                                     1,
-                                     obtained.freq,
-                                     obtained.format,
-                                     1,
-                                     obtained.freq);
-    if(s->needconversion < 0) {
+    if(SDL_BuildAudioCVT(&(s->converter),
+                         desired.format,
+                         1,
+                         obtained.freq,
+                         obtained.format,
+                         1,
+                         obtained.freq) < 0) {
         fprintf(stderr, "Can't create audio output converter.\n");
-        SDL_CloseAudio();
+        SDL_CloseAudioDevice(s->audiodev);
         free(s);
+        return(NULL);
     }
 
     /* create converters now for allowing import later */
-    if(SDL_BuildCVT(&(s->U8toF32),
-                    AUDIO_U8,
-                    1,
-                    obtained.freq,
-                    AUDIO_F32SYS,
-                    1,
-                    obtained.freq) < 0) {
+    if(SDL_BuildAudioCVT(&(s->U8toF32),
+                         AUDIO_U8,
+                         1,
+                         obtained.freq,
+                         AUDIO_F32SYS,
+                         1,
+                         obtained.freq) < 0) {
         fprintf(stderr, "Failed to build U8 import converter.\n");
-        SDL_CloseAudio();
+        SDL_CloseAudioDevice(s->audiodev);
         free(s);
+        return(NULL);
     }
-    if(SDL_BuildCVT(&(s->S16toF32),
-                    AUDIO_S16SYS,
-                    1,
-                    obtained.freq,
-                    AUDIO_F32SYS,
-                    1,
-                    obtained.freq) < 0) {
+    if(SDL_BuildAudioCVT(&(s->S16toF32),
+                         AUDIO_S16SYS,
+                         1,
+                         obtained.freq,
+                         AUDIO_F32SYS,
+                         1,
+                         obtained.freq) < 0) {
         fprintf(stderr, "Failed to build S16 import converter.\n");
-        SDL_CloseAudio();
+        SDL_CloseAudioDevice(s->audiodev);
         free(s);
+        return(NULL);
     }
 
-    s->rate = obtained.rate;
+    s->rate = obtained.freq;
     s->fragmentsize = obtained.samples;
     s->fragments = 0;
     s->channels = obtained.channels;
     /* Won't know what size to allocate to them until the user has set a number of fragments */
-    s->channelbuffers = NULL;
+    s->channelbuffer = NULL;
     s->buffer = NULL;
     s->buffersmem = 0;
+/*
     s->envelope = NULL;
     s->envelopesmem = 0;
+*/
     s->player = NULL;
     s->playersmem = 0;
+/*
     s->effect = NULL;
     s->effectsmem = 0;
+*/
     s->underrun = 0;
     s->state = SYNTH_STOPPED;
     s->synth_frame_cb = synth_frame_cb;
@@ -484,37 +476,37 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
 void synth_free(Synth *s) {
     unsigned int i;
 
-    SDL_CloseAudio();
+    SDL_CloseAudioDevice(s->audiodev);
 
     if(s->buffer != NULL) {
         free(s->buffer);
     }
 
-    if(s->channelbuffers != NULL) {
+    if(s->channelbuffer != NULL) {
         for(i = 0; i < s->channels; i++) {
-            if(s->channelbuffers[i].data != NULL) {
-                free(s->channelbuffers[i].data);
+            if(s->channelbuffer[i].data != NULL) {
+                free(s->channelbuffer[i].data);
             }
         }
-        free(s->channelbuffers);
+        free(s->channelbuffer);
     }
 
     if(s->buffer != NULL) {
         free(s->buffer);
     }
-
+/*
     if(s->envelope != NULL) {
         free(s->envelope);
     }
-
+*/
     if(s->player != NULL) {
         free(s->player);
     }
-
+/*
     if(s->effect != NULL) {
         free(s->effect);
     }
-
+*/
     free(s);
 }
 
@@ -541,10 +533,10 @@ int synth_has_underrun(Synth *s) {
 
 int synth_set_enabled(Synth *s, int enabled) {
     if(enabled == 0) {
-        SDL_PauseAudio(1);
+        SDL_PauseAudioDevice(s->audiodev, 1);
         s->state = SYNTH_STOPPED;
     } else {
-        if(s->channelbuffers == NULL) {
+        if(s->channelbuffer == NULL) {
             fprintf(stderr, "Audio buffers haven't been set up.  Set fragment "
                             "count first.\n");
             return(-1);
@@ -567,29 +559,29 @@ int synth_frame(Synth *s) {
         s->readcursor = 0;
         s->writecursor = 0;
         s->underrun = 0;
-        if(s->synth_frame_cb(synth_frame_priv) < 0) {
+        if(s->synth_frame_cb(s->synth_frame_priv) < 0) {
             return(-1);
         }
-        update_samples_needed(s->buffersize);
-        s->state == SYNTH_RUNNING;
-        SDL_PauseAudio(0);
+        update_samples_needed(s, s->buffersize);
+        s->state = SYNTH_RUNNING;
+        SDL_PauseAudioDevice(s->audiodev, 0);
     } else if(s->state == SYNTH_RUNNING) {
         needed = synth_get_samples_needed(s);
         if(needed > 0) {
-            SDL_LockAudio();
-            if(s->synth_frame_cb(synth_frame_priv) < 0) {
+            SDL_LockAudioDevice(s->audiodev);
+            if(s->synth_frame_cb(s->synth_frame_priv) < 0) {
                 return(-1);
             }
-            update_samples_needed(needed);
+            update_samples_needed(s, needed);
             /* get_samples_needed() returns only the remaining contiguous
              * buffer, so it may need to be called twice */
             if(needed > 0) {
-                if(s->synth_frame_cb(synth_frame_priv) < 0) {
+                if(s->synth_frame_cb(s->synth_frame_priv) < 0) {
                     return(-1);
                 }
-                update_samples_needed(needed);
+                update_samples_needed(s, needed);
             }
-            SDL_UnlockAudio();
+            SDL_UnlockAudioDevice(s->audiodev);
         }
     }
 
@@ -598,7 +590,7 @@ int synth_frame(Synth *s) {
 
 int synth_set_fragments(Synth *s,
                         unsigned int fragments) {
-    unsigned int i;
+    int i;
 
     if(fragments == 0) {
         return(-1);
@@ -609,16 +601,15 @@ int synth_set_fragments(Synth *s,
         return(-1);
     }
 
-    if(s->channelbuffers == NULL) {
-        s->channelbuffers = malloc(sizeof(SynthBuffer * s->channels));
-        if(s->channelbuffers == NULL) {
+    if(s->channelbuffer == NULL) {
+        s->channelbuffer = malloc(sizeof(SynthBuffer) * s->channels);
+        if(s->channelbuffer == NULL) {
             fprintf(stderr, "Failed to allocate channel buffers.\n");
             return(-1);
         }
         for(i = 0; i < s->channels; i++) {
-            s->channelbuffers[i].type = s->type;
-            s->channelbuffers[i].data = NULL;
-            s->channelbuffers[i].size = 0;
+            s->channelbuffer[i].data = NULL;
+            s->channelbuffer[i].size = 0;
         }
     }
 
@@ -675,7 +666,6 @@ int synth_add_buffer(Synth *s,
             return(-1);
         }
         s->buffersmem = 1;
-        s->buffer[0].type = type;
         s->buffer[0].size = size;
         s->buffer[0].data = malloc(size * sizeof(float));
         if(s->buffer[0].data == NULL) {
@@ -685,16 +675,16 @@ int synth_add_buffer(Synth *s,
         if(data != NULL) {
             if(type == SYNTH_TYPE_U8) {
                 memcpy(s->buffer[0].data, data, size * sizeof(Uint8));
-                s->U8toF32.buf = s->buffer[0].data;
+                s->U8toF32.buf = (Uint8 *)s->buffer[0].data;
                 s->U8toF32.len = size;
-                SDL_ConvertAudio(s->U8toF32);
+                SDL_ConvertAudio(&(s->U8toF32));
             } else if(type == SYNTH_TYPE_S16) {
                 memcpy(s->buffer[0].data, data, size * sizeof(Sint16));
-                s->S16toF32.buf = s->buffer[0].data;
+                s->S16toF32.buf = (Uint8 *)s->buffer[0].data;
                 s->S16toF32.len = size;
-                SDL_ConvertAudio(s->S16toF32);
+                SDL_ConvertAudio(&(s->S16toF32));
             } else { /* F32 */
-                memcpy(s->buffer[i].data, data, size * sizeof(float));
+                memcpy(s->buffer[0].data, data, size * sizeof(float));
             }
         } else {
             memset(s->buffer[0].data, 0, size * sizeof(float));
@@ -706,7 +696,6 @@ int synth_add_buffer(Synth *s,
     /* find first NULL buffer and assign it */
     for(i = 0; i < s->buffersmem; i++) {
         if(s->buffer[i].size == 0) {
-            s->buffer[i].type = type;
             s->buffer[i].size = size;
             s->buffer[i].data = malloc(size * sizeof(float));
             if(s->buffer[i].data == NULL) {
@@ -716,14 +705,14 @@ int synth_add_buffer(Synth *s,
             if(data != NULL) {
                 if(type == SYNTH_TYPE_U8) {
                     memcpy(s->buffer[i].data, data, size * sizeof(Uint8));
-                    s->U8toF32.buf = s->buffer[i].data;
+                    s->U8toF32.buf = (Uint8 *)s->buffer[i].data;
                     s->U8toF32.len = size;
-                    SDL_ConvertAudio(s->U8toF32);
+                    SDL_ConvertAudio(&(s->U8toF32));
                 } else if(type == SYNTH_TYPE_S16) {
                     memcpy(s->buffer[i].data, data, size * sizeof(Sint16));
-                    s->S16toF32.buf = s->buffer[i].data;
+                    s->S16toF32.buf = (Uint8 *)s->buffer[i].data;
                     s->S16toF32.len = size;
-                    SDL_ConvertAudio(s->S16toF32);
+                    SDL_ConvertAudio(&(s->S16toF32));
                 } else { /* F32 */
                     memcpy(s->buffer[i].data, data, size * sizeof(float));
                 }
@@ -737,7 +726,7 @@ int synth_add_buffer(Synth *s,
 
     /* expand buffer if there's no free slots */
     temp = realloc(s->buffer,
-                   sizeof(SyntbBuffer) * s->buffersmem * 2);
+                   sizeof(SynthBuffer) * s->buffersmem * 2);
     if(temp == NULL) {
         LOG_PRINTF(s, "Failed to allocate buffers memory.\n");
         return(-1);
@@ -748,7 +737,6 @@ int synth_add_buffer(Synth *s,
     for(j = i + 1; j < s->buffersmem; j++) {
         s->buffer[j].size = 0;
     }
-    s->buffer[i].type = type;
     s->buffer[i].size = size;
     s->buffer[i].data = malloc(size * sizeof(float));
     if(s->buffer[i].data == NULL) {
@@ -758,14 +746,14 @@ int synth_add_buffer(Synth *s,
     if(data != NULL) {
         if(type == SYNTH_TYPE_U8) {
             memcpy(s->buffer[i].data, data, size * sizeof(Uint8));
-            s->U8toF32.buf = s->buffer[i].data;
+            s->U8toF32.buf = (Uint8 *)s->buffer[i].data;
             s->U8toF32.len = size;
-            SDL_ConvertAudio(s->U8toF32);
+            SDL_ConvertAudio(&(s->U8toF32));
         } else if(type == SYNTH_TYPE_S16) {
             memcpy(s->buffer[i].data, data, size * sizeof(Sint16));
-            s->S16toF32.buf = s->buffer[i].data;
+            s->S16toF32.buf = (Uint8 *)s->buffer[i].data;
             s->S16toF32.len = size;
-            SDL_ConvertAudio(s->S16toF32);
+            SDL_ConvertAudio(&(s->S16toF32));
         } else { /* F32 */
             memcpy(s->buffer[i].data, data, size * sizeof(float));
         }
@@ -809,13 +797,13 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
     }
 
     /* first loaded buffer, so do some initial setup */
-    if(s->playerssmem == 0) {
+    if(s->playersmem == 0) {
         s->player = malloc(sizeof(SynthPlayer));
         if(s->player == NULL) {
             LOG_PRINTF(s, "Failed to allocate buffers memory.\n");
             return(-1);
         }
-        s->player[0].playersmem = 1;
+        s->playersmem = 1;
         s->player[0].inBuffer = inBuffer;
         s->buffer[inBuffer].ref++; /* add a reference */
         s->player[0].outBuffer = 0; /* A 0th buffer will have to exist at least */
@@ -830,7 +818,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
         s->buffer[inBuffer].ref++;
         s->player[0].volPos = 0;
         s->player[0].volScale = 1.0;
-        s->player[0].playMode = SYNTH_MODE_ONCE;
+        s->player[0].mode = SYNTH_MODE_ONCE;
         s->player[0].loopStart = 0;
         s->player[0].loopEnd = s->buffer[inBuffer].size - 1;
         s->player[0].phaseBuffer = inBuffer; /* this would have some weird effect, but
@@ -860,7 +848,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
             s->buffer[inBuffer].ref++;
             s->player[i].volPos = 0;
             s->player[i].volScale = 1.0;
-            s->player[i].playMode = SYNTH_MODE_ONCE;
+            s->player[i].mode = SYNTH_MODE_ONCE;
             s->player[i].loopStart = 0;
             s->player[i].loopEnd = s->buffer[inBuffer].size - 1;
             s->player[i].phaseBuffer = inBuffer;
@@ -876,17 +864,17 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
     }
 
     /* expand buffer if there's no free slots */
-    temp = realloc(s->buffer,
-                   sizeof(SyntbBuffer) * s->buffersmem * 2);
+    temp = realloc(s->player,
+                   sizeof(SynthBuffer) * s->playersmem * 2);
     if(temp == NULL) {
         LOG_PRINTF(s, "Failed to allocate buffers memory.\n");
         return(-1);
     }
-    s->buffer = temp;
-    s->buffersmem *= 2;
+    s->player = temp;
+    s->playersmem *= 2;
     /* initialize empty excess buffers as empty */
-    for(j = i + 1; j < s->buffersmem; j++) {
-        s->buffer[j].size = 0;
+    for(j = i + 1; j < s->playersmem; j++) {
+        s->player[j].inBuffer = 0;
     }
     s->player[i].inBuffer = inBuffer;
     s->buffer[inBuffer].ref++;
@@ -900,7 +888,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
     s->buffer[inBuffer].ref++;
     s->player[i].volPos = 0;
     s->player[i].volScale = 1.0;
-    s->player[i].playMode = SYNTH_MODE_ONCE;
+    s->player[i].mode = SYNTH_MODE_ONCE;
     s->player[i].loopStart = 0;
     s->player[i].loopEnd = s->buffer[inBuffer].size - 1;
     s->player[i].phaseBuffer = inBuffer;
@@ -926,7 +914,7 @@ int synth_free_player(Synth *s, unsigned int index) {
         s->buffer[s->player[index].outBuffer - s->channels].ref--;
     }
     s->buffer[s->player[index].inBuffer].ref--;
-    s->buffer[s->player[index].volumeBuffer].ref--;
+    s->buffer[s->player[index].volBuffer].ref--;
     s->buffer[s->player[index].phaseBuffer].ref--;
     s->buffer[s->player[index].speedBuffer].ref--;
     s->player[index].inBuffer = 0;
@@ -1350,7 +1338,7 @@ int synth_run_player(Synth *s,
     p = &(s->player[index]);
     i = &(s->buffer[p->inBuffer]);
     if(p->outBuffer < s->channels) {
-        o = &(s->channelbuffers[p->outBuffer].data[s->writecursor]);
+        o = &(s->channelbuffer[p->outBuffer].data[s->writecursor]);
         os = synth_get_samples_needed(s);
         if(p->outPos >= os) {
             return(0);
@@ -1371,8 +1359,8 @@ int synth_run_player(Synth *s,
             todo = MIN(todo, ((float)(i->size) - p->inPos) /
                              p->speed);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 p->inPos += p->speed;
             }
@@ -1382,8 +1370,8 @@ int synth_run_player(Synth *s,
             todo = MIN(todo, ((float)(i->size) - p->inPos) /
                              p->speed);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 p->inPos += p->speed;
             }
@@ -1394,11 +1382,11 @@ int synth_run_player(Synth *s,
             todo = MIN(todo, ((float)(i->size) - p->inPos) /
                              p->speed);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->inPos += p->speed;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
@@ -1407,11 +1395,11 @@ int synth_run_player(Synth *s,
             todo = MIN(todo, ((float)(i->size) - p->inPos) /
                              p->speed);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->inPos += p->speed;
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
@@ -1424,8 +1412,8 @@ int synth_run_player(Synth *s,
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
@@ -1437,8 +1425,8 @@ int synth_run_player(Synth *s,
                   p->outOp == SYNTH_OUTPUT_ADD) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
@@ -1451,8 +1439,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
@@ -1466,8 +1454,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->inPos += sp->data[p->speedPos] * p->speedScale;
                 if(p->inPos >= i->size) {
@@ -1487,8 +1475,8 @@ int synth_run_player(Synth *s,
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos + loopPos] * p->volume;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1506,8 +1494,8 @@ int synth_run_player(Synth *s,
                   p->outOp == SYNTH_OUTPUT_ADD) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1524,8 +1512,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1543,8 +1531,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1569,8 +1557,8 @@ int synth_run_player(Synth *s,
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1590,8 +1578,8 @@ int synth_run_player(Synth *s,
                   p->outOp == SYNTH_OUTPUT_ADD) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1612,8 +1600,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1635,8 +1623,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1664,8 +1652,8 @@ int synth_run_player(Synth *s,
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1683,8 +1671,8 @@ int synth_run_player(Synth *s,
                   p->outOp == SYNTH_OUTPUT_ADD) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1703,8 +1691,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1717,15 +1705,15 @@ int synth_run_player(Synth *s,
                     p->inPos += loopLen;
                     p->speed = -(p->speed);
                 }
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else if(p->volMode == SYNTH_VOLUME_SOURCE &&
                   p->outOp == SYNTH_OUTPUT_ADD) {
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos = fmodf(p->inPos + p->speed, i->size);
@@ -1738,7 +1726,7 @@ int synth_run_player(Synth *s,
                     p->inPos += loopLen;
                     p->speed = -(p->speed);
                 }
-                p->volPos = (p->volPos + 1) % sp->size;
+                p->volPos = (p->volPos + 1) % v->size;
             }
         } else {
             fprintf(stderr, "Invalid output mode.\n");
@@ -1752,8 +1740,8 @@ int synth_run_player(Synth *s,
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1775,8 +1763,8 @@ int synth_run_player(Synth *s,
                   p->outOp == SYNTH_OUTPUT_ADD) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * p->volume;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * p->volume;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1799,8 +1787,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] =
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1824,8 +1812,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[p->inPos] * v->data[p->volPos] * p->volScale;
+                o[p->outPos] +=
+                    i->data[(int)p->inPos] * v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 lastInPos = p->inPos;
                 p->inPos =
@@ -1854,8 +1842,8 @@ int synth_run_player(Synth *s,
            p->outOp == SYNTH_OUTPUT_REPLACE) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                o[p->outPos] =
+                    i->data[(int)fabsf(ph->data[p->phasePos] * i->size) % i->size] *
                     p->volume;
                 p->outPos++;
                 p->phasePos = (p->phasePos + 1) % ph->size;
@@ -1864,8 +1852,8 @@ int synth_run_player(Synth *s,
                   p->outOp == SYNTH_OUTPUT_ADD) {
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                o[p->outPos] +=
+                    i->data[(int)fabsf(ph->data[p->phasePos] * i->size) % i->size] *
                     p->volume;
                 p->outPos++;
                 p->phasePos = (p->phasePos + 1) % ph->size;
@@ -1875,8 +1863,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] =
-                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                o[p->outPos] =
+                    i->data[(int)fabsf(ph->data[p->phasePos] * i->size) % i->size] *
                     v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->volPos = (p->volPos + 1) % v->size;
@@ -1887,8 +1875,8 @@ int synth_run_player(Synth *s,
             v = &(s->buffer[p->volBuffer]);
             todo = MIN(todo, os - p->outPos);
             for(samples = 0; samples < todo; samples++) {
-                o->data[p->outPos] +=
-                    i->data[fabsf(ph->data[p->phasePos] * i->size) % i->size] *
+                o[p->outPos] +=
+                    i->data[(int)fabsf(ph->data[p->phasePos] * i->size) % i->size] *
                     v->data[p->volPos] * p->volScale;
                 p->outPos++;
                 p->volPos = (p->volPos + 1) % v->size;

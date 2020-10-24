@@ -54,7 +54,7 @@ int initialize_SDL(SDL_Window **win,
     SDL_RendererInfo driver;
 
     /* SDL/Windows/Render initialization stuff */
-    if(SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "Failed to initialize SDL: %s\n",
                 SDL_GetError());
         return(-1);
@@ -373,12 +373,11 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
 int audio_frame_cb(void *priv) {
     CrustyGame *state = priv;
 
-    result = crustyvm_run(cvm, "audio");
-    if(result < 0) {
+    if(crustyvm_run(state->cvm, "audio") < 0) {
         fprintf(stderr, "Program reached an exception while running: "
                         "%s\n",
-                crustyvm_statusstr(crustyvm_get_status(cvm)));
-        crustyvm_debugtrace(cvm, 1);
+                crustyvm_statusstr(crustyvm_get_status(state->cvm)));
+        crustyvm_debugtrace(state->cvm, 1);
         return(-1);
     }
 
@@ -419,7 +418,6 @@ int main(int argc, char **argv) {
     unsigned int vars = 0;
 
     FILE *in = NULL;
-    CrustyVM *cvm;
     char *program = NULL;
     long len;
     int result;
@@ -552,14 +550,14 @@ int main(int argc, char **argv) {
         }
     }
 
-    cvm = crustyvm_new(filename, fullpath, 
+    state.cvm = crustyvm_new(filename, fullpath, 
                        program, len,
                        CRUSTY_FLAG_DEFAULTS,
                        0,
                        cb, CRUSTYGAME_CALLBACKS,
                        (const char **)var, (const char **)value, vars,
                        vprintf_cb, stderr);
-    if(cvm == NULL) {
+    if(state.cvm == NULL) {
         fprintf(stderr, "Failed to load program.\n");
         goto error_infile;
     }
@@ -570,9 +568,9 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Program loaded.\n");
 
     fprintf(stderr, "Token memory size: %u\n",
-                    crustyvm_get_tokenmem(cvm));
+                    crustyvm_get_tokenmem(state.cvm));
     fprintf(stderr, "Stack size: %u\n",
-                    crustyvm_get_stackmem(cvm));
+                    crustyvm_get_stackmem(state.cvm));
 
     if(initialize_SDL(&(state.win),
                       &(state.renderer),
@@ -596,10 +594,12 @@ int main(int argc, char **argv) {
                         &state,
                         vprintf_cb,
                         stderr);
-    if(state.ll == NULL) {
+    if(state.s == NULL) {
         fprintf(stderr, "Failed to create synth.\n");
         goto error_ll;
     }
+    SDL_Delay(100);
+    goto error_synth;
 
     /* seed random */
     srand(time(NULL));
@@ -607,16 +607,17 @@ int main(int argc, char **argv) {
     /* init may flag program quit due to error */
     state.running = 1;
     /* call program init */
-    result = crustyvm_run(cvm, "init");
+    result = crustyvm_run(state.cvm, "init");
     if(result < 0) {
         fprintf(stderr, "Program reached an exception while running: "
                         "%s\n",
-                crustyvm_statusstr(crustyvm_get_status(cvm)));
-        crustyvm_debugtrace(cvm, 1);
+                crustyvm_statusstr(crustyvm_get_status(state.cvm)));
+        crustyvm_debugtrace(state.cvm, 1);
         goto error_synth;
     }
 
     while(state.running) {
+        state.running = 0;
         if(SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
             goto error_synth;
@@ -635,7 +636,7 @@ int main(int argc, char **argv) {
             goto error_synth;
         } 
 
-        while(SDL_PollEvent(&(state.lastEvent)) && state.running) {
+        while(state.running && SDL_PollEvent(&(state.lastEvent))) {
             /* allow the user to press CTRL+F10 (like DOSBOX) to uncapture a
              * captured mouse, and also enforce disallowing recapture until
              * reallowed by pressing the same combo again. */
@@ -691,12 +692,12 @@ int main(int argc, char **argv) {
                 case SDL_CONTROLLERAXISMOTION:
                 case SDL_CONTROLLERBUTTONDOWN:
                 case SDL_CONTROLLERBUTTONUP:
-                    result = crustyvm_run(cvm, "event");
+                    result = crustyvm_run(state.cvm, "event");
                     if(result < 0) {
                         fprintf(stderr, "Program reached an exception while "
                                         "running: %s\n",
-                                crustyvm_statusstr(crustyvm_get_status(cvm)));
-                        crustyvm_debugtrace(cvm, 0);
+                                crustyvm_statusstr(crustyvm_get_status(state.cvm)));
+                        crustyvm_debugtrace(state.cvm, 0);
                         goto error_synth;
                     }
                     break;
@@ -704,18 +705,18 @@ int main(int argc, char **argv) {
                     break;
             }
         }
- 
+
         if(synth_frame(state.s) < 0) {
             fprintf(stderr, "Audio failed.\n");
             goto error_synth;
         }
 
-        result = crustyvm_run(cvm, "frame");
+        result = crustyvm_run(state.cvm, "frame");
         if(result < 0) {
             fprintf(stderr, "Program reached an exception while "
                             "running: %s\n",
-                    crustyvm_statusstr(crustyvm_get_status(cvm)));
-            crustyvm_debugtrace(cvm, 0);
+                    crustyvm_statusstr(crustyvm_get_status(state.cvm)));
+            crustyvm_debugtrace(state.cvm, 0);
             goto error_synth;
         }
 
@@ -723,12 +724,13 @@ int main(int argc, char **argv) {
     }
 
     fprintf(stderr, "Program completed successfully.\n");
+    synth_free(state.s);
     layerlist_free(state.ll);
 
     SDL_DestroyWindow(state.win);
     SDL_Quit();
 
-    crustyvm_free(cvm);
+    crustyvm_free(state.cvm);
 
     exit(EXIT_SUCCESS);
 
@@ -740,7 +742,7 @@ error_sdl:
     SDL_DestroyWindow(state.win);
     SDL_Quit();
 error_cvm:
-    crustyvm_free(cvm);
+    crustyvm_free(state.cvm);
 error_infile:
     if(program != NULL) {
         free(program);

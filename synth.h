@@ -1,3 +1,6 @@
+#ifndef _SYNTH_H
+#define _SYNTH_H
+
 typedef int (*synth_frame_cb_t)(void *priv);
 typedef void (*synth_log_cb_t)(void *priv, const char *fmt, ...);
 
@@ -8,7 +11,35 @@ typedef enum {
     SYNTH_TYPE_F32
 } SynthImportType;
 
-typedef struct Synth;
+typedef enum {
+    SYNTH_STOPPED,
+    SYNTH_ENABLED,
+    SYNTH_RUNNING
+} SynthState;
+
+typedef enum {
+    SYNTH_OUTPUT_REPLACE,
+    SYNTH_OUTPUT_ADD
+} SynthOutputOperation;
+
+typedef enum {
+    SYNTH_VOLUME_CONSTANT,
+    SYNTH_VOLUME_SOURCE
+} SynthVolumeMode;
+
+typedef enum {
+    SYNTH_SPEED_CONSTANT,
+    SYNTH_SPEED_SOURCE
+} SynthSpeedMode;
+
+typedef enum {
+    SYNTH_MODE_ONCE,
+    SYNTH_MODE_LOOP,
+    SYNTH_MODE_PINGPONG,
+    SYNTH_MODE_PHASE_SOURCE
+} SynthPlayerMode;
+
+typedef struct Synth_t Synth;
 
 unsigned int synth_get_samples_needed(Synth *s);
 Synth *synth_new(synth_frame_cb_t synth_frame_cb,
@@ -85,3 +116,5 @@ int synth_set_player_speed_source_scale(Synth *s,
 int synth_run_player(Synth *s,
                      unsigned int index,
                      unsigned int reqSamples);
+
+#endif

@@ -21,7 +21,9 @@
 #define _CRUSTYGAME_H
 
 #include <SDL.h>
+#include "crustyvm.h"
 #include "tilemap.h"
+#include "synth.h"
 
 #define CRUSTYGAME_KEYDOWN              (1)
 #define CRUSTYGAME_KEYUP                (2)
@@ -71,10 +73,12 @@
 #define CRUSTYGAME_SYNTH_TYPE_F32 (2)
 
 typedef struct {
+    CrustyVM *cvm;
     SDL_Window *win;
     SDL_Renderer *renderer;
     SDL_Event lastEvent;
     LayerList *ll;
+    Synth *s;
     int running;
 
     void *buffer;
@@ -86,8 +90,6 @@ typedef struct {
 
     unsigned int savesize;
     FILE *savefile;
-
-    Synth *s;
 } CrustyGame;
 
 extern CrustyGame state;

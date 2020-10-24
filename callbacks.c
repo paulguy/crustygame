@@ -1188,7 +1188,7 @@ int audio_set_fragments(void *priv,
         return(-1);
     }
 
-    fragments = (int *)ptr;
+    fragments = *(int *)ptr;
     if(fragments < 0) {
         fprintf(stderr, "Value out of range.\n");
         return(-1);
@@ -1619,7 +1619,7 @@ int audio_run_player(void *priv,
         return(-1);
     }
 
-    state->ret = synth_run_player(state->s, *(int *)ptr);
+    state->ret = synth_run_player(state->s, index, *(int *)ptr);
     if(state->ret < 0) {
         return(-1);
     }
@@ -2041,16 +2041,16 @@ CrustyCallback cb[] = {
         .write = audio_set_player_speed, .writepriv = &state
     },
     {
-        .name = "audio_set_player_source", .length = INT_MAX,
+        .name = "audio_set_player_speed_source", .length = INT_MAX,
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
-        .write = audio_set_player_source, .writepriv = &state
+        .write = audio_set_player_speed_source, .writepriv = &state
     },
     {
-        .name = "audio_set_player_source_scale", .length = INT_MAX,
+        .name = "audio_set_player_speed_source_scale", .length = INT_MAX,
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
-        .write = audio_set_player_source_scale, .writepriv = &state
+        .write = audio_set_player_speed_source_scale, .writepriv = &state
     },
     {
         .name = "audio_run_player", .length = INT_MAX,
