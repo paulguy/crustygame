@@ -581,9 +581,11 @@ int synth_frame(Synth *s) {
         s->state = SYNTH_RUNNING;
         SDL_PauseAudioDevice(s->audiodev, 0);
     } else if(s->state == SYNTH_RUNNING) {
-        SDL_LockAudioDevice(s->audiodev);
         needed = synth_get_samples_needed(s);
         if(needed > 0) {
+            SDL_LockAudioDevice(s->audiodev);
+            /* call this again to avoid racing */
+            needed = synth_get_samples_needed(s);
             if(s->synth_frame_cb(s->synth_frame_priv) < 0) {
                 return(-1);
             }
@@ -597,8 +599,8 @@ int synth_frame(Synth *s) {
                 }
                 update_samples_needed(s, needed);
             }
+            SDL_UnlockAudioDevice(s->audiodev);
         }
-        SDL_UnlockAudioDevice(s->audiodev);
     }
 
     return(0);
