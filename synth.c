@@ -207,29 +207,32 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
         if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
             for(i = 0; i < todo; i++) {
                 ((Sint32 *)stream)[i * 2] =
-                    ((Sint32 *)&(s->channelbuffer[0].data))[s->readcursor + i];
+                    ((Sint32 *)(s->channelbuffer[0].data))[s->readcursor + i];
                 ((Sint32 *)stream)[i * 2 + 1] =
-                    ((Sint32 *)&(s->channelbuffer[1].data))[s->readcursor + i];
+                    ((Sint32 *)(s->channelbuffer[1].data))[s->readcursor + i];
             }
             /* clear used buffer so the converted data isn't reconverted from
              * garbage possibly producing horrible noises */
             memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
+            memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint32));
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
             for(i = 0; i < todo; i++) {
                 ((Sint16 *)stream)[i * 2] =
-                    ((Sint16 *)&(s->channelbuffer[0].data))[s->readcursor + i];
+                    ((Sint16 *)(s->channelbuffer[0].data))[s->readcursor + i];
                 ((Sint16 *)stream)[i * 2 + 1] =
-                    ((Sint16 *)&(s->channelbuffer[1].data))[s->readcursor + i];
+                    ((Sint16 *)(s->channelbuffer[1].data))[s->readcursor + i];
             }
             memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
+            memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint16));
         } else { /* 8, very unlikely */
             for(i = 0; i < todo; i++) {
                 stream[i * 2] =
-                    ((char *)&(s->channelbuffer[0].data))[s->readcursor + i];
+                    ((char *)(s->channelbuffer[0].data))[s->readcursor + i];
                 stream[i * 2 + 1] =
-                    ((char *)&(s->channelbuffer[1].data))[s->readcursor + i];
+                    ((char *)(s->channelbuffer[1].data))[s->readcursor + i];
             }
             memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
+            memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo);
         }
         update_samples_available(s, todo);
         length -= todo;
@@ -243,27 +246,30 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 32) {
                 for(i = 0; i < todo; i++) {
                     ((Sint32 *)stream)[i * 2] =
-                        ((Sint32 *)&(s->channelbuffer[0].data))[s->readcursor + i];
+                        ((Sint32 *)(s->channelbuffer[0].data))[s->readcursor + i];
                     ((Sint32 *)stream)[i * 2 + 1] =
-                        ((Sint32 *)&(s->channelbuffer[1].data))[s->readcursor + i];
+                        ((Sint32 *)(s->channelbuffer[1].data))[s->readcursor + i];
                 }
                 memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
+                memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint32));
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
                 for(i = 0; i < todo; i++) {
                     ((Sint16 *)stream)[i * 2] =
-                        ((Sint16 *)&(s->channelbuffer[0].data))[s->readcursor + i];
+                        ((Sint16 *)(s->channelbuffer[0].data))[s->readcursor + i];
                     ((Sint16 *)stream)[i * 2 + 1] =
-                        ((Sint16 *)&(s->channelbuffer[1].data))[s->readcursor + i];
+                        ((Sint16 *)(s->channelbuffer[1].data))[s->readcursor + i];
                 }
                 memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
+                memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint16));
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     stream[i * 2] =
-                        ((char *)&(s->channelbuffer[0].data))[s->readcursor + i];
+                        ((char *)(s->channelbuffer[0].data))[s->readcursor + i];
                     stream[i * 2 + 1] =
-                        ((char *)&(s->channelbuffer[1].data))[s->readcursor + i];
+                        ((char *)(s->channelbuffer[1].data))[s->readcursor + i];
                 }
                 memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
+                memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo);
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -286,26 +292,32 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     ((Sint32 *)stream)[i * s->channels + j] =
-                        ((Sint32 *)&(s->channelbuffer[j].data))[s->readcursor + i];
+                        ((Sint32 *)(s->channelbuffer[j].data))[s->readcursor + i];
                 }
             }
-            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
+            for(i = 0; i < s->channels; i++) {
+                memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint32));
+            }
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     ((Sint16 *)stream)[i * s->channels + j] =
-                        ((Sint16 *)&(s->channelbuffer[j].data))[s->readcursor + i];
+                        ((Sint16 *)(s->channelbuffer[j].data))[s->readcursor + i];
                 }
             }
-            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
+            for(i = 0; i < s->channels; i++) {
+                memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint16));
+            }
         } else { /* 8 */
             for(i = 0; i < todo; i++) {
                 for(j = 0; j < s->channels; j++) {
                     stream[i * s->channels + j] =
-                        ((char *)&(s->channelbuffer[j].data))[s->readcursor + i];
+                        ((char *)(s->channelbuffer[j].data))[s->readcursor + i];
                 }
             }
-            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
+            for(i = 0; i < s->channels; i++) {
+                memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo);
+            }
         }
         update_samples_available(s, todo);
         length -= todo;
@@ -320,26 +332,32 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         ((Sint32 *)stream)[i * s->channels + j] =
-                            ((Sint32 *)&(s->channelbuffer[j].data))[s->readcursor + i];
+                            ((Sint32 *)(s->channelbuffer[j].data))[s->readcursor + i];
                     }
                 }
-                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
+                for(i = 0; i < s->channels; i++) {
+                    memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint32));
+                }
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         ((Sint16 *)stream)[i * s->channels + j] =
-                            ((Sint16 *)&(s->channelbuffer[j].data))[s->readcursor + i];
+                            ((Sint16 *)(s->channelbuffer[j].data))[s->readcursor + i];
                     }
                 }
-                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
+                for(i = 0; i < s->channels; i++) {
+                    memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint16));
+                }
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     for(j = 0; j < s->channels; j++) {
                         stream[i * s->channels + j] =
-                            ((char *)&(s->channelbuffer[j].data))[s->readcursor + i];
+                            ((char *)(s->channelbuffer[j].data))[s->readcursor + i];
                     }
                 }
-                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
+                for(i = 0; i < s->channels; i++) {
+                    memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo);
+                }
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -602,37 +620,44 @@ int synth_set_fragments(Synth *s,
         return(-1);
     }
 
+    if(s->channelbuffer != NULL) {
+        if(s->fragments != fragments) {
+            for(i = 0; i < s->channels; i++) {
+                free(s->channelbuffer[i].data);
+            }
+            free(s->channelbuffer);
+            s->channelbuffer = NULL;
+        } else {
+            /* nothing to do */
+            return(0);
+        }
+    }
+
     if(s->channelbuffer == NULL) {
         s->channelbuffer = malloc(sizeof(SynthBuffer) * s->channels);
         if(s->channelbuffer == NULL) {
             fprintf(stderr, "Failed to allocate channel buffers.\n");
             return(-1);
         }
-        for(i = 0; i < s->channels; i++) {
-            s->channelbuffer[i].data = NULL;
-            s->channelbuffer[i].size = 0;
-        }
     }
 
+    s->fragments = fragments;
     s->buffersize = s->fragmentsize * fragments;
     for(i = 0; i < s->channels; i++) {
-        if(s->channelbuffer[i].data != NULL) {
-            free(s->channelbuffer[i].data);
-        }
+        s->channelbuffer[i].size = s->buffersize;
         s->channelbuffer[i].data =
             malloc(sizeof(float) * s->buffersize);
         if(s->channelbuffer[i].data == NULL) {
             fprintf(stderr, "Failed to allocate channel buffer memory.\n");
             for(i -= 1; i >= 0; i--) {
                 free(s->channelbuffer[i].data);
-                s->channelbuffer[i].data = NULL;
             }
+            free(s->channelbuffer);
+            s->fragments = 0;
             return(-1);
         }
         memset(s->channelbuffer[i].data, 0, sizeof(float) * s->buffersize);
     }
-
-    s->channelbuffer[i].size = s->buffersize;
 
     return(0);
 }

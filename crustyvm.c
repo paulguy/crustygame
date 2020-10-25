@@ -431,6 +431,7 @@ static long add_token(CrustyVM *cvm,
     char *end;
     unsigned char value;
     unsigned long newlen;
+    hexchr[2] = '\0';
 
     oldlen = cvm->tokenmemlen;
     /* original memory + new length tag + new string + null terminator for the

@@ -506,14 +506,14 @@ int main(int argc, char **argv) {
 
     if(filename == NULL) {
         fprintf(stderr, "USAGE: %s [(<filename>|-D<var>=<value>) ...] [-- <filename>]\n", argv[0]);
-        goto error_fullpath;
+        goto error_arglist;
     }
 
     fullpath = NULL;
     in = crustyvm_open_file(filename, &fullpath, vprintf_cb, stderr);
     if(in == NULL) {
         fprintf(stderr, "Failed to open file %s.\n", filename);
-        goto error_fullpath;
+        goto error_arglist;
     }
 
     if(fseek(in, 0, SEEK_END) < 0) {
@@ -752,7 +752,7 @@ error_infile:
     if(in != NULL) {
         fclose(in);
     }
-error_fullpath:
+
     free(fullpath);
 error_arglist:
     CLEAN_ARGS

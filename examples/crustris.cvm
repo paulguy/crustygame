@@ -195,6 +195,9 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
+    move audio_set_fragments 1
+    move audio_set_enabled 1
+
     move set_window_title WINDOW_TITLE
 
     call load_high_scores
@@ -439,6 +442,12 @@ proc init
     ; need to be set up first
     call setup_game
     label end
+ret
+
+proc audio
+    local dot string "."
+
+    move err dot
 ret
 
 static fps
