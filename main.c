@@ -598,8 +598,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to create synth.\n");
         goto error_ll;
     }
-    SDL_Delay(100);
-    goto error_synth;
 
     /* seed random */
     srand(time(NULL));
@@ -617,7 +615,6 @@ int main(int argc, char **argv) {
     }
 
     while(state.running) {
-        state.running = 0;
         if(SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0) {
             fprintf(stderr, "Failed to set render draw color.\n");
             goto error_synth;

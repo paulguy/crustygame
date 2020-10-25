@@ -386,6 +386,7 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
         free(s);
         return(NULL);
     }
+
     /* probably impossible, but there are cases where at least one output
      * buffer is assumed, so I guess make it clear that there must be at least
      * 1. */
