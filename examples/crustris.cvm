@@ -186,7 +186,14 @@ static piece_timer_id
 static input_timer_id
 static bgscroll_timer_id
 
+static wave ints 54
+static wave2 ints 56
+expr WAVE_HIGH 0x7FFF7FFF ; 32767
+expr WAVE_LOW  0x80008000 ; -32768
+static waveplayer
+
 proc init
+    local oscvol floats "0.1"
     local temp ints 4
     local tempf floats "0.0 0.0 0.0 0.0"
     local pitbg ints PIT_BG_SIZE 
@@ -195,7 +202,54 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
-    move audio_set_fragments 1
+    move temp 0
+    label genwave1
+        cmp temp 27
+        jumpz genwave2
+        move wave:temp WAVE_HIGH
+        add temp 1
+    jump genwave1
+    label genwave2
+        cmp temp 54
+        jumpz donewave
+        move wave:temp WAVE_LOW
+        add temp 1
+    jump genwave2
+    label donewave
+
+    move temp 0
+    label genwave3
+        cmp temp 28
+        jumpz genwave4
+        move wave2:temp WAVE_HIGH
+        add temp 1
+    jump genwave3
+    label genwave4
+        cmp temp 56
+        jumpz donewave2
+        move wave2:temp WAVE_LOW
+        add temp 1
+    jump genwave4
+    label donewave2
+
+    move set_buffer wave
+    move temp:0 AUDIO_TYPE_S16
+    move temp:1 108
+    move audio_add_buffer temp
+    move temp get_return
+    move audio_add_player temp
+    move waveplayer get_return
+    move audio_set_player_mode:waveplayer AUDIO_MODE_LOOP
+    move set_buffer wave2
+    move temp:0 AUDIO_TYPE_S16
+    move temp:1 112
+    move audio_add_buffer temp
+    move temp get_return
+    move audio_set_player_volume_source:waveplayer temp
+    move audio_set_player_volume_mode:waveplayer AUDIO_VOLUME_MODE_SOURCE
+    move audio_set_player_volume_source_scale:waveplayer oscvol
+
+    move audio_set_fragments 4
     move audio_set_enabled 1
 
     move set_window_title WINDOW_TITLE
@@ -445,9 +499,11 @@ proc init
 ret
 
 proc audio
-    local dot string "."
+    local temp
 
-    move err dot
+    move temp audio_get_samples_needed
+    move audio_set_player_output_buffer_pos:waveplayer 0
+    move audio_run_player:waveplayer temp
 ret
 
 static fps

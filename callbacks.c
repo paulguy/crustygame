@@ -1133,31 +1133,36 @@ int set_window_title(void *priv,
 int audio_get_samples_needed(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    return(synth_get_samples_needed(state->s));
+    *(int *)val = synth_get_samples_needed(state->s);
+    return(0);
 }
 
 int audio_get_rate(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    return(synth_get_rate(state->s));
+    *(int *)val = synth_get_rate(state->s);
+    return(0);
 }
 
 int audio_get_channels(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    return(synth_get_channels(state->s));
+    *(int *)val = synth_get_channels(state->s);
+    return(0);
 }
 
 int audio_get_fragment_size(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    return(synth_get_fragment_size(state->s));
+    *(int *)val = synth_get_fragment_size(state->s);
+    return(0);
 }
 
 int audio_has_underrun(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    return(synth_has_underrun(state->s));
+    *(int *)val = synth_has_underrun(state->s);
+    return(0);
 }
 
 int audio_set_enabled(void *priv,
@@ -1221,6 +1226,33 @@ int audio_add_buffer(void *priv,
     if(state->buffer == NULL) {
         fprintf(stderr, "No buffer has been assigned.\n");
         return(-1);
+    }
+
+    switch(bufferType) {
+        case CRUSTYGAME_AUDIO_TYPE_U8:
+            if(bufferSize > state->size) {
+                fprintf(stderr, "Buffer too small for declared size.\n");
+                return(-1);
+            }
+            bufferType = SYNTH_TYPE_U8;
+            break;
+        case CRUSTYGAME_AUDIO_TYPE_S16:
+            if(bufferSize * sizeof(Sint16) > state->size) {
+                fprintf(stderr, "Buffer too small for declared size.\n");
+                return(-1);
+            }
+            bufferType = SYNTH_TYPE_S16;
+            break;
+        case CRUSTYGAME_AUDIO_TYPE_F32:
+            if(bufferSize * sizeof(float) > state->size) {
+                fprintf(stderr, "Buffer too small for declared size.\n");
+                return(-1);
+            }
+            bufferType = SYNTH_TYPE_F32;
+            break;
+        default:
+            fprintf(stderr, "Invalid audio buffer type.\n");
+            return(-1);
     }
 
     state->ret = synth_add_buffer(state->s,
@@ -1409,15 +1441,28 @@ int audio_set_player_volume_mode(void *priv,
                                  void *ptr,
                                  unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
+    int volumeMode;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
 
+    switch(*(int *)ptr) {
+        case CRUSTYGAME_AUDIO_VOLUME_MODE_CONSTANT:
+            volumeMode = SYNTH_VOLUME_CONSTANT;
+            break;
+        case CRUSTYGAME_AUDIO_VOLUME_MODE_SOURCE:
+            volumeMode = SYNTH_VOLUME_SOURCE;
+            break;
+        default:
+            fprintf(stderr, "Invalid volume mode.\n");
+            return(-1);
+    }
+
     return(synth_set_player_volume_mode(state->s,
                                         index,
-                                        *(int *)ptr));
+                                        volumeMode));
 }
 
 int audio_set_player_volume(void *priv,
@@ -1434,7 +1479,7 @@ int audio_set_player_volume(void *priv,
 
     return(synth_set_player_volume(state->s,
                                    index,
-                                   *(float *)ptr));
+                                   *(double *)ptr));
 }
 
 int audio_set_player_volume_source(void *priv,
@@ -1468,7 +1513,7 @@ int audio_set_player_volume_source_scale(void *priv,
 
     return(synth_set_player_volume_source_scale(state->s,
                                                 index,
-                                                *(float *)ptr));
+                                                *(double *)ptr));
 }
 
 int audio_set_player_mode(void *priv,
@@ -1477,15 +1522,33 @@ int audio_set_player_mode(void *priv,
                           void *ptr,
                           unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
+    int playerMode;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
+    switch(*(int *)ptr) {
+        case CRUSTYGAME_AUDIO_MODE_ONCE:
+            playerMode = SYNTH_MODE_ONCE;
+            break;
+        case CRUSTYGAME_AUDIO_MODE_LOOP:
+            playerMode = SYNTH_MODE_LOOP;
+            break;
+        case CRUSTYGAME_AUDIO_MODE_PINGPONG:
+            playerMode = SYNTH_MODE_PINGPONG;
+            break;
+        case CRUSTYGAME_AUDIO_MODE_PHASE_SOURCE:
+            playerMode = SYNTH_MODE_PHASE_SOURCE;
+            break;
+        default:
+            fprintf(stderr, "Invalid player mode.\n");
+            return(-1);
+    }
 
     return(synth_set_player_mode(state->s,
                                  index,
-                                 *(int *)ptr));
+                                 playerMode));
 }
 
 int audio_set_player_loop_start(void *priv,
@@ -1570,7 +1633,7 @@ int audio_set_player_speed(void *priv,
 
     return(synth_set_player_speed(state->s,
                                   index,
-                                  *(float *)ptr));
+                                  *(double *)ptr));
 }
 
 int audio_set_player_speed_source(void *priv,
@@ -1604,7 +1667,7 @@ int audio_set_player_speed_source_scale(void *priv,
 
     return(synth_set_player_speed_source_scale(state->s,
                                                index,
-                                               *(float *)ptr));
+                                               *(double *)ptr));
 }
 
 int audio_run_player(void *priv,

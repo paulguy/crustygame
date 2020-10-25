@@ -2722,7 +2722,6 @@ static int variable_declaration(CrustyVM *cvm,
                 }
 
                 memset(intinit, 0, sizeof(int) * length);
-                initializer = intinit;
             }
             /* array with initializer, nothing to do, since length and intinit
                are already what they should be */
@@ -2736,6 +2735,7 @@ static int variable_declaration(CrustyVM *cvm,
             length = strtol(TOKENVAL(line->offset[3]), &end, 0);
             if(end != TOKENVAL(line->offset[3]) &&
                *end == '\0') {
+                /* integer length */
                 if(length <= 0) {
                     LOG_PRINTF_LINE(cvm, "Arrays size must be positive and non "
                                         "zero.\n");
@@ -2747,8 +2747,8 @@ static int variable_declaration(CrustyVM *cvm,
                     return(-1);
                 }
                 memset(floatinit, 0, sizeof(double) * length);
-                initializer = floatinit;
             } else {
+                /* literal list of intiailizers */
                 length = number_list_floats(TOKENVAL(line->offset[3]),
                                             TOKENLEN(line->offset[3]),
                                             &floatinit);
@@ -2759,9 +2759,8 @@ static int variable_declaration(CrustyVM *cvm,
                     LOG_PRINTF_LINE(cvm, "Initializer must be a space separated list of numbers.\n");
                     return(-1);
                 }
-                initializer = floatinit;
             }
-            /* array with initializer */
+            initializer = floatinit;
         } else if(compare_token_and_string(cvm,
                                            line->offset[2],
                                            "string") == 0) {
@@ -5865,7 +5864,7 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
                         j < proc->var[i]->length && j < DEBUG_MAX_PRINT;
                         j++) {
                         LOG_PRINTF_BARE(cvm, " %g",
-                            *((int *)(&(cvm->stack[sp -
+                            *((double *)(&(cvm->stack[sp -
                                                    proc->var[i]->offset +
                                                    (j * sizeof(double))]))));
                     }
@@ -5875,7 +5874,7 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
                         j < proc->var[i]->length && j < DEBUG_MAX_PRINT;
                         j++) {
                         LOG_PRINTF_BARE(cvm, "%c",
-                            *((int *)(&(cvm->stack[sp - proc->var[i]->offset + j]))));
+                            cvm->stack[sp - proc->var[i]->offset + j]);
                     }
                     LOG_PRINTF_BARE(cvm, "\"");
                 }
@@ -5915,7 +5914,7 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
                             j < cvm->var[i].length && j < DEBUG_MAX_PRINT;
                             j++) {
                             LOG_PRINTF_BARE(cvm, " %g",
-                                *((int *)(&(cvm->stack[cvm->var[i].offset +
+                                *((double *)(&(cvm->stack[cvm->var[i].offset +
                                                        (j * sizeof(double))]))));
                         }
                     } else { /* CHAR */
@@ -5924,7 +5923,7 @@ void crustyvm_debugtrace(CrustyVM *cvm, int full) {
                             j < cvm->var[i].length && j < DEBUG_MAX_PRINT;
                             j++) {
                             LOG_PRINTF_BARE(cvm, "%c",
-                                *((int *)(&(cvm->stack[cvm->var[i].offset + j]))));
+                                cvm->stack[cvm->var[i].offset + j]);
                         }
                         LOG_PRINTF_BARE(cvm, "\"");
                     }
