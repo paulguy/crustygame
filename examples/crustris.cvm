@@ -249,7 +249,7 @@ proc init
     move audio_set_player_volume_mode:waveplayer AUDIO_VOLUME_MODE_SOURCE
     move audio_set_player_volume_source_scale:waveplayer oscvol
 
-    move audio_set_fragments 4
+    move audio_set_fragments 1
     move audio_set_enabled 1
 
     move set_window_title WINDOW_TITLE
@@ -498,12 +498,18 @@ proc init
     label end
 ret
 
+static playing_audio 0
+static audio_fragments 1
+
 proc audio
     local temp
 
+    cmp playing_audio
+    jumpz end
     move temp audio_get_samples_needed
     move audio_set_player_output_buffer_pos:waveplayer 0
     move audio_run_player:waveplayer temp
+    label end
 ret
 
 static fps
@@ -1268,8 +1274,16 @@ proc do_gameover_frame
 ret
 
 proc frame
-    local junk
+    local temp
 
+    cmp audio_has_underrun
+    jumpz no_reinit_audio
+        move audio_set_enabled 0
+        move audio_set_fragments audio_fragments
+        ERR_NL audio_fragments
+        add audio_fragments 1
+        move audio_set_enabled 1
+    label no_reinit_audio
     cmp game_mode GAME_MODE_TITLE
     jumpz do_title
     cmp game_mode GAME_MODE_PLAYING
@@ -1298,7 +1312,7 @@ proc frame
     label end
 
     ; always do random
-    move junk get_random
+    move temp get_random
 ;    call count_fps
 ret
 
@@ -1307,6 +1321,8 @@ proc generic_event keycode
     jumpz toggle_fullscreen
     cmp event_get_button INPUT_KEY_ESCAPE
     jumpz quit
+    cmp event_get_button INPUT_KEY_F1
+    jumpz toggle_audio
     jump end
 
     label toggle_fullscreen
@@ -1320,6 +1336,12 @@ proc generic_event keycode
         call save_high_scores
         move set_running 0
         move keycode -1
+    jump end
+
+    label toggle_audio
+        xor playing_audio 1
+    jump end
+
     label end
 ret
 

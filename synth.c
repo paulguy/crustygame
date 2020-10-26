@@ -117,8 +117,8 @@ unsigned int synth_get_samples_needed(Synth *s) {
 
 static void update_samples_needed(Synth *s, unsigned int added) {
     s->writecursor += added;
-    if(s->writecursor >= s->buffersize) {
-        s->writecursor -= s->buffersize;
+    if(s->writecursor == s->buffersize) {
+        s->writecursor = 0;
     }
     s->bufferfilled += added;
 }
@@ -128,7 +128,7 @@ static unsigned int get_samples_available(Synth *s) {
         if(s->bufferfilled == s->buffersize) {
             return(s->buffersize);
         } else {
-            return(s->buffersize - s->readcursor);
+            return(0);
         }
     } else if(s->readcursor < s->writecursor) {
         return(s->writecursor - s->readcursor);
@@ -154,6 +154,11 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
     unsigned int todo;
     /* get number of samples */
     unsigned int length = len / (s->channels * sizeof(float));
+
+    if(available == 0) {
+        s->underrun = 1;
+        return;
+    }
 
     if(s->channels == 1) {
         todo = MIN(length, available);
@@ -191,7 +196,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             if(length > 0) {
                 /* SDL audio requested more, but there is no more,
                  * underrun. */
-                s->underrun = 0;
+                s->underrun = 1;
             }
         }
     } else if(s->channels == 2) { /* hopefully faster stereo code path */
@@ -274,7 +279,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             update_samples_available(s, todo);
             length -= todo;
             if(length > 0) {
-                s->underrun = 0;
+                s->underrun = 1;
             }
         }
     } else { /* unlikely case it's multichannel surround ... */
@@ -322,6 +327,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
         update_samples_available(s, todo);
         length -= todo;
         if(length > 0) {
+            available = get_samples_available(s);
             todo = MIN(length, available);
             s->converter.len = todo * sizeof(float);
             for(i = 0; i < s->channels; i++) {
@@ -362,7 +368,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             update_samples_available(s, todo);
             length -= todo;
             if(length > 0) {
-                s->underrun = 0;
+                s->underrun = 1;
             }
         }
     }
