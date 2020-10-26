@@ -1,8 +1,6 @@
 Expand some kind of standard library of macros/procedures - longterm
 Audio
 Graphical demos and example games
-Allow importing crustyvm float arrays.
-Fix add_empty_buffer.
 Add wave generators.
 Add envelope generators.
 Add effects.

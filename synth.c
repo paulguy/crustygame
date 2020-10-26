@@ -754,8 +754,14 @@ int synth_add_buffer(Synth *s,
                 s->S16toF32.buf = (Uint8 *)s->buffer[0].data;
                 s->S16toF32.len = size * sizeof(Sint16);
                 SDL_ConvertAudio(&(s->S16toF32));
-            } else { /* F32 */
+            } else if(type == SYNTH_TYPE_F32) {
                 memcpy(s->buffer[0].data, data, size * sizeof(float));
+            } else { /* F64 */
+                /* SDL has no conversion facilities to accept F64, so just do
+                 * a cast of each value in a loop and hope it goes OK. */
+                for(j = 0; j < size; j++) {
+                    s->buffer[0].data[j] = (float)(((double *)data)[j]);
+                }
             }
         } else {
             memset(s->buffer[0].data, s->silence, size * sizeof(float));
@@ -784,8 +790,12 @@ int synth_add_buffer(Synth *s,
                     s->S16toF32.buf = (Uint8 *)s->buffer[i].data;
                     s->S16toF32.len = size * sizeof(Sint16);
                     SDL_ConvertAudio(&(s->S16toF32));
-                } else { /* F32 */
-                    memcpy(s->buffer[i].data, data, size * sizeof(float));
+                } else if(type == SYNTH_TYPE_F32) {
+                    memcpy(s->buffer[0].data, data, size * sizeof(float));
+                } else { /* F64 */
+                    for(j = 0; j < size; j++) {
+                        s->buffer[0].data[j] = (float)(((double *)data)[j]);
+                    }
                 }
             } else {
                 memset(s->buffer[i].data, s->silence, size * sizeof(float));
@@ -825,8 +835,12 @@ int synth_add_buffer(Synth *s,
             s->S16toF32.buf = (Uint8 *)s->buffer[i].data;
             s->S16toF32.len = size * sizeof(Sint16);
             SDL_ConvertAudio(&(s->S16toF32));
-        } else { /* F32 */
-            memcpy(s->buffer[i].data, data, size * sizeof(float));
+        } else if(type == SYNTH_TYPE_F32) {
+            memcpy(s->buffer[0].data, data, size * sizeof(float));
+        } else { /* F64 */
+            for(j = 0; j < size; j++) {
+                s->buffer[0].data[j] = (float)(((double *)data)[j]);
+            }
         }
     } else {
         memset(s->buffer[i].data, s->silence, size * sizeof(float));

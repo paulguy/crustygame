@@ -568,6 +568,7 @@ SCANCODE_TO_KEYCODE KP_F                193
 expr AUDIO_TYPE_U8  0
 expr AUDIO_TYPE_S16 1
 expr AUDIO_TYPE_F32 2
+expr AUDIO_TYPE_F64 3
 
 expr AUDIO_MODE_ONCE         0
 expr AUDIO_MODE_LOOP         1

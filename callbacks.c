@@ -1250,6 +1250,13 @@ int audio_add_buffer(void *priv,
             }
             bufferType = SYNTH_TYPE_F32;
             break;
+        case CRUSTYGAME_AUDIO_TYPE_F64:
+            if(bufferSize * sizeof(double) > state->size) {
+                fprintf(stderr, "Buffer too small for declared size.\n");
+                return(-1);
+            }
+            bufferType = SYNTH_TYPE_F64;
+            break;
         default:
             fprintf(stderr, "Invalid audio buffer type.\n");
             return(-1);
@@ -1273,24 +1280,17 @@ int audio_add_empty_buffer(void *priv,
                            unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    int bufferType, bufferSize;
     /* check data type and size */
-    if(type != CRUSTY_TYPE_INT || size < 2) {
+    if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
-    /* set variables to usable names */
-    int *buf = (int *)ptr;
-    bufferType = buf[0]; bufferSize = buf[1];
-    if(bufferType < 0 || bufferSize < 0) {
-        fprintf(stderr, "Value out of range.\n");
-        return(-1);
-    }
 
+    /* type is ignored in this case */
     state->ret = synth_add_buffer(state->s,
-                                  bufferType,
+                                  SYNTH_TYPE_F32,
                                   NULL,
-                                  bufferSize);
+                                  *(int *)ptr);
     if(state->ret < 0) {
         return(-1);
     }
