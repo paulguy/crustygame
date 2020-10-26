@@ -12,9 +12,13 @@ audio_get_return (int)return
 (first N buffers are the audio channels, where N is the number of channels...
 will figure out channel order, but it'll probably just be whatever it is in
 SDL.)
-audio_add_buffer use_buffer (int)size
-    (if use_buffer, copy the buffer set from audio_set_buffer, otherwise create
-a silent buffer, int buffers are converted to float)
+audio_add_buffer type (int)size
+    (type used to interpret the array being imported in)
+    AUDIO_TYPE_U8
+    AUDIO_TYPE_S16
+    AUDIO_TYPE_F32
+    AUDIO_TYPE_F64
+audio_add_empty_buffer (int)size
 audio_free_buffer (int)id
 
 (all which operate on an envelope take an id as first argument)
@@ -43,11 +47,12 @@ audio_set_player_output_buffer_pos (int)pos
 audio_set_player_output_mode mode
     AUDIO_OUTPUT_REPLACE
     AUDIO_OUTPUT_ADD
-audio_set_player_volume (int)bufferid/(float)volume
-    (if type is int, assume it's a buffer id, if type is float, assume it's a
-constant volume multiplier)
-audio_set_player_volume_source_scale (float)scale
-    (factor to multiply volume buffer by)
+audio_set_player_volume_mode
+    AUDIO_VOLUME_MODE_CONSTANT
+    AUDIO_VOLUME_MODE_SOURCE
+audio_set_player_volume (float)volume
+audio_set_player_volume_source (int)bufferid
+    (scaled to volume)
 audio_set_player_mode mode
     AUDIO_MODE_ONCE
     AUDIO_MODE_LOOP
@@ -58,10 +63,12 @@ audio_set_player_loop_end (int)pos
 audio_set_player_phase_source (int)phaseid
     (only used for AUDIO_MODE_PHASE_SOURCE)
     (range is 0.0 to 1.0 to indicate start to end)
-audio_set_player_speed (int)bufferid/(float)speed
-    (same as audio_set_player_volume)
-audio_set_player_speed_source_scale
-    (factor to multiply speed buffer by)
+audio_set_player_speed_mode
+    AUDIO_SPEED_MODE_CONSTANT
+    AUDIO_SPEED_MODE_SOURCE
+audio_set_player_speed (float)speed
+audio_seT_player_speed_source (int)bufferid
+    (scaled to speed)
 audio_run_player (int)samples -> samples
     (audio player stops if any source buffer runs out)
 
