@@ -70,6 +70,7 @@ typedef struct Synth_t {
     int underrun;
     SynthState state;
     SDL_AudioCVT converter;
+    Uint8 silence;
 
     synth_frame_cb_t synth_frame_cb;
     void *synth_frame_priv;
@@ -174,7 +175,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                &(s->channelbuffer[0].data[s->readcursor]),
                todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
         memset(&(s->channelbuffer[0].data[s->readcursor]),
-               0,
+               s->silence,
                todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
         update_samples_available(s, todo);
         length -= todo;
@@ -189,7 +190,7 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                    &(s->channelbuffer[0].data[s->readcursor]),
                    todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
             memset(&(s->channelbuffer[0].data[s->readcursor]),
-                   0,
+                   s->silence,
                    todo * SDL_AUDIO_BITSIZE(s->converter.dst_format) / 8);
             update_samples_available(s, todo);
             length -= todo;
@@ -218,8 +219,12 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
             }
             /* clear used buffer so the converted data isn't reconverted from
              * garbage possibly producing horrible noises */
-            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
-            memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint32));
+            memset(&(s->channelbuffer[0].data[s->readcursor]),
+                   s->silence,
+                   todo * sizeof(Sint32));
+            memset(&(s->channelbuffer[1].data[s->readcursor]),
+                   s->silence,
+                   todo * sizeof(Sint32));
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
             for(i = 0; i < todo; i++) {
                 ((Sint16 *)stream)[i * 2] =
@@ -227,8 +232,12 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 ((Sint16 *)stream)[i * 2 + 1] =
                     ((Sint16 *)(s->channelbuffer[1].data))[s->readcursor + i];
             }
-            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
-            memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint16));
+            memset(&(s->channelbuffer[0].data[s->readcursor]),
+                   s->silence,
+                   todo * sizeof(Sint16));
+            memset(&(s->channelbuffer[1].data[s->readcursor]),
+                   s->silence,
+                   todo * sizeof(Sint16));
         } else { /* 8, very unlikely */
             for(i = 0; i < todo; i++) {
                 stream[i * 2] =
@@ -236,8 +245,12 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 stream[i * 2 + 1] =
                     ((char *)(s->channelbuffer[1].data))[s->readcursor + i];
             }
-            memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
-            memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo);
+            memset(&(s->channelbuffer[0].data[s->readcursor]),
+                   s->silence,
+                   todo);
+            memset(&(s->channelbuffer[1].data[s->readcursor]),
+                   s->silence,
+                   todo);
         }
         update_samples_available(s, todo);
         length -= todo;
@@ -255,8 +268,12 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     ((Sint32 *)stream)[i * 2 + 1] =
                         ((Sint32 *)(s->channelbuffer[1].data))[s->readcursor + i];
                 }
-                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint32));
-                memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint32));
+                memset(&(s->channelbuffer[0].data[s->readcursor]),
+                       s->silence,
+                       todo * sizeof(Sint32));
+                memset(&(s->channelbuffer[1].data[s->readcursor]),
+                       s->silence,
+                       todo * sizeof(Sint32));
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
                 for(i = 0; i < todo; i++) {
                     ((Sint16 *)stream)[i * 2] =
@@ -264,8 +281,12 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     ((Sint16 *)stream)[i * 2 + 1] =
                         ((Sint16 *)(s->channelbuffer[1].data))[s->readcursor + i];
                 }
-                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo * sizeof(Sint16));
-                memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo * sizeof(Sint16));
+                memset(&(s->channelbuffer[0].data[s->readcursor]),
+                       s->silence,
+                       todo * sizeof(Sint16));
+                memset(&(s->channelbuffer[1].data[s->readcursor]),
+                       s->silence,
+                       todo * sizeof(Sint16));
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
                     stream[i * 2] =
@@ -273,8 +294,12 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     stream[i * 2 + 1] =
                         ((char *)(s->channelbuffer[1].data))[s->readcursor + i];
                 }
-                memset(&(s->channelbuffer[0].data[s->readcursor]), 0, todo);
-                memset(&(s->channelbuffer[1].data[s->readcursor]), 0, todo);
+                memset(&(s->channelbuffer[0].data[s->readcursor]),
+                       s->silence,
+                       todo);
+                memset(&(s->channelbuffer[1].data[s->readcursor]),
+                       s->silence,
+                       todo);
             }
             update_samples_available(s, todo);
             length -= todo;
@@ -301,7 +326,9 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 }
             }
             for(i = 0; i < s->channels; i++) {
-                memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint32));
+                memset(&(s->channelbuffer[i].data[s->readcursor]),
+                       s->silence,
+                       todo * sizeof(Sint32));
             }
         } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
             for(i = 0; i < todo; i++) {
@@ -311,7 +338,9 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 }
             }
             for(i = 0; i < s->channels; i++) {
-                memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint16));
+                memset(&(s->channelbuffer[i].data[s->readcursor]),
+                       s->silence,
+                       todo * sizeof(Sint16));
             }
         } else { /* 8 */
             for(i = 0; i < todo; i++) {
@@ -321,7 +350,9 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                 }
             }
             for(i = 0; i < s->channels; i++) {
-                memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo);
+                memset(&(s->channelbuffer[i].data[s->readcursor]),
+                       s->silence,
+                       todo);
             }
         }
         update_samples_available(s, todo);
@@ -342,7 +373,9 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     }
                 }
                 for(i = 0; i < s->channels; i++) {
-                    memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint32));
+                    memset(&(s->channelbuffer[i].data[s->readcursor]),
+                           s->silence,
+                           todo * sizeof(Sint32));
                 }
             } else if(SDL_AUDIO_BITSIZE(s->converter.dst_format) == 16) {
                 for(i = 0; i < todo; i++) {
@@ -352,7 +385,9 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     }
                 }
                 for(i = 0; i < s->channels; i++) {
-                    memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo * sizeof(Sint16));
+                    memset(&(s->channelbuffer[i].data[s->readcursor]),
+                           s->silence,
+                           todo * sizeof(Sint16));
                 }
             } else { /* 8 */
                 for(i = 0; i < todo; i++) {
@@ -362,7 +397,9 @@ void synth_audio_cb(void *userdata, Uint8 *stream, int len) {
                     }
                 }
                 for(i = 0; i < s->channels; i++) {
-                    memset(&(s->channelbuffer[i].data[s->readcursor]), 0, todo);
+                    memset(&(s->channelbuffer[i].data[s->readcursor]),
+                           s->silence,
+                           todo);
                 }
             }
             update_samples_available(s, todo);
@@ -476,6 +513,7 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
     s->fragmentsize = obtained.samples;
     s->fragments = 0;
     s->channels = obtained.channels;
+    s->silence = obtained.silence;
     /* Won't know what size to allocate to them until the user has set a number of fragments */
     s->channelbuffer = NULL;
     s->buffer = NULL;
@@ -661,7 +699,9 @@ int synth_set_fragments(Synth *s,
             s->fragments = 0;
             return(-1);
         }
-        memset(s->channelbuffer[i].data, 0, sizeof(float) * s->buffersize);
+        memset(s->channelbuffer[i].data,
+               s->silence,
+               sizeof(float) * s->buffersize);
     }
 
     return(0);
@@ -718,7 +758,7 @@ int synth_add_buffer(Synth *s,
                 memcpy(s->buffer[0].data, data, size * sizeof(float));
             }
         } else {
-            memset(s->buffer[0].data, 0, size * sizeof(float));
+            memset(s->buffer[0].data, s->silence, size * sizeof(float));
         }
         s->buffer[0].ref = 0;
         return(s->channels);
@@ -748,7 +788,7 @@ int synth_add_buffer(Synth *s,
                     memcpy(s->buffer[i].data, data, size * sizeof(float));
                 }
             } else {
-                memset(s->buffer[i].data, 0, size * sizeof(float));
+                memset(s->buffer[i].data, s->silence, size * sizeof(float));
             }
             s->buffer[i].ref = 0;
             return(s->channels + i);
@@ -789,7 +829,7 @@ int synth_add_buffer(Synth *s,
             memcpy(s->buffer[i].data, data, size * sizeof(float));
         }
     } else {
-        memset(s->buffer[i].data, 0, size * sizeof(float));
+        memset(s->buffer[i].data, s->silence, size * sizeof(float));
     }
     s->buffer[i].ref = 0;
     return(s->channels + i);

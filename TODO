@@ -1,7 +1,6 @@
 Expand some kind of standard library of macros/procedures - longterm
 Audio
 Graphical demos and example games
-Re-add silence value usage.
 Allow importing crustyvm float arrays.
 Fix add_empty_buffer.
 Add wave generators.
