@@ -87,9 +87,6 @@ int synth_set_player_volume(Synth *s,
 int synth_set_player_volume_source(Synth *s,
                                    unsigned int index,
                                    unsigned int volBuffer);
-int synth_set_player_volume_source_scale(Synth *s,
-                                         unsigned int index,
-                                         float volScale);
 int synth_set_player_mode(Synth *s,
                           unsigned int index,
                           SynthPlayerMode mode);
@@ -111,9 +108,6 @@ int synth_set_player_speed(Synth *s,
 int synth_set_player_speed_source(Synth *s,
                                   unsigned int index,
                                   unsigned int speedBuffer);
-int synth_set_player_speed_source_scale(Synth *s,
-                                        unsigned int index,
-                                        float speedScale);
 int synth_run_player(Synth *s,
                      unsigned int index,
                      unsigned int reqSamples);

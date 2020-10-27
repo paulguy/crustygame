@@ -1441,7 +1441,7 @@ int audio_set_player_volume_mode(void *priv,
                                  void *ptr,
                                  unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
-    int volumeMode;
+    SynthVolumeMode volumeMode;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
@@ -1499,30 +1499,13 @@ int audio_set_player_volume_source(void *priv,
                                           *(int *)ptr));
 }
 
-int audio_set_player_volume_source_scale(void *priv,
-                                         CrustyType type,
-                                         unsigned int size,
-                                         void *ptr,
-                                         unsigned int index) {
-    CrustyGame *state = (CrustyGame *)priv;
-
-    if(type != CRUSTY_TYPE_FLOAT) {
-        fprintf(stderr, "Wrong type.\n");
-        return(-1);
-    }
-
-    return(synth_set_player_volume_source_scale(state->s,
-                                                index,
-                                                *(double *)ptr));
-}
-
 int audio_set_player_mode(void *priv,
                           CrustyType type,
                           unsigned int size,
                           void *ptr,
                           unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
-    int playerMode;
+    SynthPlayerMode playerMode;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
@@ -1608,15 +1591,28 @@ int audio_set_player_speed_mode(void *priv,
                                 void *ptr,
                                 unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
+    SynthSpeedMode speedMode;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
 
+    switch(*(int *)ptr) {
+        case CRUSTYGAME_AUDIO_SPEED_MODE_CONSTANT:
+            speedMode = SYNTH_SPEED_CONSTANT;
+            break;
+        case CRUSTYGAME_AUDIO_SPEED_MODE_SOURCE:
+            speedMode = SYNTH_SPEED_SOURCE;
+            break;
+        default:
+            fprintf(stderr, "Invalid speed mode.\n");
+            return(-1);
+    }
+
     return(synth_set_player_speed_mode(state->s,
                                        index,
-                                       *(int *)ptr));
+                                       speedMode));
 }
 
 int audio_set_player_speed(void *priv,
@@ -1651,23 +1647,6 @@ int audio_set_player_speed_source(void *priv,
     return(synth_set_player_speed_source(state->s,
                                          index,
                                          *(int *)ptr));
-}
-
-int audio_set_player_speed_source_scale(void *priv,
-                                        CrustyType type,
-                                        unsigned int size,
-                                        void *ptr,
-                                        unsigned int index) {
-    CrustyGame *state = (CrustyGame *)priv;
-
-    if(type != CRUSTY_TYPE_FLOAT) {
-        fprintf(stderr, "Wrong type.\n");
-        return(-1);
-    }
-
-    return(synth_set_player_speed_source_scale(state->s,
-                                               index,
-                                               *(double *)ptr));
 }
 
 int audio_run_player(void *priv,
@@ -2062,12 +2041,6 @@ CrustyCallback cb[] = {
         .write = audio_set_player_volume_source, .writepriv = &state
     },
     {
-        .name = "audio_set_player_volume_source_scale", .length = INT_MAX,
-        .readType = CRUSTY_TYPE_NONE,
-        .read = NULL, .readpriv = NULL,
-        .write = audio_set_player_volume_source_scale, .writepriv = &state
-    },
-    {
         .name = "audio_set_player_mode", .length = INT_MAX,
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
@@ -2108,12 +2081,6 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = audio_set_player_speed_source, .writepriv = &state
-    },
-    {
-        .name = "audio_set_player_speed_source_scale", .length = INT_MAX,
-        .readType = CRUSTY_TYPE_NONE,
-        .read = NULL, .readpriv = NULL,
-        .write = audio_set_player_speed_source_scale, .writepriv = &state
     },
     {
         .name = "audio_run_player", .length = INT_MAX,
