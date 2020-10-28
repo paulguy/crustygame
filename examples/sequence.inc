@@ -68,6 +68,7 @@ proc _sequence_get_note note len div octave nextpos seq pos basetime
         label found_div
             add temppos 1
             move div i
+            add  div 1
         jump try_find_note
         label not_div
             
@@ -299,6 +300,6 @@ macro SEQUENCE_SET_SAMPLE_MEM_BUFFER MEMPOS
     move set_buffer _sequence_sample_mem:MEMPOS
 endmacro SEQUENCE_SET_SAMPLE_MEM_BUFFER
 
-macro SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER MEMPOS SIZE PROC
-    call PROC _sequence_sample_mem:MEMPOS SIZE
+macro SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER PROC PRIV MEMPOS SIZE
+    call PROC PRIV _sequence_sample_mem:MEMPOS SIZE
 endmacro SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER

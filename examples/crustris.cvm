@@ -195,11 +195,11 @@ static wave2
 static waveplayer
 
 proc gen_wave_1 priv mem size
-    call wave_make_saw_descending mem size -1 1
+    call wave_make_cosine_approx mem size -1 1
 ret
 
 proc gen_wave_2 priv mem size
-    call wave_make_triangle mem size 0 1
+    call wave_make_square mem size 0 1
 ret
 
 proc init
@@ -218,8 +218,8 @@ proc init
     call sequence_get_sample_mem wave1 temp:2
     call sequence_get_sample_mem wave2 temp:2
 
-    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER temp wave1 temp:2 gen_wave_1
-    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER temp wave2 temp:2 gen_wave_2
+    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER gen_wave_1 temp wave1 temp:2
+    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER gen_wave_2 temp wave2 temp:2
 
     SEQUENCE_SET_SAMPLE_MEM_BUFFER wave1
     move temp:0 AUDIO_TYPE_F64
@@ -235,7 +235,7 @@ proc init
     move audio_add_buffer temp
     move temp get_return
     move audio_set_player_speed_source:waveplayer temp
-    move audio_set_player_speed_mode:waveplayer AUDIO_SPEED_MODE_SOURCE
+    ;move audio_set_player_speed_mode:waveplayer AUDIO_SPEED_MODE_SOURCE
     move audio_set_player_volume:waveplayer oscvol
 
     move audio_set_fragments 1
