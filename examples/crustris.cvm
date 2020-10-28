@@ -10,6 +10,7 @@ include text.inc
 include objects.inc
 include savedata.inc
 include waves.inc
+include sequence.inc
 
 macro CENTER RESULT SPACESIZE ITEMSIZE
     move RESULT SPACESIZE
@@ -187,12 +188,12 @@ static piece_timer_id
 static input_timer_id
 static bgscroll_timer_id
 
-static wave floats 109
-static wave2 floats 48000
+static wave floats 110
+static wave2 floats 110
 static waveplayer
 
 proc init
-    local oscvol floats "0.25"
+    local oscvol floats "0.3"
     local temp ints 4
     local tempf floats "0.0 0.0 0.0 0.0"
     local pitbg ints PIT_BG_SIZE 
@@ -201,8 +202,8 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
-    call wave_make_triangle wave wave: -1 1
-    call wave_make_saw_ascending wave2 wave2: 0 1
+    call wave_make_saw_descending wave wave: -1 1
+    call wave_make_triangle wave2 wave2: 0 1
 
     move set_buffer wave
     move temp:0 AUDIO_TYPE_F64
