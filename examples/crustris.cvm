@@ -2,6 +2,8 @@
 expr SAVEDATA_SIZE 1024
 expr SAVEDATA_CHECKSUM_POS "SAVEDATA_SIZE - 1"
 
+expr SEQUENCE_SAMPLE_MEM_SIZE 32768
+
 include crustygame.inc
 include fills.inc
 include videomode.inc
@@ -188,9 +190,17 @@ static piece_timer_id
 static input_timer_id
 static bgscroll_timer_id
 
-static wave floats 110
-static wave2 floats 110
+static wave1
+static wave2
 static waveplayer
+
+proc gen_wave_1 priv mem size
+    call wave_make_saw_descending mem size -1 1
+ret
+
+proc gen_wave_2 priv mem size
+    call wave_make_triangle mem size 0 1
+ret
 
 proc init
     local oscvol floats "0.3"
@@ -202,20 +212,26 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
-    call wave_make_saw_descending wave wave: -1 1
-    call wave_make_triangle wave2 wave2: 0 1
+    call sequence_tune 440
 
-    move set_buffer wave
+    SEQUENCE_GET_FREQ_PERIOD temp:2 audio_get_rate 440
+    call sequence_get_sample_mem wave1 temp:2
+    call sequence_get_sample_mem wave2 temp:2
+
+    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER temp wave1 temp:2 gen_wave_1
+    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER temp wave2 temp:2 gen_wave_2
+
+    SEQUENCE_SET_SAMPLE_MEM_BUFFER wave1
     move temp:0 AUDIO_TYPE_F64
-    move temp:1 wave:
+    move temp:1 temp:2
     move audio_add_buffer temp
     move temp get_return
     move audio_add_player temp
     move waveplayer get_return
     move audio_set_player_mode:waveplayer AUDIO_MODE_LOOP
-    move set_buffer wave2
+    SEQUENCE_SET_SAMPLE_MEM_BUFFER wave2
     move temp:0 AUDIO_TYPE_F64
-    move temp:1 wave2:
+    move temp:1 temp:2
     move audio_add_buffer temp
     move temp get_return
     move audio_set_player_speed_source:waveplayer temp
