@@ -239,12 +239,15 @@ proc sequence_tune afour
     call _sequence_clamp_val _SEQUENCE_TUNINGS:11 octave
 ret
 
-proc sequence_get_note_freq freq note octave
+proc sequence_get_note_freq freq note
     local temp
+    local octave
 
     move temp note
     sub  temp 1
+    move octave temp
     mod  temp _SEQUENCE_TUNINGS:
+    div  octave _SEQUENCE_TUNINGS:
     move freq _SEQUENCE_TUNINGS:temp
 
     cmp octave 4
