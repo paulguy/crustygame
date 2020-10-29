@@ -7,15 +7,27 @@ static _SEQUENCE_DIVS  string "whqestfo"
 ; Whole, Half, Quarter, Eighth, Sixteenth,
 ; Thirdtysecond, sixtyFourth, Onetwentyeighth
 static _SEQUENCE_TUNINGS floats 12
+static _sequence_rate
 
-proc _sequence_get_note note len div octave nextpos seq pos basetime
+macro SEQUENCE_SET_RATE RATE
+    move _sequence_rate RATE
+endmacro SEQUENCE_SET_RATE
+
+macro _SEQUENCE_CALC_LENGTH RESULT DIV MUL TEMPO
+    move RESULT _sequence_rate
+    mul  RESULT 60
+    div  RESULT TEMPO
+    ; this is a length and not rate so the divisions increase the length of a
+    ; nove and the multiplying of the notes shortens them
+    mul  RESULT DIV
+    div  RESULT MUL
+endmacro _SEQUENCE_CALC_LENGTH
+
+proc _sequence_get_next_note note len div mul tempo octave seq pos
     local i
-    local temppos
-
-    move temppos pos
 
     label try_find_note
-        cmp temppos seq:
+        cmp pos seq:
         jumpl not_finished
             ; indicate the sequence finished
             move note -1
@@ -24,144 +36,144 @@ proc _sequence_get_note note len div octave nextpos seq pos basetime
 
         move i 0
         label find_note
-            cmp seq:temppos _SEQUENCE_NOTES:i
+            cmp seq:pos _SEQUENCE_NOTES:i
             jumpz found_note
             add i 1
             cmp i _SEQUENCE_NOTES:
         jumpl find_note
         jump not_note
         label found_note
-            move len basetime
-            div  len div
-            move note _SEQUENCE_NOTES:i
+            add pos 1
+            _SEQUENCE_CALC_LENGTH len div mul tempo
+            move note 12
             mul  note octave
+            add  note i
             add  note 1 ; 0 is rest
-            cmp temppos seq:
+            cmp pos seq:
         jumpz end
-            add temppos 1
-            cmp seq:temppos _SEQUENCE_SHARP
+            cmp seq:pos _SEQUENCE_SHARP
             jumpz note_sharp
-            cmp seq:temppos _SEQUENCE_FLAT
+            cmp seq:pos _SEQUENCE_FLAT
             jumpz note_flat
-            move nextpos temppos
         jump end
         label note_sharp
-            add temppos 1
             add note 1
-            move nextpos temppos
         jump end
         label note_flat
-            add temppos 1
             sub note 1
-            move nextpos temppos
         jump end
         label not_note
 
         move i 0
-        label find_div
-            cmp seq:temppos _SEQUENCE_DIVS:i
-            jumpz found_div
+        label find_mul
+            cmp seq:pos _SEQUENCE_DIVS:i
+            jumpz found_mul
             add i 1
             cmp i _SEQUENCE_DIVS:
-        jumpl find_div
-        jump not_div
-        label found_div
-            add temppos 1
-            move div i
-            add  div 1
+        jumpl find_mul
+        jump not_mul
+        label found_mul
+            add pos 1
+            move mul i
+            add  mul 1
         jump try_find_note
-        label not_div
+        label not_mul
             
         move i 0
         label find_octave
-            cmp seq:temppos _SEQUENCE_OCTAVES:i
+            cmp seq:pos _SEQUENCE_OCTAVES:i
             jumpz found_octave
             add i 1
             cmp i _SEQUENCE_OCTAVES:
         jumpl find_octave
         jump not_octave
         label found_octave
-            add temppos 1
+            add pos 1
             move octave i
         jump try_find_note
         label not_octave
  
-        cmp seq:temppos _SEQUENCE_REST
+        cmp seq:pos _SEQUENCE_REST
         jumpn not_rest
+            add pos 1
             move note 0
-            move len basetime
+            _SEQUENCE_CALC_LENGTH len div mul tempo
             div  len div
-            move nextpos temppos
  
             jump end
         label not_rest
 
         ; ignore invalid characters
-        add temppos 1
+        add pos 1
     label end
 ret
 
-macro MAKE_SEQUENCE SEQ BPM DIVS
-    expr _SQUENCE_BASE_NOTE_TIME "(1000 * DIVS / BPM)"
+macro MAKE_SEQUENCE SEQ DIV TEMPO
+    static _sequence_start_notediv_SEQ DIV
+    static _sequence_start_tempo_SEQ TEMPO
+    static _sequence_notediv_SEQ
+    static _sequence_tempo_SEQ
+    static _sequence_notemul_SEQ
     static _sequence_pos_SEQ
-    static _sequence_next_pos_SEQ
     static _sequence_note_SEQ
     static _sequence_octave_SEQ
-    static _sequence_notediv_SEQ
     static _sequence_notelen_SEQ
     static _sequence_notetime_SEQ
+    static _sequence_time_SEQ
     static _sequence_notes_missed_SEQ
     static _sequence_consumed_SEQ
 
-    proc sequence_start_SEQ
+    proc _sequence_start_SEQ
+        move _sequence_notediv_SEQ _sequence_start_notediv_SEQ
+        move _sequence_tempo_SEQ _sequence_start_tempo_SEQ
+        move _sequence_notemul_SEQ 1
         move _sequence_consumed_SEQ 0
         move _sequence_pos_SEQ 0
-        move _sequence_notediv_SEQ 1
         move _sequence_octave_SEQ 4
-        move _sequence_notetime_SEQ get_ticks
-        call _sequence_get_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_octave_SEQ _sequence_next_pos_SEQ SEQ _sequence_pos_SEQ _SQUENCE_BASE_NOTE_TIME
+        move _sequence_time_SEQ 0
+        move _sequence_notetime_SEQ 0
+        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ SEQ _sequence_pos_SEQ
         move _sequence_notes_missed_SEQ 0
     ret
 
-    ; note = -1 && remain = 0 -> note off
+    ; note = 0 -> note off/rest
     ; remain = -1 -> sequence ended
-    proc sequence_get_cur_note_SEQ note remain
-        local thisTime
-        local consumed 0
+    proc _sequence_get_cur_note_SEQ note remain
+        cmp _sequence_note_SEQ 0
+        jumpl finished
 
-        cmp _sequence_note_SEQ -1
-        jumpg no_need_reset
-            move remain -1
-            jump end
-        label no_need_reset
+        ; get amount of time remaining for this note
+        move remain _sequence_notelen_SEQ
+        add  remain _sequence_notetime_SEQ
+        sub  remain _sequence_time_SEQ
 
-        move thisTime get_ticks
-        move remain thisTime
-        sub  remain _sequence_notetime_SEQ
-
-        label do_consume
-        label consume
-            cmp _sequence_notelen_SEQ remain
-            jumpl done_consume
-            move consumed 1
-            call _sequence_get_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_octave_SEQ _sequence_next_pos_SEQ SEQ _sequence_pos_SEQ _SQUENCE_BASE_NOTE_TIME
-            cmp _sequence_note_SEQ 0
-            jumpl error
-            sub remain _sequence_notelen_SEQ
-        jump consume
-        label done_consume
-            cmp consumed
-            jumpz do_note
-                ;indicate note off, next call will give the next note
-                move note -1
-                move remain 0
-            jump end
-            label do_note
-                move note _sequence_note_SEQ
+        ; if the note is shorter than the amount of time which has passed,
+        ; indicate note off first then the next call should return the next
+        ; note
+        cmp remain 0
+        jumpl next_note
+        jumpz next_note
+        ; just return the note
+            move note _sequence_note_SEQ
         jump end
 
-        label error
-            move note -1
+        label next_note
+            ; advance the time
+            add _sequence_notetime_SEQ _sequence_notelen_SEQ
+            move remain _sequence_notelen_SEQ
+
+            ; get the next note information
+            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ SEQ _sequence_pos_SEQ
+
+            ; see if the sequence has ended
+            cmp _sequence_note_SEQ 0
+        jumpl finished
+            move note 0
+            move remain 0
+        jump end
+
+        label finished
+            move note 0
             move remain -1
         label end
     ret
@@ -169,12 +181,24 @@ endmacro MAKE_SEQUENCE
 
 ; some syntactical sugar to cover up how this actually works
 macro SEQUENCE_START SEQ
-    call sequence_start_SEQ
+    call _sequence_start_SEQ
 endmacro SEQUENCE_START
 
 macro SEQUENCE_GET_CUR_NOTE SEQ NOTE REMAIN
-    call sequence_get_cur_note_SEQ NOTE REMAIN
+    call _sequence_get_cur_note_SEQ NOTE REMAIN
 endmacro SEQUENCE_GET_CUR_NOTE 
+
+macro SEQUENCE_ADVANCE_TIME SEQ SAMPLES
+    add _sequence_time_SEQ SAMPLES
+endmacro SEQUENCE_ADVANCE_TIME
+
+macro SEQUENCE_SET_TEMPO SEQ TEMPO
+    move _sequence_tempo_SEQ TEMPO
+endmacro SEQUENCE_SET_TEMPO
+
+macro SEQUENCE_SET_DIVISIONS SEQ DIV
+    move _sequence_notediv_SEQ DIV
+endmacro SEQUENCE_SET_DIVISIONS
 
 proc _sequence_clamp_val val max
     label find_val
@@ -192,51 +216,51 @@ proc sequence_tune afour
     move octave afour
     mul  octave 2
 
-    ; A
-    move _SEQUENCE_TUNINGS:0 afour
-    ; A#
-    move _SEQUENCE_TUNINGS:1 afour
-    mul  _SEQUENCE_TUNINGS:1 17
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:1 octave
-    ; B
-    move _SEQUENCE_TUNINGS:2 afour
-    mul  _SEQUENCE_TUNINGS:2 9
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:2 octave
     ; C
-    move _SEQUENCE_TUNINGS:3 afour
-    mul  _SEQUENCE_TUNINGS:3 19
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:3 octave
+    move _SEQUENCE_TUNINGS:0 afour
+    mul  _SEQUENCE_TUNINGS:0 19
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:0 octave
     ; C#
-    move _SEQUENCE_TUNINGS:4 afour
-    mul  _SEQUENCE_TUNINGS:4 5
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:4 octave
+    move _SEQUENCE_TUNINGS:1 afour
+    mul  _SEQUENCE_TUNINGS:1 5
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:1 octave
     ; D
-    move _SEQUENCE_TUNINGS:5 afour
-    mul  _SEQUENCE_TUNINGS:5 21
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:5 octave
+    move _SEQUENCE_TUNINGS:2 afour
+    mul  _SEQUENCE_TUNINGS:2 21
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:2 octave
     ; D#
-    move _SEQUENCE_TUNINGS:6 afour
-    mul  _SEQUENCE_TUNINGS:6 11
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:6 octave
+    move _SEQUENCE_TUNINGS:3 afour
+    mul  _SEQUENCE_TUNINGS:3 11
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:3 octave
     ; E
-    move _SEQUENCE_TUNINGS:7 afour
-    mul  _SEQUENCE_TUNINGS:7 3
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:7 octave
+    move _SEQUENCE_TUNINGS:4 afour
+    mul  _SEQUENCE_TUNINGS:4 3
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:4 octave
     ; F
-    move _SEQUENCE_TUNINGS:8 afour
-    mul  _SEQUENCE_TUNINGS:8 13
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:8 octave
+    move _SEQUENCE_TUNINGS:5 afour
+    mul  _SEQUENCE_TUNINGS:5 13
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:5 octave
     ; F#
-    move _SEQUENCE_TUNINGS:9 afour
-    mul  _SEQUENCE_TUNINGS:9 27
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:9 octave
+    move _SEQUENCE_TUNINGS:6 afour
+    mul  _SEQUENCE_TUNINGS:6 27
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:6 octave
     ; G
-    move _SEQUENCE_TUNINGS:10 afour
-    mul  _SEQUENCE_TUNINGS:10 7
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:10 octave
+    move _SEQUENCE_TUNINGS:7 afour
+    mul  _SEQUENCE_TUNINGS:7 7
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:7 octave
     ; G#
+    move _SEQUENCE_TUNINGS:8 afour
+    mul  _SEQUENCE_TUNINGS:8 15
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:8 octave
+    ; A
+    move _SEQUENCE_TUNINGS:9 afour
+    ; A#
+    move _SEQUENCE_TUNINGS:10 afour
+    mul  _SEQUENCE_TUNINGS:10 17
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:10 octave
+    ; B
     move _SEQUENCE_TUNINGS:11 afour
-    mul  _SEQUENCE_TUNINGS:11 15
+    mul  _SEQUENCE_TUNINGS:11 9
     call _sequence_clamp_val _SEQUENCE_TUNINGS:11 octave
 ret
 
@@ -254,24 +278,33 @@ proc sequence_get_note_freq freq note
     cmp octave 4
     jumpl lower
     jumpg higher
-    jumpz done
+    jump done
     label lower
         move temp 4
         sub  temp octave
+        mul  temp 2
         div  freq temp
     jump done
     label higher
         move temp octave
         sub  temp 4
+        mul  temp 2
         mul  freq temp
 
     label done
 ret
 
-macro SEQUENCE_GET_FREQ_PERIOD RESULT RATE FREQ
-    move RESULT RATE
+macro SEQUENCE_CALC_LENGTH RESULT FREQ
+    move RESULT _sequence_rate
     div  RESULT FREQ
-endmacro SEQUENCE_GET_FREQ_PERIOD
+endmacro SEQUENCE_CALC_LENGTH
+
+macro SEQUENCE_CALC_SPEED TEMP RESULT LEN FREQ
+    move TEMP _sequence_rate
+    div  TEMP LEN
+    move RESULT FREQ
+    div  RESULT TEMP
+endmacro SEQUENCE_CALC_SPEED
 
 static _sequence_sample_mem floats SEQUENCE_SAMPLE_MEM_SIZE
 static _sequence_sample_mem_pos 0

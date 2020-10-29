@@ -191,15 +191,14 @@ static input_timer_id
 static bgscroll_timer_id
 
 static wave1
-static wave2
+static wave1len
 static waveplayer
+
+static testseq string "wXqABCDEFG5A"
+MAKE_SEQUENCE testseq 4 90
 
 proc gen_wave_1 priv mem size
     call wave_make_cosine_approx mem size -1 1
-ret
-
-proc gen_wave_2 priv mem size
-    call wave_make_square mem size 0 1
 ret
 
 proc init
@@ -212,36 +211,29 @@ proc init
     local row ints SCREEN_TILES_WIDTH
     local background_pattern ints BACKGROUND_SIZE
 
+    move set_window_title WINDOW_TITLE
+
+    SEQUENCE_SET_RATE audio_get_rate
     call sequence_tune 440
+    SEQUENCE_START testseq
 
-    SEQUENCE_GET_FREQ_PERIOD temp:2 audio_get_rate 440
-    call sequence_get_sample_mem wave1 temp:2
-    call sequence_get_sample_mem wave2 temp:2
+    SEQUENCE_CALC_LENGTH wave1len 440
+    call sequence_get_sample_mem wave1 wave1len
 
-    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER gen_wave_1 temp wave1 temp:2
-    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER gen_wave_2 temp wave2 temp:2
+    SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER gen_wave_1 temp wave1 wave1len
 
     SEQUENCE_SET_SAMPLE_MEM_BUFFER wave1
     move temp:0 AUDIO_TYPE_F64
-    move temp:1 temp:2
+    move temp:1 wave1len
     move audio_add_buffer temp
     move temp get_return
     move audio_add_player temp
     move waveplayer get_return
     move audio_set_player_mode:waveplayer AUDIO_MODE_LOOP
-    SEQUENCE_SET_SAMPLE_MEM_BUFFER wave2
-    move temp:0 AUDIO_TYPE_F64
-    move temp:1 temp:2
-    move audio_add_buffer temp
-    move temp get_return
-    move audio_set_player_speed_source:waveplayer temp
-    ;move audio_set_player_speed_mode:waveplayer AUDIO_SPEED_MODE_SOURCE
     move audio_set_player_volume:waveplayer oscvol
 
     move audio_set_fragments 1
     move audio_set_enabled 1
-
-    move set_window_title WINDOW_TITLE
 
     call load_high_scores
 
@@ -492,12 +484,58 @@ static audio_fragments 1
 
 proc audio
     local temp
+    local needed
+    local request 0
+    local outpos 0
+    local note
+    local remain
+    local freq floats 1
+    local speed floats 1
 
-    cmp playing_audio
-    jumpz end
-    move temp audio_get_samples_needed
-    move audio_set_player_output_buffer_pos:waveplayer 0
-    move audio_run_player:waveplayer temp
+    move needed audio_get_samples_needed
+    label need_more
+        SEQUENCE_GET_CUR_NOTE testseq note remain
+        cmp remain 0 ; end of sequence
+        jumpl loop
+        cmp note 1 ; rest/note off
+        jumpl rest
+
+        call sequence_get_note_freq freq note
+        SEQUENCE_CALC_SPEED temp speed wave1len freq
+        ERR_SPC freq
+        ERR_NL speed
+        move audio_set_player_speed:waveplayer speed
+
+        move request remain
+        cmp request needed
+        jumpl no_set_needed
+        move request needed
+        label no_set_needed
+
+        move audio_set_player_output_buffer_pos:waveplayer outpos
+        move audio_run_player:waveplayer request
+
+        SEQUENCE_ADVANCE_TIME testseq request
+        add outpos request
+        sub needed request
+    jumpg need_more
+    jump end
+
+    label loop
+        SEQUENCE_START testseq
+    jump need_more
+
+    label rest
+        move request remain
+        cmp request needed
+        jumpl no_set_needed2
+        move request needed
+        label no_set_needed2
+
+        SEQUENCE_ADVANCE_TIME testseq request
+        add outpos request
+        sub needed request
+    jumpg need_more
     label end
 ret
 
