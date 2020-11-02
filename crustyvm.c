@@ -1877,10 +1877,10 @@ static int preprocess(CrustyVM *cvm,
 #ifdef CRUSTY_TEST
         LOG_PRINTF_LINE(cvm, " Original: ");
         if(macrostackptr >= 0) {
-            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(macrostack[macrostackptr]->nameOffset);
+            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(macrostack[macrostackptr]->nameOffset));
         }
         for(i = 0; i < cvm->line[cvm->logline].tokencount; i++) {
-            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(cvm->line[cvm->logline].offset[i]);
+            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(cvm->line[cvm->logline].offset[i]));
         }
         LOG_PRINTF_BARE(cvm, "\n");
 #endif
@@ -4149,7 +4149,6 @@ int crustyvm_reset(CrustyVM *cvm) {
 static int write_lines(CrustyVM *cvm, const char *name) {
     FILE *out;
     unsigned int i, j;
-    char *temp;
 
     out = fopen(name, "wb");
     if(out == NULL) {
@@ -4287,7 +4286,7 @@ CrustyVM *crustyvm_new(const char *name,
     }
 
     if(cvm->flags & CRUSTY_FLAG_OUTPUT_PASSES) {
-        if(write_lines(cvm, "tokenize.cvm", 1) < 0) {
+        if(write_lines(cvm, "tokenize.cvm") < 0) {
             LOG_PRINTF(cvm, "Failed to write tokenize pass.\n");
             crustyvm_free(cvm);
             return(NULL);
@@ -4361,7 +4360,7 @@ CrustyVM *crustyvm_new(const char *name,
 #ifdef CRUSTY_TEST
         if(cvm->flags & CRUSTY_FLAG_OUTPUT_PASSES) {
             snprintf(namebuffer, sizeof(namebuffer), "preprocess%03d.cvm", i + 1);
-            if(write_lines(cvm, namebuffer, 1) < 0) {
+            if(write_lines(cvm, namebuffer) < 0) {
                 LOG_PRINTF(cvm, "Failed to write pass %d.\n", i + 1);
                 crustyvm_free(cvm);
                 return(NULL);
@@ -4445,7 +4444,7 @@ CrustyVM *crustyvm_new(const char *name,
 #ifdef CRUSTY_TEST
     /* output a text file because it is no longer a valid cvm source file */
     if(cvm->flags & CRUSTY_FLAG_OUTPUT_PASSES) {
-        if(write_lines(cvm, "symbols scan.txt", 0) < 0) {
+        if(write_lines(cvm, "symbols scan.txt") < 0) {
             LOG_PRINTF(cvm, "Failed to write tokenize pass.\n");
             crustyvm_free(cvm);
             return(NULL);
@@ -4510,7 +4509,7 @@ CrustyVM *crustyvm_new(const char *name,
                         LOG_PRINTF(cvm, "   String initializer: \"");
                         for(k = 0; k < cvm->proc[i].var[j]->length; k++) {
                             LOG_PRINTF_BARE(cvm, "%c",
-                                ((char *)&(cvm->initializer[cvm->proc[i].var[j].offset]))[k]);
+                                ((char *)&(cvm->initializer[cvm->proc[i].var[j]->offset]))[k]);
                         }
                         LOG_PRINTF_BARE(cvm, "\"");
                     }
@@ -4518,14 +4517,14 @@ CrustyVM *crustyvm_new(const char *name,
                         LOG_PRINTF(cvm, "   Integer initializer:");
                         for(k = 0; k < cvm->proc[i].var[j]->length; k++) {
                             LOG_PRINTF_BARE(cvm, "%c",
-                                ((int *)&(cvm->initializer[cvm->proc[i].var[j].offset]))[k]);
+                                ((int *)&(cvm->initializer[cvm->proc[i].var[j]->offset]))[k]);
                         }
                     }
                     if(cvm->proc[i].var[j]->type == CRUSTY_TYPE_FLOAT) {
                         LOG_PRINTF(cvm, "   Float initializer:");
                         for(k = 0; k < cvm->proc[i].var[j]->length; k++) {
                             LOG_PRINTF_BARE(cvm, "%c",
-                                ((float *)&(cvm->initializer[cvm->proc[i].var[j].offset]))[k]);
+                                ((float *)&(cvm->initializer[cvm->proc[i].var[j]->offset]))[k]);
                         }
                     }
                     LOG_PRINTF_BARE(cvm, "\n");
@@ -5975,13 +5974,13 @@ int write_to(void *priv,
              unsigned int index) {
     switch(type) {
         case CRUSTY_TYPE_CHAR:
-            fprintf((FILE *)priv, "%c", (char *)ptr);
+            fprintf((FILE *)priv, "%c", *(char *)ptr);
             break;
         case CRUSTY_TYPE_INT:
-            fprintf((FILE *)priv, "%d", (int *)ptr);
+            fprintf((FILE *)priv, "%d", *(int *)ptr);
             break;
         case CRUSTY_TYPE_FLOAT:
-            fprintf((FILE *)priv, "%g", (float *)ptr);
+            fprintf((FILE *)priv, "%g", *(float *)ptr);
             break;
         default:
             return(-1);

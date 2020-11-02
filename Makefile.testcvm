@@ -1,6 +1,6 @@
 OBJS   = crustyvm.o
 TARGET = testcvm
-CFLAGS = -DCRUSTY_TEST -Wall -Wextra -D_FILE_OFFSET_BITS=64 -ggdb
+CFLAGS = -D_GNU_SOURCE -DCRUSTY_TEST -Wall -Wextra -D_FILE_OFFSET_BITS=64 -ggdb
 LDFLAGS = -lm
 
 $(TARGET): $(OBJS)

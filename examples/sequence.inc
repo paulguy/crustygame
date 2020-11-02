@@ -1,3 +1,8 @@
+; pretty big but it's 1 second at a crazy high sample rate so it should be
+; relatively reasonable.  Better than a bunch of things having their own
+; buffers
+expr SEQUENCE_USER_SCRATCH_MEM_SIZE 192000
+
 static _SEQUENCE_NOTES string "CCDDEFFGGAAB"
 static _SEQUENCE_SHARP string "#"
 static _SEQUENCE_FLAT  string "b"
@@ -6,8 +11,12 @@ static _SEQUENCE_OCTAVES string "0123456789"
 static _SEQUENCE_DIVS  string "whqestfo"
 ; Whole, Half, Quarter, Eighth, Sixteenth,
 ; Thirdtysecond, sixtyFourth, Onetwentyeighth
+static _SEQUENCE_PIANO string "p"
+static _SEQUENCE_MEZZO string "m"
+static _SEQUENCE_FORTE string "f"
 static _SEQUENCE_TUNINGS floats 12
 static _sequence_rate
+static sequence_user_scratch_mem floats SEQUENCE_USER_SCRATCH_MEM_SIZE
 
 macro SEQUENCE_SET_RATE RATE
     move _sequence_rate RATE
@@ -23,7 +32,7 @@ macro _SEQUENCE_CALC_LENGTH RESULT DIV MUL TEMPO
     div  RESULT MUL
 endmacro _SEQUENCE_CALC_LENGTH
 
-proc _sequence_get_next_note note len div mul tempo octave seq pos
+proc _sequence_get_next_note note len div mul tempo octave velocity seq pos
     local i
 
     label try_find_note
@@ -103,12 +112,33 @@ proc _sequence_get_next_note note len div mul tempo octave seq pos
             jump end
         label not_rest
 
+        cmp seq:pos _SEQUENCE_PIANO
+        jumpn not_piano
+            add pos 1
+            sub velocity 1
+        jump try_find_note
+        label not_piano
+
+        cmp seq:pos _SEQUENCE_MEZZO
+        jumpn not_mezzo
+            add pos 1
+            move velocity 0
+        jump try_find_note
+        label not_mezzo
+
+        cmp seq:pos _SEQUENCE_FORTE
+        jumpn not_forte
+            add pos 1
+            add velocity 1
+        jump try_find_note
+        label not_forte
+
         ; ignore invalid characters
         add pos 1
     label end
 ret
 
-macro MAKE_SEQUENCE SEQ DIV TEMPO
+macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
     static _sequence_start_notediv_SEQ DIV
     static _sequence_start_tempo_SEQ TEMPO
     static _sequence_notediv_SEQ
@@ -117,6 +147,7 @@ macro MAKE_SEQUENCE SEQ DIV TEMPO
     static _sequence_pos_SEQ
     static _sequence_note_SEQ
     static _sequence_octave_SEQ
+    static _sequence_velocity_SEQ
     static _sequence_notelen_SEQ
     static _sequence_notetime_SEQ
     static _sequence_time_SEQ
@@ -130,9 +161,10 @@ macro MAKE_SEQUENCE SEQ DIV TEMPO
         move _sequence_consumed_SEQ 0
         move _sequence_pos_SEQ 0
         move _sequence_octave_SEQ 4
+        move _sequence_velocity_SEQ 0
         move _sequence_time_SEQ 0
         move _sequence_notetime_SEQ 0
-        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ SEQ _sequence_pos_SEQ
+        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ SEQ _sequence_pos_SEQ
         move _sequence_notes_missed_SEQ 0
     ret
 
@@ -163,7 +195,7 @@ macro MAKE_SEQUENCE SEQ DIV TEMPO
             move remain _sequence_notelen_SEQ
 
             ; get the next note information
-            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ SEQ _sequence_pos_SEQ
+            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ SEQ _sequence_pos_SEQ
 
             ; see if the sequence has ended
             cmp _sequence_note_SEQ 0
@@ -177,7 +209,7 @@ macro MAKE_SEQUENCE SEQ DIV TEMPO
             move remain -1
         label end
     ret
-endmacro MAKE_SEQUENCE
+endmacro SEQUENCE_MAKE_SEQ
 
 ; some syntactical sugar to cover up how this actually works
 macro SEQUENCE_START SEQ
@@ -306,33 +338,54 @@ macro SEQUENCE_CALC_SPEED TEMP RESULT LEN FREQ
     div  RESULT TEMP
 endmacro SEQUENCE_CALC_SPEED
 
-static _sequence_sample_mem floats SEQUENCE_SAMPLE_MEM_SIZE
-static _sequence_sample_mem_pos 0
+expr _SEQUENCE_MAX_INST_OBJS 10
 
-proc sequence_clear_sample_mem
-    move _sequence_sample_mem_pos 0
-ret
+macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
+    expr _SEQUENCE_ISIZE_INSTNAME "OBJSIZE + 1"
+    expr _SEQUENCE_IMEM_INSTNAME "_SEQUENCE_MAX_INST_OBJS * _SEQUENCE_ISIZE_INSTNAME"
 
-proc sequence_get_sample_mem mempos size
-    local temp
+    static _sequence_inst_objbuffer_INSTNAME ints _SEQUENCE_IMEM_INSTNAME
 
-    move temp _sequence_sample_mem_pos
-    add  temp size
-    cmp  temp _sequence_sample_mem:
-    jumpl good
-    move mempos -1
-    jump end
-    label good
+    proc sequence_inst_init_INSTNAME hInst
+        ; find free slot
+        move hInst _SEQUENCE_IMEM_INSTNAME
+        label loop
+            sub hInst _SEQUENCE_ISIZE_INSTNAME
+            jumpl end
+            cmp _sequence_inst_objbuffer_INSTNAME:hInst 0
+            jumpz found
+        jump loop
+        label found
+        ; mark used
+        move _sequence_inst_objbuffer_INSTNAME:hInst 1
+        add hInst 1
+        call inst_INSTNAME_obj_init _sequence_inst_objbuffer_INSTNAME:hInst
+        label end
+    ret
 
-    move mempos _sequence_sample_mem_pos
-    add  _sequence_sample_mem_pos size
-    label end
-ret
+    proc sequence_inst_free_INSTNAME hInst
+        call inst_INSTNAME_obj_free hInst
+        sub hInst 1
+        move _sequence_inst_objbuffer_INSTNAME:hInst 0
+    ret
+endmacro SEQUENCE_MAKE_INST
 
-macro SEQUENCE_SET_SAMPLE_MEM_BUFFER MEMPOS
-    move set_buffer _sequence_sample_mem:MEMPOS
-endmacro SEQUENCE_SET_SAMPLE_MEM_BUFFER
+macro SEQUENCE_GET_INST_OBJ INST HANDLE
+    call sequence_inst_init_INST HANDLE
+endmacro SEQUENCE_GET_INST_OBJ
 
-macro SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER PROC PRIV MEMPOS SIZE
-    call PROC PRIV _sequence_sample_mem:MEMPOS SIZE
-endmacro SEQUENCE_CALL_WITH_SAMPLE_MEM_BUFFER
+macro SEQUENCE_FREE_INST_OBJ INST HANDLE
+    call sequence_free_inst_INST HANDLE
+endmacro SEQUENCE_FREE_INST_OBJ
+
+macro SEQUENCE_GET_INST_OBJ_MEM TEMP RESULT NAME HANDLE OFFSET
+    move TEMP HANDLE
+    add  TEMP OFFSET
+    move RESULT _sequence_inst_objbuffer_NAME:TEMP
+endmacro SEQUENCE_GET_INST_OBJ_MEM
+
+macro SEQUENCE_SET_INST_OBJ_MEM TEMP NAME HANDLE OFFSET VAL
+    move TEMP HANDLE
+    add  TEMP OFFSET
+    move _sequence_inst_objbuffer_NAME:TEMP VAL
+endmacro SEQUENCE_SET_INST_OBJ_MEM
