@@ -368,6 +368,33 @@ macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
         sub hInst 1
         move _sequence_inst_objbuffer_INSTNAME:hInst 0
     ret
+
+    macro PLAY_INSTNAME_CHANNEL SQ OBJ
+        call inst_INSTNAME_frame OBJ needed
+        label need_more_SQ
+            SEQUENCE_GET_CUR_NOTE SQ note remain
+            cmp remain 0 ; end of sequence
+            jumpl loop_SQ
+            call inst_INSTNAME_note OBJ note
+
+            move request remain
+            cmp request needed
+            jumpl no_set_needed_SQ
+            move request needed
+            label no_set_needed_SQ
+
+            call inst_INSTNAME_run OBJ request
+            SEQUENCE_ADVANCE_TIME SQ request
+
+            sub needed request
+        jumpg need_more_SQ
+        jump end_SQ
+
+        label loop_SQ
+            SEQUENCE_START SQ
+        jump need_more_SQ
+        label end_SQ
+    endmacro PLAY_INSTNAME_CHANNEL
 endmacro SEQUENCE_MAKE_INST
 
 macro SEQUENCE_GET_INST_OBJ INST HANDLE
@@ -389,3 +416,7 @@ macro SEQUENCE_SET_INST_OBJ_MEM TEMP NAME HANDLE OFFSET VAL
     add  TEMP OFFSET
     move _sequence_inst_objbuffer_NAME:TEMP VAL
 endmacro SEQUENCE_SET_INST_OBJ_MEM
+
+macro SEQUENCE_PLAY_CHANNEL INST SQ OBJ
+    PLAY_INST_CHANNEL SQ OBJ
+endmacro SEQUENCE_PLAY_CHANNEL

@@ -1,3 +1,15 @@
+proc wave_make_dc buffer length val
+    local temp 0
+
+    label genwave
+        cmp temp length
+        jumpz donewave
+        move buffer:temp val
+        add temp 1
+    jump genwave
+    label donewave
+ret
+
 proc wave_make_square buffer length low high
     local temp 0
     local half

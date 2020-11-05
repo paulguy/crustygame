@@ -195,36 +195,9 @@ expr CURRENT_SONG_NONE     0
 expr CURRENT_SONG_TESTSONG 1
 
 static testseq string "wX3qEEAAEEhCFqFhFFEbqEbhEbEbqFAAFFhCqE"
-SEQUENCE_MAKE_SEQ testseq 4 90
+SEQUENCE_MAKE_SEQ testseq 4 120
 
 static sineobj1
-
-macro PLAY_SINE_CHANNEL SQ OBJ
-    call inst_sine_frame OBJ needed
-    label need_more_SQ
-        SEQUENCE_GET_CUR_NOTE SQ note remain
-        cmp remain 0 ; end of sequence
-        jumpl loop_SQ
-        call inst_sine_note OBJ note
-
-        move request remain
-        cmp request needed
-        jumpl no_set_needed_SQ
-        move request needed
-        label no_set_needed_SQ
-
-        call inst_sine_run OBJ request
-        SEQUENCE_ADVANCE_TIME SQ request
-
-        sub needed request
-    jumpg need_more_SQ
-    jump end_SQ
-
-    label loop_SQ
-        SEQUENCE_START SQ
-    jump need_more_SQ
-    label end_SQ
-endmacro PLAY_SINE_CHANNEL
 
 proc song_testsong_start
     call inst_sine_init
@@ -243,7 +216,7 @@ proc song_testsong_run needed
 
     cmp playing_audio
     jumpz end
-        PLAY_SINE_CHANNEL testseq sineobj1
+        SEQUENCE_PLAY_CHANNEL sine testseq sineobj1
     label end
 ret
 

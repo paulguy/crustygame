@@ -938,21 +938,21 @@ static int tokenize(CrustyVM *cvm,
 #undef PROGRAM
 #undef ISJUNK
 
-static CrustyMacro *find_macro(CrustyVM *cvm,
-                               CrustyMacro *macro,
-                               unsigned int count,
-                               const char *name) {
+static int find_macro(CrustyVM *cvm,
+                      CrustyMacro *macro,
+                      unsigned int count,
+                      const char *name) {
     unsigned int i;
 
     for(i = 0; i < count; i++) {
         if(compare_token_and_string(cvm,
                                     macro[i].nameOffset,
                                     name) == 0) {
-            return(&(macro[i]));
+            return(i);
         }
     }
 
-    return(NULL);
+    return(-1);
 }
 
 static long string_replace(CrustyVM *cvm,
@@ -985,11 +985,11 @@ static long string_replace(CrustyVM *cvm,
            to search within or if the last result is
            at the end of the string anyway. */
         if(macroInTokenLen + macrolen < tokenlen) {
-            /* start checking 1 character in so the same
-               string isn't found again, safe because
-               there is at least an additional character
-               after this */
-            macroInToken = memmem(macroInToken + 1, tokenlen - macroInTokenLen - 1, macro, macrolen);
+            /* start checking at the end of the found macro.  This is less
+             * robust because it doesn't allow greedy expansion of macros but
+             * I'd rather the simplicity than to allow hard to read
+             * metaprogramming shenanigans. */
+            macroInToken = memmem(macroInToken + macrolen, tokenlen - macroInTokenLen - macrolen, macro, macrolen);
         } else { /* already at end of token */
             break;
         }
@@ -1825,6 +1825,13 @@ static int valid_instruction(const char *name) {
 
 #undef INSTRUCTION_COUNT
 
+#define LOG_PRINTF_LINE2(CVM, FMT, ...) \
+    (CVM)->log_cb((CVM)->log_priv, "%s:%s:%u: " FMT, \
+        (CVM)->stage, \
+        TOKENVAL(curline->moduleOffset), \
+        curline->line, \
+        ##__VA_ARGS__)
+
 #define GET_ACTIVE(TOKEN) TOKENVAL(active.offset[TOKEN])
 
 static int preprocess(CrustyVM *cvm,
@@ -1837,15 +1844,17 @@ static int preprocess(CrustyVM *cvm,
     unsigned int lines;
     char *temp;
 
+    CrustyLine *curline;
     CrustyLine active;
     active.offset = NULL;
 
     CrustyMacro *macro = NULL;
     unsigned int macrocount = 0;
+    unsigned int lookup_macro;
     CrustyMacro *curmacro = NULL;
 
     unsigned int returnstack[MACRO_STACK_SIZE];
-    CrustyMacro *macrostack[MACRO_STACK_SIZE];
+    unsigned int macrostack[MACRO_STACK_SIZE];
     long *macroargs[MACRO_STACK_SIZE];
     int macrostackptr = -1;
 
@@ -1853,47 +1862,59 @@ static int preprocess(CrustyVM *cvm,
     long *values = NULL;
     unsigned int varcount = 0;
 
-    int foundmacro = 0;
-
     long tokenstart;
 
     mem = 0; /* actual memory allocated for line */
     lines = 0; /* size of initialized array */
 
     cvm->logline = 0; /* line being evaluated */
-    while(cvm->logline < cvm->lines) {
+    for(;;) {
+        if(macrostackptr == -1) {
+            if(cvm->logline >= cvm->lines) {
+                break;
+            }
+            curline = &(cvm->line[cvm->logline]);
+        } else {
+            if(cvm->logline >= lines) {
+                LOG_PRINTF(cvm, "BUG: Macro went past end of memory.\n");
+                goto failure;
+            }
+            curline = &(new[cvm->logline]);
+        }
+
         /* no need to check if tokencount > 0 because those lines were filtered
            out previously */
 
         if(active.offset != NULL) {
             free(active.offset);
         }
-        active.offset = malloc(sizeof(long) * cvm->line[cvm->logline].tokencount);
+
+        active.offset = malloc(sizeof(long) * curline->tokencount);
         if(active.offset == NULL) {
-            LOG_PRINTF_LINE(cvm, "Failed to allocate memory for active token arguments.");
+            LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for active token arguments.");
             goto failure;
         }
 
 #ifdef CRUSTY_TEST
-        LOG_PRINTF_LINE(cvm, " Original: ");
+        LOG_PRINTF_LINE2(cvm, " Original: ");
         if(macrostackptr >= 0) {
-            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(macrostack[macrostackptr]->nameOffset));
+            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(macro[macrostack[macrostackptr]].nameOffset));
         }
-        for(i = 0; i < cvm->line[cvm->logline].tokencount; i++) {
-            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(cvm->line[cvm->logline].offset[i]));
+        for(i = 0; i < curline->tokencount; i++) {
+            LOG_PRINTF_BARE(cvm, "%s ", TOKENVAL(curline->offset[i]));
         }
         LOG_PRINTF_BARE(cvm, "\n");
 #endif
 
         /* make mutable active line */
-        active.tokencount = cvm->line[cvm->logline].tokencount;
-        active.moduleOffset = cvm->line[cvm->logline].moduleOffset;
-        active.line = cvm->line[cvm->logline].line;
+        active.tokencount = curline->tokencount;
+        active.moduleOffset = curline->moduleOffset;
+        active.line = curline->line;
 
         /* replace any tokens with tokens containing any possible macro
            replacement values */
         for(i = 0; i < active.tokencount; i++) {
-            active.offset[i] = cvm->line[cvm->logline].offset[i];
+            active.offset[i] = curline->offset[i];
             /* don't rewrite the line at all if it's ending the current
              * macro. */
             if(!(macrostackptr >= 0 && i == 1 &&
@@ -1902,7 +1923,7 @@ static int preprocess(CrustyVM *cvm,
                                           "endmacro") == 0 &&
                  compare_token_and_token(cvm,
                                          active.offset[1],
-                                         macrostack[macrostackptr]->nameOffset) == 0)) {
+                                         macro[macrostack[macrostackptr]].nameOffset) == 0)) {
                 for(j = 0; j < inVars; j++) {
                     /* first part of a hack to prevent a -D parameter
                      * on the command line becoming "undefined".
@@ -1927,8 +1948,8 @@ static int preprocess(CrustyVM *cvm,
                     }
                     active.offset[i] = tokenstart;
                 }
-                if((macrostackptr >= 0 && macrostack[macrostackptr]->argcount > 0)) {
-                    for(j = 0; j < macrostack[macrostackptr]->argcount; j++) {
+                if((macrostackptr >= 0 && macro[macrostack[macrostackptr]].argcount > 0)) {
+                    for(j = 0; j < macro[macrostack[macrostackptr]].argcount; j++) {
                         /* function will just pass back the token passed to
                            it in the case there's nothing to be done,
                            otherwise it'll create the new string in extramem
@@ -1936,7 +1957,7 @@ static int preprocess(CrustyVM *cvm,
                         tokenstart =
                             string_replace(cvm,
                                            active.offset[i],
-                                           macrostack[macrostackptr]->argOffset[j],
+                                           macro[macrostack[macrostackptr]].argOffset[j],
                                            macroargs[macrostackptr][j]);
                         if(tokenstart < 0) {
                             /* reason will have already been printed */
@@ -1957,7 +1978,7 @@ static int preprocess(CrustyVM *cvm,
         }
 
 #ifdef CRUSTY_TEST
-        LOG_PRINTF_LINE(cvm, "Rewritten: ");
+        LOG_PRINTF_LINE2(cvm, "Rewritten: ");
         for(i = 0; i < active.tokencount; i++) {
             LOG_PRINTF_BARE(cvm, "%s ", GET_ACTIVE(i));
         }
@@ -1970,50 +1991,42 @@ static int preprocess(CrustyVM *cvm,
             if(curmacro == NULL) { /* don't evaluate any macros which may be
                                       within other macros. */
                 if(active.tokencount < 2) {
-                    LOG_PRINTF_LINE(cvm, "Macros must at least be defined with a name.\n");
+                    LOG_PRINTF_LINE2(cvm, "Macros must at least be defined with a name.\n");
                     goto failure;
                 }
 
                 /* if the macro wasn't found, allocate space for it, otherwise
                    override previous declaration */
-                curmacro = find_macro(cvm, macro, macrocount, GET_ACTIVE(1));
-                if(curmacro == NULL) {
+                lookup_macro = find_macro(cvm, macro, macrocount, GET_ACTIVE(1));
+                if(lookup_macro == -1) {
                     curmacro = realloc(macro, sizeof(CrustyMacro) * (macrocount + 1));
                     if(curmacro == NULL) {
-                        LOG_PRINTF_LINE(cvm, "Failed to allocate memory for macro.\n");
+                        LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for macro.\n");
                         goto failure;
                     }
                     macro = curmacro;
                     curmacro = &(macro[macrocount]);
                     macrocount++;
+                } else {
+                    curmacro = &(macro[lookup_macro]);
                 }
                 curmacro->nameOffset = active.offset[1];
                 curmacro->argcount = active.tokencount - 2;
                 curmacro->argOffset = malloc(sizeof(long) * curmacro->argcount);
                 if(curmacro->argOffset == NULL) {
-                    LOG_PRINTF_LINE(cvm, "Failed to allocate memory for macro args list.\n");
-                    free(curmacro);
+                    LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for macro args list.\n");
                     goto failure;
                 }
                 for(i = 2; i < active.tokencount; i++) {
                     curmacro->argOffset[i - 2] = active.offset[i];
                 }
-                curmacro->start = cvm->logline + 1; /* may not be defined now but a
-                                                  valid program will have it
-                                                  defined eventually as a macro
-                                                  at least needs a matching
-                                                  endmacro */
-
-                /* suppress copying evaluated macro in to destination */
-                goto skip_copy;
-            } else {
-                foundmacro = 1;
+                curmacro->start = lines;
             }
         } else if(compare_token_and_string(cvm,
                                            active.offset[0],
                                            "endmacro") == 0) {
             if(active.tokencount != 2) {
-                LOG_PRINTF_LINE(cvm, "endmacro takes a name.\n");
+                LOG_PRINTF_LINE2(cvm, "endmacro takes a name.\n");
                 goto failure;
             }
 
@@ -2024,22 +2037,18 @@ static int preprocess(CrustyVM *cvm,
                                        active.offset[1],
                                        curmacro->nameOffset) == 0) {
                 curmacro = NULL;
-
-                /* suppress copying evaluated endmacro in to destination */
-                goto skip_copy;
             }
 
             /* if a macro is being output and the end of the macro currently
                being output is reached, then pop it off the stack. */
             if(macrostackptr >= 0 &&
                compare_token_and_token(cvm,
-                                       macrostack[macrostackptr]->nameOffset,
+                                       macro[macrostack[macrostackptr]].nameOffset,
                                        active.offset[1]) == 0) {
                 free(macroargs[macrostackptr]);
                 cvm->logline = returnstack[macrostackptr];
                 macrostackptr--;
 
-                /* suppress copying evaluated endmacro in to destination */
                 goto skip_copy;
             }
         } else if(compare_token_and_string(cvm,
@@ -2052,7 +2061,7 @@ static int preprocess(CrustyVM *cvm,
                    replaced the first argument so we just need to determine
                    whather it's a number and whether it's not 0 */
                 if(active.tokencount < 3) {
-                    LOG_PRINTF_LINE(cvm,
+                    LOG_PRINTF_LINE2(cvm,
                         "if takes a variable and at least 1 more argument.\n");
                     goto failure;
                 }
@@ -2084,10 +2093,10 @@ static int preprocess(CrustyVM *cvm,
                 if(dothing) {
                     /* move everything over 2 */
                     for(j = 2; j < active.tokencount; j++) {
-                        cvm->line[cvm->logline].offset[j - 2] =
-                            cvm->line[cvm->logline].offset[j];
+                        curline->offset[j - 2] =
+                            curline->offset[j];
                     }
-                    cvm->line[cvm->logline].tokencount -= 2;
+                    curline->tokencount -= 2;
 
                     continue; /* don't copy but reevaluate */
                 }
@@ -2097,120 +2106,123 @@ static int preprocess(CrustyVM *cvm,
         } else if(compare_token_and_string(cvm,
                                            active.offset[0],
                                            "expr") == 0) {
-           if(curmacro == NULL) { /* don't evaluate any macros which may be
-                                      within other macros. */
-               if(active.tokencount != 3) {
-                   LOG_PRINTF_LINE(cvm,
-                       "expr takes a variable name and an expression.\n");
-                   goto failure;
-               }
+            if(curmacro == NULL) { /* don't evaluate any macros which may be
+                                       within other macros. */
+                if(active.tokencount != 3) {
+                    LOG_PRINTF_LINE2(cvm,
+                        "expr takes a variable name and an expression.\n");
+                    goto failure;
+                }
 
-               temp = realloc(vars, sizeof(long) * (varcount + 1));
-               if(temp == NULL) {
-                   LOG_PRINTF_LINE(cvm, "Failed to allocate memory for expr var.\n");
-                   goto failure;
-               }
-               vars = (long *)temp;
+                temp = realloc(vars, sizeof(long) * (varcount + 1));
+                if(temp == NULL) {
+                    LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for expr var.\n");
+                    goto failure;
+                }
+                vars = (long *)temp;
 
-               temp = realloc(values, sizeof(long) * (varcount + 1));
-               if(temp == NULL) {
-                   LOG_PRINTF_LINE(cvm, "Failed to allocate memory for expr value.\n");
-                   goto failure;
-               }
-               values = (long *)temp;
+                temp = realloc(values, sizeof(long) * (varcount + 1));
+                if(temp == NULL) {
+                    LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for expr value.\n");
+                    goto failure;
+                }
+                values = (long *)temp;
 
-               vars[varcount] = active.offset[1];
-               values[varcount] = evaluate_expr(cvm,
-                                                TOKENVAL(active.offset[2]),
-                                                TOKENLEN(active.offset[2]));
-               if(values[varcount] < 0) {
-                   LOG_PRINTF_LINE(cvm, "Expression evaluation failed.\n");
-                   goto failure;
-               }
-               varcount++;
+                vars[varcount] = active.offset[1];
+                values[varcount] = evaluate_expr(cvm,
+                                                 TOKENVAL(active.offset[2]),
+                                                 TOKENLEN(active.offset[2]));
+                if(values[varcount] < 0) {
+                    LOG_PRINTF_LINE2(cvm, "Expression evaluation failed.\n");
+                    goto failure;
+                }
+                varcount++;
 
-               goto skip_copy;
-           } else {
-               foundmacro = 1;
-           }
+                goto skip_copy;
+            }
         } else if(!valid_instruction(GET_ACTIVE(0))) {
             /* don't evaluate macro calls while reading in a macro, only
                while writing out */
             if(curmacro == NULL) {
                 if(macrostackptr == MACRO_STACK_SIZE - 1) {
-                    LOG_PRINTF_LINE(cvm, "Macro stack filled.\n");
+                    LOG_PRINTF_LINE2(cvm, "Macro stack filled.\n");
                 }
 
                 macrostack[macrostackptr + 1] = find_macro(cvm,
                                                            macro,
                                                            macrocount,
                                                            GET_ACTIVE(0));
-                if(macrostack[macrostackptr + 1] == NULL) {
-                    LOG_PRINTF_LINE(cvm, "Invalid keyword or macro not found: %s.\n",
+                if(macrostack[macrostackptr + 1] == -1) {
+                    LOG_PRINTF_LINE2(cvm, "Invalid keyword or macro not found: %s.\n",
                                         GET_ACTIVE(0));
                     goto failure;
                 }
 
-                if(macrostack[macrostackptr + 1] == curmacro) {
-                    LOG_PRINTF_LINE(cvm, "Macro called recursively: %s.\n",
-                                        TOKENVAL(curmacro->nameOffset));
-                    goto failure;
+                if(macrostackptr >= 0) {
+                    for(i = 0; i < macrostackptr + 1; i++) {
+                        if(macrostack[i] == 
+                           macrostack[macrostackptr + 1]) {
+                            LOG_PRINTF_LINE2(cvm, "Macro called recursively: %s.\n",
+                                                 TOKENVAL(macro[macrostack[i]].nameOffset));
+                            goto failure;
+                        }
+                    }
                 }
                 if(active.tokencount - 1 !=
-                   macrostack[macrostackptr + 1]->argcount) {
-                    LOG_PRINTF_LINE(cvm, "Wrong number of arguments to macro: "
+                   macro[macrostack[macrostackptr + 1]].argcount) {
+                    LOG_PRINTF_LINE2(cvm, "Wrong number of arguments to macro: "
                                          "got %d, expected %d.\n",
                                active.tokencount - 1,
-                               macrostack[macrostackptr + 1]->argcount);
+                               macro[macrostack[macrostackptr + 1]].argcount);
                     goto failure;
                 }
 
                 macrostackptr++;
                 macroargs[macrostackptr] =
-                    malloc(sizeof(long) * macrostack[macrostackptr]->argcount);
+                    malloc(sizeof(long) * macro[macrostack[macrostackptr]].argcount);
                 if(macroargs[macrostackptr] == NULL) {
-                    LOG_PRINTF_LINE(cvm, "Failed to allocate memory for macro args.\n");
+                    LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for macro args.\n");
                     goto failure;
                 }
-                for(i = 0; i < macrostack[macrostackptr]->argcount; i++) {
+                for(i = 0; i < macro[macrostack[macrostackptr]].argcount; i++) {
                     macroargs[macrostackptr][i] = active.offset[i + 1];
                 }
                 returnstack[macrostackptr] = cvm->logline;
-                cvm->logline = macrostack[macrostackptr]->start;
+                cvm->logline = macro[macrostack[macrostackptr]].start;
 
                 /* don't copy the next line but make sure it's still evaluated */
-                continue;
-            } else {
-                foundmacro = 1;
+                goto skip_copy;
             }
         }
 
-        /* don't actually output a macro being read in */
-        if(curmacro == NULL) {
-            if(lines == mem) {
-                temp = realloc(new, sizeof(CrustyLine) * (mem + 1));
-                if(temp == NULL) {
-                    LOG_PRINTF_LINE(cvm, "Failed to allocate memory for line copy.\n");
-                    goto failure;
-                }
-                new = (CrustyLine *)temp;
-                mem++;
-            }
-
-            new[lines].tokencount = active.tokencount;
-            new[lines].moduleOffset = active.moduleOffset;
-            new[lines].line = active.line;
-            new[lines].offset = malloc(sizeof(long) * new[lines].tokencount);
-            if(new[lines].offset == NULL) {
-                LOG_PRINTF_LINE(cvm, "Failed to allocate memory for line offsets copy.\n");
-                goto failure;
-            }
-            for(i = 0; i < new[lines].tokencount; i++) {
-                new[lines].offset[i] = active.offset[i];
-            }
-
-            lines++;
+#ifdef CRUSTY_TEST
+        LOG_PRINTF_LINE2(cvm, "   Copied: ");
+        for(i = 0; i < active.tokencount; i++) {
+            LOG_PRINTF_BARE(cvm, "%s ", GET_ACTIVE(i));
         }
+        LOG_PRINTF_BARE(cvm, "\n");
+#endif
+
+        temp = realloc(new, sizeof(CrustyLine) * (lines + 1));
+        if(temp == NULL) {
+            LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for line copy.\n");
+            goto failure;
+        }
+        new = (CrustyLine *)temp;
+
+        new[lines].tokencount = active.tokencount;
+        new[lines].moduleOffset = active.moduleOffset;
+        new[lines].line = active.line;
+        new[lines].offset = malloc(sizeof(long) * new[lines].tokencount);
+        if(new[lines].offset == NULL) {
+            LOG_PRINTF_LINE2(cvm, "Failed to allocate memory for line offsets copy.\n");
+            goto failure;
+        }
+        for(i = 0; i < new[lines].tokencount; i++) {
+            new[lines].offset[i] = active.offset[i];
+        }
+
+        lines++;
 
 skip_copy:
         cvm->logline++;
@@ -2219,8 +2231,8 @@ skip_copy:
     if(curmacro != NULL) {
         LOG_PRINTF(cvm, "Macro without endmacro: %s@%s:%u.\n",
                         TOKENVAL(curmacro->nameOffset),
-                        TOKENVAL(cvm->line[curmacro->start].moduleOffset),
-                        cvm->line[curmacro->start].line);
+                        TOKENVAL(new[curmacro->start].moduleOffset),
+                        new[curmacro->start].line);
         goto failure;
     }
 
@@ -2251,7 +2263,7 @@ skip_copy:
         free(values);
     }
 
-    return(foundmacro);
+    return(0);
 
 failure:
     if(new != NULL) {
@@ -2286,7 +2298,67 @@ failure:
     return(-1);
 }
 
+#undef LOG_PRINTF_LINE2
 #undef GET_ACTIVE
+
+static int clear_macros(CrustyVM *cvm) {
+    CrustyLine *new = NULL;
+    CrustyLine *temp;
+    unsigned int lines = 0;
+    int macros = 0;
+    unsigned int i;
+
+    for(cvm->logline = 0; cvm->logline < cvm->lines; cvm->logline++) {
+        if(compare_token_and_string(cvm,
+                                    GET_TOKEN_OFFSET(cvm->logline, 0),
+                                    "macro") == 0) {
+            macros++;
+        } else if(compare_token_and_string(cvm,
+                                           GET_TOKEN_OFFSET(cvm->logline, 0),
+                                           "endmacro") == 0) {
+            if(macros == 0) {
+                LOG_PRINTF_LINE(cvm, "BUG: endmacro without macro.\n");
+                goto failure;
+            }
+
+            macros--;
+            continue;
+        }
+
+        if(macros == 0) {
+            temp = realloc(new, sizeof(CrustyLine) * (lines + 1));
+            if(temp == NULL) {
+                LOG_PRINTF_LINE(cvm, "Failed to allocate memory for line copy.\n");
+                goto failure;
+            }
+            new = temp;
+
+            new[lines].tokencount = cvm->line[cvm->logline].tokencount;
+            new[lines].moduleOffset = cvm->line[cvm->logline].moduleOffset;
+            new[lines].line = cvm->line[cvm->logline].line;
+            new[lines].offset = malloc(sizeof(long) * new[lines].tokencount);
+            if(new[lines].offset == NULL) {
+                LOG_PRINTF_LINE(cvm, "Failed to allocate memory for line offsets copy.\n");
+                goto failure;
+            }
+            for(i = 0; i < new[lines].tokencount; i++) {
+                new[lines].offset[i] = cvm->line[cvm->logline].offset[i];
+            }
+
+            lines++;
+        }
+    }
+
+    free(cvm->line);
+    cvm->line = new;
+    cvm->lines = lines;
+
+    return(0);
+
+failure:
+    free(new);
+    return(-1);
+}
 
 static int find_procedure(CrustyVM *cvm,
                           const char *name) {
@@ -4197,7 +4269,6 @@ CrustyVM *crustyvm_new(const char *name,
     CrustyVM *cvm;
     int foundmacro;
     unsigned int i, j;
-    char namebuffer[] = "preprocess###.cvm";
     long tokenstart;
     unsigned long *varOffset;
     unsigned long *valueOffset;
@@ -4337,48 +4408,35 @@ CrustyVM *crustyvm_new(const char *name,
     }
 #endif
 
-    for(i = 0; i < MAX_PASSES; i++) {
-        snprintf(namebuffer, sizeof(namebuffer), "preprocess %d", i + 1);
-        cvm->stage = namebuffer;
+    cvm->stage = "preprocess";
 #ifdef CRUSTY_TEST
-        LOG_PRINTF(cvm, "Start\n", i);
+    LOG_PRINTF(cvm, "Start\n", i);
 #endif
 
-        foundmacro = preprocess(cvm, varOffset, valueOffset, vars);
-        if(foundmacro < 0) {
-            LOG_PRINTF(cvm, "Failed preprocess at pass %d.\n", i + 1);
-            crustyvm_free(cvm);
-            return(NULL);
-        }
-
-        if(cvm->lines == 0) {
-            LOG_PRINTF(cvm, "No lines remain after pass.\n");
-            crustyvm_free(cvm);
-            return(NULL);
-        }
-
-#ifdef CRUSTY_TEST
-        if(cvm->flags & CRUSTY_FLAG_OUTPUT_PASSES) {
-            snprintf(namebuffer, sizeof(namebuffer), "preprocess%03d.cvm", i + 1);
-            if(write_lines(cvm, namebuffer) < 0) {
-                LOG_PRINTF(cvm, "Failed to write pass %d.\n", i + 1);
-                crustyvm_free(cvm);
-                return(NULL);
-            }
-        }
-#endif
-
-        if(foundmacro == 0) {
-            break;
-        }
-    }
-    free(varOffset);
-    free(valueOffset);
-    if(i == MAX_PASSES) {
-        LOG_PRINTF(cvm, "Preprocess passes exceeded.\n");
+    if(preprocess(cvm, varOffset, valueOffset, vars)) {
+        LOG_PRINTF(cvm, "Failed preprocess.\n");
         crustyvm_free(cvm);
         return(NULL);
     }
+
+    if(cvm->lines == 0) {
+        LOG_PRINTF(cvm, "No lines remain after pass.\n");
+        crustyvm_free(cvm);
+        return(NULL);
+    }
+
+#ifdef CRUSTY_TEST
+    if(cvm->flags & CRUSTY_FLAG_OUTPUT_PASSES) {
+        if(write_lines(cvm, "preprocess.cvm") < 0) {
+            LOG_PRINTF(cvm, "Failed to write pass %d.\n", i + 1);
+            crustyvm_free(cvm);
+            return(NULL);
+        }
+    }
+#endif
+
+    free(varOffset);
+    free(valueOffset);
 
     cvm->stage = "adding callbacks";
 #ifdef CRUSTY_TEST
@@ -4410,6 +4468,17 @@ CrustyVM *crustyvm_new(const char *name,
             crustyvm_free(cvm);
             return(NULL);
         }
+    }
+
+    cvm->stage = "clear macros";
+#ifdef CRUSTY_TEST
+    LOG_PRINTF(cvm, "Start\n");
+#endif
+
+    if(clear_macros(cvm) < 0) {
+        LOG_PRINTF(cvm, "Clear macros failed.\n");
+        crustyvm_free(cvm);
+        return(NULL);
     }
 
     cvm->stage = "symbols scan";
