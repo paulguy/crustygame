@@ -84,6 +84,9 @@
 #define CRUSTYGAME_AUDIO_SPEED_MODE_CONSTANT (0)
 #define CRUSTYGAME_AUDIO_SPEED_MODE_SOURCE   (1)
 
+#define CRUSTYGAME_AUDIO_OUTPUT_MODE_REPLACE (0)
+#define CRUSTYGAME_AUDIO_OUTPUT_MODE_ADD     (1)
+
 typedef struct {
     CrustyVM *cvm;
     SDL_Window *win;

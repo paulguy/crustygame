@@ -14,13 +14,28 @@ static _SEQUENCE_DIVS  string "whqestfo"
 static _SEQUENCE_PIANO string "p"
 static _SEQUENCE_MEZZO string "m"
 static _SEQUENCE_FORTE string "f"
+static _SEQUENCE_SLUR string "_"
 static _SEQUENCE_TUNINGS floats 12
 static _sequence_rate
 static sequence_user_scratch_mem floats SEQUENCE_USER_SCRATCH_MEM_SIZE
+static sequence_scratch_volume_buffer -1
+static sequence_scratch_speed_buffer -1
 
-macro SEQUENCE_SET_RATE RATE
-    move _sequence_rate RATE
-endmacro SEQUENCE_SET_RATE
+proc sequence_set_rate rate
+    move _sequence_rate rate
+
+    cmp sequence_scratch_volume_buffer -1
+    jumpg no_free
+    move audio_free_buffer sequence_scratch_volume_buffer
+    move audio_free_buffer sequence_scratch_speed_buffer
+    label no_free
+
+    ; make the buffer 1 second, should be plenty
+    move audio_add_empty_buffer rate
+    move sequence_scratch_volume_buffer get_return
+    move audio_add_empty_buffer rate
+    move sequence_scratch_speed_buffer get_return
+ret
 
 macro _SEQUENCE_CALC_LENGTH RESULT DIV MUL TEMPO
     move RESULT _sequence_rate
@@ -32,7 +47,7 @@ macro _SEQUENCE_CALC_LENGTH RESULT DIV MUL TEMPO
     div  RESULT MUL
 endmacro _SEQUENCE_CALC_LENGTH
 
-proc _sequence_get_next_note note len div mul tempo octave velocity seq pos
+proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq pos
     local i
 
     label try_find_note
@@ -53,6 +68,7 @@ proc _sequence_get_next_note note len div mul tempo octave velocity seq pos
         jump not_note
         label found_note
             add pos 1
+            move slurred 0
             _SEQUENCE_CALC_LENGTH len div mul tempo
             move note 12
             mul  note octave
@@ -64,12 +80,21 @@ proc _sequence_get_next_note note len div mul tempo octave velocity seq pos
             jumpz note_sharp
             cmp seq:pos _SEQUENCE_FLAT
             jumpz note_flat
-        jump end
+        jump check_slur
         label note_sharp
+            add pos 1
             add note 1
-        jump end
+        jump check_slur
         label note_flat
+            add pos 1
             sub note 1
+        label check_slur
+            cmp pos seq:
+        jumpz end
+            cmp seq:pos _SEQUENCE_SLUR
+            jumpn end
+            add pos 1
+            move slurred 1
         jump end
         label not_note
 
@@ -148,6 +173,7 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
     static _sequence_note_SEQ
     static _sequence_octave_SEQ
     static _sequence_velocity_SEQ
+    static _sequence_slurred_SEQ
     static _sequence_notelen_SEQ
     static _sequence_notetime_SEQ
     static _sequence_time_SEQ
@@ -164,13 +190,13 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
         move _sequence_velocity_SEQ 0
         move _sequence_time_SEQ 0
         move _sequence_notetime_SEQ 0
-        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ SEQ _sequence_pos_SEQ
+        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ _sequence_slurred_SEQ SEQ _sequence_pos_SEQ
         move _sequence_notes_missed_SEQ 0
     ret
 
     ; note = 0 -> note off/rest
     ; remain = -1 -> sequence ended
-    proc _sequence_get_cur_note_SEQ note remain
+    proc _sequence_get_cur_note_SEQ note velocity remain
         cmp _sequence_note_SEQ 0
         jumpl finished
 
@@ -183,25 +209,35 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
         ; indicate note off first then the next call should return the next
         ; note
         cmp remain 0
-        jumpl next_note
         jumpz next_note
         ; just return the note
             move note _sequence_note_SEQ
+            move velocity _sequence_velocity_SEQ
         jump end
 
         label next_note
             ; advance the time
             add _sequence_notetime_SEQ _sequence_notelen_SEQ
-            move remain _sequence_notelen_SEQ
 
             ; get the next note information
-            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ SEQ _sequence_pos_SEQ
+            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ _sequence_slurred_SEQ SEQ _sequence_pos_SEQ
 
             ; see if the sequence has ended
             cmp _sequence_note_SEQ 0
         jumpl finished
+
+            ; in case of a slurred note, don't pass the note off evend, just
+            ; pass the next note
+            cmp _sequence_slurred_SEQ
+        jumpn slurred
             move note 0
             move remain 0
+        jump end
+
+        label slurred
+            move note _sequence_note_SEQ
+            move velocity _sequence_velocity_SEQ
+            move remain _sequence_notelen_SEQ
         jump end
 
         label finished
@@ -216,8 +252,8 @@ macro SEQUENCE_START SEQ
     call _sequence_start_SEQ
 endmacro SEQUENCE_START
 
-macro SEQUENCE_GET_CUR_NOTE SEQ NOTE REMAIN
-    call _sequence_get_cur_note_SEQ NOTE REMAIN
+macro SEQUENCE_GET_CUR_NOTE SEQ NOTE VELOCITY REMAIN
+    call _sequence_get_cur_note_SEQ NOTE VELOCITY REMAIN
 endmacro SEQUENCE_GET_CUR_NOTE 
 
 macro SEQUENCE_ADVANCE_TIME SEQ SAMPLES
@@ -369,24 +405,25 @@ macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
         move _sequence_inst_objbuffer_INSTNAME:hInst 0
     ret
 
-    macro PLAY_INSTNAME_CHANNEL SQ OBJ
-        call inst_INSTNAME_frame OBJ needed
+    macro _SEQUENCE_PLAY_INSTNAME_CHANNEL SQ OBJ
+        move tempneeded needed
+        call inst_INSTNAME_frame OBJ tempneeded
         label need_more_SQ
-            SEQUENCE_GET_CUR_NOTE SQ note remain
+            SEQUENCE_GET_CUR_NOTE SQ note velocity remain
             cmp remain 0 ; end of sequence
             jumpl loop_SQ
-            call inst_INSTNAME_note OBJ note
+            call inst_INSTNAME_note OBJ note velocity remain
 
             move request remain
-            cmp request needed
+            cmp request tempneeded
             jumpl no_set_needed_SQ
-            move request needed
+            move request tempneeded
             label no_set_needed_SQ
 
             call inst_INSTNAME_run OBJ request
             SEQUENCE_ADVANCE_TIME SQ request
 
-            sub needed request
+            sub tempneeded request
         jumpg need_more_SQ
         jump end_SQ
 
@@ -394,7 +431,7 @@ macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
             SEQUENCE_START SQ
         jump need_more_SQ
         label end_SQ
-    endmacro PLAY_INSTNAME_CHANNEL
+    endmacro _SEQUENCE_PLAY_INSTNAME_CHANNEL
 endmacro SEQUENCE_MAKE_INST
 
 macro SEQUENCE_GET_INST_OBJ INST HANDLE
@@ -417,6 +454,17 @@ macro SEQUENCE_SET_INST_OBJ_MEM TEMP NAME HANDLE OFFSET VAL
     move _sequence_inst_objbuffer_NAME:TEMP VAL
 endmacro SEQUENCE_SET_INST_OBJ_MEM
 
+; _SEQUENCE_PLAY_*_CHANNEL needs some local variables to work
+macro SEQUENCE_PLAY_LOCALS
+    local tempneeded
+    local temp
+    local request
+    local note
+    local remain
+    local freq floats 1
+    local speed floats 1
+endmacro SEQUENCE_PLAY_LOCALS
+
 macro SEQUENCE_PLAY_CHANNEL INST SQ OBJ
-    PLAY_INST_CHANNEL SQ OBJ
+    _SEQUENCE_PLAY_INST_CHANNEL SQ OBJ
 endmacro SEQUENCE_PLAY_CHANNEL

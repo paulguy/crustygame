@@ -1424,15 +1424,29 @@ int audio_set_player_output_mode(void *priv,
                                  void *ptr,
                                  unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
+    SynthOutputOperation outOp;
 
     if(type != CRUSTY_TYPE_INT) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
 
-    return(synth_set_player_output_buffer_pos(state->s,
-                                              index,
-                                              *(int *)ptr));
+    switch(*(int *)ptr) {
+        case CRUSTYGAME_AUDIO_OUTPUT_MODE_REPLACE:
+            outOp = SYNTH_OUTPUT_REPLACE;
+            break;
+        case CRUSTYGAME_AUDIO_OUTPUT_MODE_ADD:
+            outOp = SYNTH_OUTPUT_ADD;
+            break;
+        default:
+            fprintf(stderr, "Invalid volume mode.\n");
+            return(-1);
+    }
+
+
+    return(synth_set_player_output_mode(state->s,
+                                        index,
+                                        outOp));
 }
 
 int audio_set_player_volume_mode(void *priv,
