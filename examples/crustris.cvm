@@ -194,7 +194,8 @@ static bgscroll_timer_id
 expr CURRENT_SONG_NONE     0
 expr CURRENT_SONG_TESTSONG 1
 
-static testseq string "2sEXEX3AXAX2EXEXqCXeEEEXqEXeEbEbEbXqEbXeFF3AA2FFqCeEX"
+;static testseq string "2sEXEX3AXAX2EXEXqCXeEEEXqEXeEbEbEbXqEbXeFF3AA2FFqCeEX"
+static testseq string "qC_G_GwXqG_E_EwX"
 SEQUENCE_MAKE_SEQ testseq 4 180
 
 static sineobj1

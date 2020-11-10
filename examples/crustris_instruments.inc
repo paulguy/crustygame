@@ -92,8 +92,6 @@ proc inst_sine_obj_init hInst
     move player get_return
     move audio_set_player_mode:player AUDIO_MODE_LOOP
     move audio_set_player_output_mode:player AUDIO_OUTPUT_MODE_ADD
-    move audio_set_player_volume_source:player sequence_scratch_volume_buffer
-    move audio_set_player_speed_source:player sequence_scratch_speed_buffer
     move audio_set_player_volume:player vol
 
     SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_SLOPE_PLAYER_IDX slopeplayer
@@ -102,6 +100,7 @@ proc inst_sine_obj_init hInst
     SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_PLAYER_IDX player
     ; start inactive
     SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_MODE_IDX _INST_SINE_MODE_OFF
+    SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_NOTE_IDX 0
 ret
 
 proc inst_sine_obj_free hInst
@@ -117,6 +116,20 @@ proc inst_sine_obj_free hInst
     move audio_free_player temp
 ret
 
+macro _INST_SINE_CALC_VELOCITY UNIQ
+    cmp velocity 0
+    jumpg faster_UNIQ
+    ; slower
+    mul velocity -1
+    add velocity 1
+    div base_env_speed velocity
+    jump done_velocity_UNIQ
+    label faster_UNIQ
+    add velocity 1
+    mul base_env_speed velocity
+    label done_velocity_UNIQ
+endmacro _INST_SINE_CALC_VELOCITY
+
 ; note 0 is rest/off
 proc inst_sine_note hInst note velocity remain
     local temp
@@ -128,46 +141,36 @@ proc inst_sine_note hInst note velocity remain
     local biasplayer
     local slopeplayer
     ; 1/10 second
-    local base_env_speed 10
+    local base_env_speed floats "10.0"
     local oldnote
-    ERR_SPC note
 
     SEQUENCE_GET_INST_OBJ_MEM temp player sine hInst _INST_SINE_PLAYER_IDX
     SEQUENCE_GET_INST_OBJ_MEM temp volplayer sine hInst _INST_SINE_VOL_PLAYER_IDX
-    ; check for note off
+
+    SEQUENCE_GET_INST_OBJ_MEM temp oldnote sine hInst _INST_SINE_NOTE_IDX
+    ; don't do anything if the note didn't change
+    cmp oldnote note
+    jumpz end
+    ; check if the note changed to note off
     cmp note 0
     jumpz note_off
-
-    ; if a note is not already playing, trigger note on, if a new note is
-    ; triggered to play while the old note is still on (slur), bend the note
-    ; otherwise, don't change anything
-    SEQUENCE_GET_INST_OBJ_MEM temp temp sine hInst _INST_SINE_MODE_IDX
-    cmp temp _INST_SINE_MODE_ATTACK
-    jumpn note_on
-    SEQUENCE_GET_INST_OBJ_MEM temp oldnote sine hInst _INST_SINE_NOTE_IDX
-    cmp oldnote note
-    jumpn note_bend
-    jump end
+    ; check if the note changed from a note off
+    cmp oldnote 0
+    jumpz note_on
+    ; if the note changed, and it wasn't to or from a rest, then bend it
+    jump note_bend
 
     label note_on
         move audio_set_player_input_buffer_pos:volplayer 0
         move audio_set_player_input_buffer:volplayer _inst_sine_env_asc
-        cmp velocity 0
-        jumpg faster
-        ; slower
-        sub velocity 1
-        div base_env_speed velocity
-        jump done_velocity
-        label faster
-        add velocity 1
-        mul base_env_speed velocity
-        label done_velocity
-        move audio_set_player_speed:volplayer base_env_speed
 
+        _INST_SINE_CALC_VELOCITY a
+        move audio_set_player_speed:volplayer base_env_speed
         move audio_set_player_input_buffer_pos:player 0
         call sequence_get_note_freq freq note
         SEQUENCE_CALC_SPEED tempf speed _inst_sine_len freq
         move audio_set_player_speed:player speed
+        move audio_set_player_speed_mode:player AUDIO_SPEED_MODE_CONSTANT
         move audio_set_player_volume_mode:player AUDIO_VOLUME_MODE_SOURCE
 
         SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_NOTE_IDX note
@@ -183,7 +186,8 @@ proc inst_sine_note hInst note velocity remain
         call sequence_get_note_freq freq note
         ; set the player speed to the destination speed it should bend to
         SEQUENCE_CALC_SPEED tempf speed _inst_sine_len freq
-        move audio_set_player_speed:player freq
+        move audio_set_player_speed:player speed
+        move audio_set_player_speed_mode:player AUDIO_SPEED_MODE_SOURCE
 
         ; determine the speed of the speed player to make hte bend the right
         ; length for the note.  Abuse SEQUENCE_CALC_LENGTH, since it just
@@ -200,45 +204,47 @@ proc inst_sine_note hInst note velocity remain
             ; reset to beginning
             move audio_set_player_input_buffer_pos:slopeplayer 0
             ; needs to descend down to 1.0
-            move audio_set_player_volume_source:slopeplayer _inst_sine_env_desc
-            move audio_set_player_volume:biasplayer 1
+            move audio_set_player_input_buffer:slopeplayer _inst_sine_env_desc
             ; find the starting factor to multiply by to start the envelope
             ; on the original frequency
             ; tempf still contains the old frequency
             div tempf freq
             sub tempf 1
             move audio_set_player_volume:slopeplayer tempf
+            move tempf 1
+            move audio_set_player_volume:biasplayer tempf
     jump end
         label bend_up
             move audio_set_player_input_buffer_pos:slopeplayer 0
             ; needs to ascend up from the bias point to 1.0
-            move audio_set_player_volume_source:slopeplayer _inst_sine_env_asc
+            move audio_set_player_input_buffer:slopeplayer _inst_sine_env_asc
             div tempf freq
             move audio_set_player_volume:biasplayer tempf
-            move tempf:2 tempf
+            move tempf:1 tempf
             move tempf 1
-            sub  tempf tempf:2
+            sub  tempf tempf:1
             move audio_set_player_volume:slopeplayer tempf
     jump end
 
     label note_off
+        ; don't try to trigger note off to a rest
+        cmp oldnote 0
+        jumpz end
+        SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_NOTE_IDX note
         move audio_set_player_input_buffer:volplayer _inst_sine_env_desc
         move audio_set_player_input_buffer_pos:volplayer 0
-        mul base_env_speed velocity
+
+        _INST_SINE_CALC_VELOCITY b
         move audio_set_player_speed:volplayer base_env_speed
         move audio_set_player_volume_mode:player AUDIO_VOLUME_MODE_SOURCE
-
         SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_MODE_IDX _INST_SINE_MODE_RESONATE
+
     label end
 ret
 
 proc inst_sine_frame hInst needed
     local temp
     SEQUENCE_SET_INST_OBJ_MEM temp sine hInst _INST_SINE_OUTPOS_IDX 0
-    SEQUENCE_GET_INST_OBJ_MEM temp temp sine hInst _INST_SINE_ENV_PLAYER_IDX
-    move audio_set_player_output_buffer_pos:temp 0
-    SEQUENCE_GET_INST_OBJ_MEM temp temp sine hInst _INST_SINE_PLAYER_IDX
-    move audio_set_player_output_buffer_pos:temp 0
 ret
 
 proc inst_sine_run hInst request
@@ -256,7 +262,9 @@ proc inst_sine_run hInst request
     move todo request
 
     SEQUENCE_GET_INST_OBJ_MEM temp player sine hInst _INST_SINE_PLAYER_IDX
-    SEQUENCE_GET_INST_OBJ_MEM temp volplayer sine hInst _INST_SINE_ENV_PLAYER_IDX
+    SEQUENCE_GET_INST_OBJ_MEM temp volplayer sine hInst _INST_SINE_VOL_PLAYER_IDX
+    SEQUENCE_GET_INST_OBJ_MEM temp slopeplayer sine hInst _INST_SINE_SLOPE_PLAYER_IDX
+    SEQUENCE_GET_INST_OBJ_MEM temp biasplayer sine hInst _INST_SINE_BIAS_PLAYER_IDX
     SEQUENCE_GET_INST_OBJ_MEM temp outpos sine hInst _INST_SINE_OUTPOS_IDX
     move audio_set_player_output_buffer_pos:player outpos
 
@@ -275,22 +283,23 @@ proc inst_sine_run hInst request
         move audio_set_player_output_buffer_pos:slopeplayer 0
         move audio_run_player:slopeplayer todo
         move slopegot get_return
-        move audio_set_player_output_buffer_pos:biaseplayer 0
+        move audio_set_player_output_buffer_pos:biasplayer 0
         move audio_run_player:biasplayer slopegot
 
         ; in case the envelope ends on the call boundary
         cmp volgot 0
-        jumpz done_vol
+        jumpn done_vol
             move audio_set_player_volume_mode:player AUDIO_VOLUME_MODE_CONSTANT
-        jump done_vol
+        label done_vol
 
         cmp slopegot 0
-        jumpz done_slope
+        jumpn done_slope
             move audio_set_player_speed_mode:player AUDIO_SPEED_MODE_CONSTANT
         label done_slope
 
-        move audio_set_player_volume_buffer_pos:player 0
-        move audio_set_player_speed_buffer_pos:player 0
+        ; setting these resets the position to 0
+        move audio_set_player_volume_source:player sequence_scratch_volume_buffer
+        move audio_set_player_speed_source:player sequence_scratch_speed_buffer
         label loop_attack
             ; find the minimum, nonzero value, otherwise keep it as todo
             ; because both should be in constant mode
@@ -310,7 +319,7 @@ proc inst_sine_run hInst request
             add outpos temp
 
             ; check if the volume or speed envelopes returned less than todo,
-            : indicating they're done
+            ; indicating they're done
             cmp volgot todo
             jumpl vol_constant
             jump no_vol_constant
@@ -338,8 +347,7 @@ proc inst_sine_run hInst request
         move temp get_return
         cmp temp 0
         jumpz note_off
-            move audio_set_player_volume_mode:player AUDIO_VOLUME_MODE_SOURCE
-            move audio_set_player_volume_buffer_pos:player 0
+            move audio_set_player_volume_source:player sequence_scratch_volume_buffer
             move audio_run_player:player temp
             add outpos temp
             sub todo temp

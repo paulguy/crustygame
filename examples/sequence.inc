@@ -24,8 +24,8 @@ static sequence_scratch_speed_buffer -1
 proc sequence_set_rate rate
     move _sequence_rate rate
 
-    cmp sequence_scratch_volume_buffer -1
-    jumpg no_free
+    cmp sequence_scratch_volume_buffer 0
+    jumpl no_free
     move audio_free_buffer sequence_scratch_volume_buffer
     move audio_free_buffer sequence_scratch_speed_buffer
     label no_free
@@ -50,6 +50,8 @@ endmacro _SEQUENCE_CALC_LENGTH
 proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq pos
     local i
 
+    move slurred 0
+
     label try_find_note
         cmp pos seq:
         jumpl not_finished
@@ -68,7 +70,6 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         jump not_note
         label found_note
             add pos 1
-            move slurred 0
             _SEQUENCE_CALC_LENGTH len div mul tempo
             move note 12
             mul  note octave
@@ -80,21 +81,14 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
             jumpz note_sharp
             cmp seq:pos _SEQUENCE_FLAT
             jumpz note_flat
-        jump check_slur
+        jump end
         label note_sharp
             add pos 1
             add note 1
-        jump check_slur
+        jump end
         label note_flat
             add pos 1
             sub note 1
-        label check_slur
-            cmp pos seq:
-        jumpz end
-            cmp seq:pos _SEQUENCE_SLUR
-            jumpn end
-            add pos 1
-            move slurred 1
         jump end
         label not_note
 
@@ -157,6 +151,13 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
             add velocity 1
         jump try_find_note
         label not_forte
+
+        cmp seq:pos _SEQUENCE_SLUR
+        jumpn not_slurred
+            add pos 1
+            move slurred 1
+        jump try_find_note
+        label not_slurred
 
         ; ignore invalid characters
         add pos 1
@@ -229,12 +230,18 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
             ; in case of a slurred note, don't pass the note off evend, just
             ; pass the next note
             cmp _sequence_slurred_SEQ
-        jumpn slurred
+        jumpn pass
+            ; if it's a rest, just pass it on as well
+            cmp _sequence_note_SEQ 0
+        jumpz pass
+            ; otherwise, pass a 0 length rest to signal note off before the
+            ; next note on
             move note 0
+            move velocity _sequence_velocity_SEQ
             move remain 0
         jump end
 
-        label slurred
+        label pass
             move note _sequence_note_SEQ
             move velocity _sequence_velocity_SEQ
             move remain _sequence_notelen_SEQ
@@ -395,7 +402,7 @@ macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
         ; mark used
         move _sequence_inst_objbuffer_INSTNAME:hInst 1
         add hInst 1
-        call inst_INSTNAME_obj_init _sequence_inst_objbuffer_INSTNAME:hInst
+        call inst_INSTNAME_obj_init hInst
         label end
     ret
 
@@ -460,6 +467,7 @@ macro SEQUENCE_PLAY_LOCALS
     local temp
     local request
     local note
+    local velocity
     local remain
     local freq floats 1
     local speed floats 1

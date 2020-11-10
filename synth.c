@@ -78,10 +78,7 @@ typedef struct Synth_t {
 
     SynthBuffer *buffer;
     unsigned int buffersmem;
-/*
-    SynthEnvelope *envelope;
-    unsigned int envelopesmem;
-*/
+
     SynthPlayer *player;
     unsigned int playersmem;
 /*
@@ -516,10 +513,6 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
     s->channelbuffer = NULL;
     s->buffer = NULL;
     s->buffersmem = 0;
-/*
-    s->envelope = NULL;
-    s->envelopesmem = 0;
-*/
     s->player = NULL;
     s->playersmem = 0;
 /*
@@ -537,6 +530,7 @@ Synth *synth_new(synth_frame_cb_t synth_frame_cb,
 void synth_free(Synth *s) {
     unsigned int i;
 
+    SDL_LockAudioDevice(s->audiodev);
     SDL_CloseAudioDevice(s->audiodev);
 
     if(s->channelbuffer != NULL) {
@@ -551,11 +545,7 @@ void synth_free(Synth *s) {
     if(s->buffer != NULL) {
         free(s->buffer);
     }
-/*
-    if(s->envelope != NULL) {
-        free(s->envelope);
-    }
-*/
+
     if(s->player != NULL) {
         free(s->player);
     }
@@ -889,7 +879,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
             return(-1);
         }
         s->playersmem = 1;
-        s->player[0].inBuffer = inBuffer + s->channels;
+        s->player[0].inBuffer = inBuffer;
         s->buffer[inBuffer].ref++; /* add a reference */
         s->player[0].outBuffer = 0; /* A 0th buffer will have to exist at least */
         s->player[0].inPos = 0.0;
@@ -920,7 +910,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
     /* find first NULL buffer and assign it */
     for(i = 0; i < s->playersmem; i++) {
         if(s->player[i].inBuffer == 0) {
-            s->player[i].inBuffer = inBuffer + s->channels;
+            s->player[i].inBuffer = inBuffer;
             s->buffer[inBuffer].ref++;
             s->player[i].outBuffer = 0;
             s->player[i].inPos = 0.0;
@@ -948,7 +938,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
 
     /* expand buffer if there's no free slots */
     temp = realloc(s->player,
-                   sizeof(SynthBuffer) * s->playersmem * 2);
+                   sizeof(SynthPlayer) * s->playersmem * 2);
     if(temp == NULL) {
         LOG_PRINTF(s, "Failed to allocate buffers memory.\n");
         return(-1);
@@ -959,7 +949,7 @@ int synth_add_player(Synth *s, unsigned int inBuffer) {
     for(j = i + 1; j < s->playersmem; j++) {
         s->player[j].inBuffer = 0;
     }
-    s->player[i].inBuffer = inBuffer + s->channels;
+    s->player[i].inBuffer = inBuffer;
     s->buffer[inBuffer].ref++;
     s->player[i].outBuffer = 0;
     s->player[i].inPos = 0.0;
@@ -1373,7 +1363,7 @@ int synth_run_player(Synth *s,
         return(-1);
     }
     p = &(s->player[index]);
-    i = &(s->buffer[p->inBuffer - s->channels]);
+    i = &(s->buffer[p->inBuffer]);
     if(p->outBuffer < s->channels) {
         o = &(s->channelbuffer[p->outBuffer].data[s->writecursor]);
         os = synth_get_samples_needed(s);
