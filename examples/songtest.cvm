@@ -1,6 +1,6 @@
-include crustygame.inc
-include waves.inc
-include sequence.inc
+include lib/crustygame.inc
+include lib/waves.inc
+include lib/sequence.inc
 include crustris_instruments.inc
 include tylko_jedno_w_głowie_mam.inc
 

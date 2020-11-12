@@ -4,15 +4,15 @@ expr SAVEDATA_CHECKSUM_POS "SAVEDATA_SIZE - 1"
 
 expr SEQUENCE_SAMPLE_MEM_SIZE 32768
 
-include crustygame.inc
-include fills.inc
-include videomode.inc
-include timers.inc
-include text.inc
-include objects.inc
-include savedata.inc
-include waves.inc
-include sequence.inc
+include lib/crustygame.inc
+include lib/fills.inc
+include lib/videomode.inc
+include lib/timers.inc
+include lib/text.inc
+include lib/objects.inc
+include lib/savedata.inc
+include lib/waves.inc
+include lib/sequence.inc
 
 macro CENTER RESULT SPACESIZE ITEMSIZE
     move RESULT SPACESIZE
