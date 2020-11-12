@@ -14,7 +14,7 @@ SEQUENCE_MAKE_SEQ cowdance2 4 120
 static sineobj
 static sawobj
 
-proc song_testsong_start
+proc song_cowdance_start
     call inst_sine_init
     call inst_saw_init
     SEQUENCE_GET_INST_OBJ sine sineobj
@@ -23,7 +23,7 @@ proc song_testsong_start
     SEQUENCE_START cowdance2
 ret
 
-proc song_testsong_run needed
+proc song_cowdance_run needed
     SEQUENCE_PLAY_LOCALS
 
     SEQUENCE_PLAY_CHANNEL sine cowdance1 sineobj
@@ -36,7 +36,7 @@ proc song_testsong_run needed
     label end
 ret
 
-proc song_testsong_end
+proc song_cowdance_end
     SEQUENCE_FREE_INST_OBJ saw  sawobj
     SEQUENCE_FREE_INST_OBJ sine sineobj
     call inst_saw_free

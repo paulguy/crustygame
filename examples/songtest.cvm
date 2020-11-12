@@ -13,7 +13,7 @@ proc init
     move audio_set_fragments 1
     move audio_set_enabled 1
 
-    call song_testsong_start
+    call song_cowdance_start
 ret
 
 proc frame
@@ -30,7 +30,7 @@ proc audio
     local needed
     move needed audio_get_samples_needed
 
-    call song_testsong_run needed
+    call song_cowdance_run needed
 ret
 
 proc event

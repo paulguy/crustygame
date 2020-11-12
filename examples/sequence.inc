@@ -117,7 +117,6 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         jumpn not_rest
             add pos 1
             move note 0
-            _SEQUENCE_CALC_LENGTH len div mul tempo
             div  len div
         jump end_note
         label not_rest
