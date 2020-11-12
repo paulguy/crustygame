@@ -194,8 +194,7 @@ static bgscroll_timer_id
 expr CURRENT_SONG_NONE     0
 expr CURRENT_SONG_TESTSONG 1
 
-;static testseq string "2sEXEX3AXAX2EXEXqCXeEEEXqEXeEbEbEbXqEbXeFF3AA2FFqCeEX"
-static testseq string "qC_G_GwXqG_E_EwX"
+static testseq string "f2sEXEXfG_3G#_tAXsAX2EXEXqCXeEEEXqEXeEbEbEbXqEbXeFF3AA2FFqCeEX"
 SEQUENCE_MAKE_SEQ testseq 4 180
 
 static sineobj1
@@ -210,10 +209,7 @@ ret
 proc song_testsong_run needed
     SEQUENCE_PLAY_LOCALS
 
-    cmp playing_audio
-    jumpz end
-        SEQUENCE_PLAY_CHANNEL sine testseq sineobj1
-    label end
+   SEQUENCE_PLAY_CHANNEL sine testseq sineobj1
 ret
 
 proc song_testsong_end
@@ -483,12 +479,16 @@ proc init
     label end
 ret
 
-static playing_audio 1
+static playing_audio 0
 static cursong CURRENT_SONG_NONE
 static audio_fragments 1
 
 proc audio
     local needed
+
+    cmp playing_audio
+    jumpz end
+
     move needed audio_get_samples_needed
 
     cmp cursong CURRENT_SONG_TESTSONG

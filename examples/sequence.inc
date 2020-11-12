@@ -8,13 +8,16 @@ static _SEQUENCE_SHARP string "#"
 static _SEQUENCE_FLAT  string "b"
 static _SEQUENCE_REST  string "X"
 static _SEQUENCE_OCTAVES string "0123456789"
-static _SEQUENCE_DIVS  string "whqestfo"
+static _SEQUENCE_DIVS  string "whqestio"
+static _SEQUENCE_DIV_VALS ints "1 2 4 8 16 32 64 128"
 ; Whole, Half, Quarter, Eighth, Sixteenth,
-; Thirdtysecond, sixtyFourth, Onetwentyeighth
+; Thirdtysecond, sIxtyfourth, Onetwentyeighth
 static _SEQUENCE_PIANO string "p"
 static _SEQUENCE_MEZZO string "m"
 static _SEQUENCE_FORTE string "f"
 static _SEQUENCE_SLUR string "_"
+static _SEQUENCE_DOT string "."
+static _SEQUENCE_DOT_MUL floats "1.5"
 static _SEQUENCE_TUNINGS floats 12
 static _sequence_rate
 static sequence_user_scratch_mem floats SEQUENCE_USER_SCRATCH_MEM_SIZE
@@ -38,17 +41,11 @@ proc sequence_set_rate rate
 ret
 
 macro _SEQUENCE_CALC_LENGTH RESULT DIV MUL TEMPO
-    move RESULT _sequence_rate
-    mul  RESULT 60
-    div  RESULT TEMPO
-    ; this is a length and not rate so the divisions increase the length of a
-    ; nove and the multiplying of the notes shortens them
-    mul  RESULT DIV
-    div  RESULT MUL
 endmacro _SEQUENCE_CALC_LENGTH
 
 proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq pos
     local i
+    local dotted 0
 
     move slurred 0
 
@@ -70,26 +67,25 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         jump not_note
         label found_note
             add pos 1
-            _SEQUENCE_CALC_LENGTH len div mul tempo
             move note 12
             mul  note octave
             add  note i
             add  note 1 ; 0 is rest
             cmp pos seq:
-        jumpz end
+        jumpz end_note
             cmp seq:pos _SEQUENCE_SHARP
             jumpz note_sharp
             cmp seq:pos _SEQUENCE_FLAT
             jumpz note_flat
-        jump end
+        jump end_note
         label note_sharp
             add pos 1
             add note 1
-        jump end
+        jump end_note
         label note_flat
             add pos 1
             sub note 1
-        jump end
+        jump end_note
         label not_note
 
         move i 0
@@ -102,8 +98,7 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         jump not_mul
         label found_mul
             add pos 1
-            move mul i
-            add  mul 1
+            move mul _SEQUENCE_DIV_VALS:i
         jump try_find_note
         label not_mul
             
@@ -127,8 +122,7 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
             move note 0
             _SEQUENCE_CALC_LENGTH len div mul tempo
             div  len div
- 
-            jump end
+        jump end_note
         label not_rest
 
         cmp seq:pos _SEQUENCE_PIANO
@@ -159,8 +153,27 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         jump try_find_note
         label not_slurred
 
+        cmp seq:pos _SEQUENCE_DOT
+        jumpn not_dotted
+            add pos 1
+            move dotted 1
+        jump try_find_note
+        label not_dotted
+
         ; ignore invalid characters
         add pos 1
+    jump try_find_note
+    label end_note
+        move len _sequence_rate
+        mul  len 60
+        div  len tempo
+        ; this is a length and not rate so the divisions increase the length of a
+        ; nove and the multiplying of the notes shortens them
+        mul  len div
+        div  len mul
+        cmp dotted
+        jumpz end
+        mul len _SEQUENCE_DOT_MUL
     label end
 ret
 
@@ -294,39 +307,39 @@ proc sequence_tune afour
     ; C
     move _SEQUENCE_TUNINGS:0 afour
     mul  _SEQUENCE_TUNINGS:0 19
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:0 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:0 afour
     ; C#
     move _SEQUENCE_TUNINGS:1 afour
     mul  _SEQUENCE_TUNINGS:1 5
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:1 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:1 afour
     ; D
     move _SEQUENCE_TUNINGS:2 afour
     mul  _SEQUENCE_TUNINGS:2 21
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:2 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:2 afour
     ; D#
     move _SEQUENCE_TUNINGS:3 afour
     mul  _SEQUENCE_TUNINGS:3 11
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:3 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:3 afour
     ; E
     move _SEQUENCE_TUNINGS:4 afour
     mul  _SEQUENCE_TUNINGS:4 3
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:4 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:4 afour
     ; F
     move _SEQUENCE_TUNINGS:5 afour
     mul  _SEQUENCE_TUNINGS:5 13
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:5 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:5 afour
     ; F#
     move _SEQUENCE_TUNINGS:6 afour
     mul  _SEQUENCE_TUNINGS:6 27
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:6 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:6 afour
     ; G
     move _SEQUENCE_TUNINGS:7 afour
     mul  _SEQUENCE_TUNINGS:7 7
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:7 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:7 afour
     ; G#
     move _SEQUENCE_TUNINGS:8 afour
     mul  _SEQUENCE_TUNINGS:8 15
-    call _sequence_clamp_val _SEQUENCE_TUNINGS:8 octave
+    call _sequence_clamp_val _SEQUENCE_TUNINGS:8 afour
     ; A
     move _SEQUENCE_TUNINGS:9 afour
     ; A#
@@ -355,9 +368,9 @@ proc sequence_get_note_freq freq note
     jumpg higher
     jump done
     label lower
-        move temp 4
-        sub  temp octave
-        mul  temp 2
+        move temp octave
+        sub  temp 4
+        mul  temp -2
         div  freq temp
     jump done
     label higher
@@ -418,7 +431,7 @@ macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
         label need_more_SQ
             SEQUENCE_GET_CUR_NOTE SQ note velocity remain
             cmp remain 0 ; end of sequence
-            jumpl loop_SQ
+            jumpl ended_SQ
             call inst_INSTNAME_note OBJ note velocity remain
 
             move request remain
@@ -434,9 +447,8 @@ macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
         jumpg need_more_SQ
         jump end_SQ
 
-        label loop_SQ
-            SEQUENCE_START SQ
-        jump need_more_SQ
+        label ended_SQ
+            add ended 1
         label end_SQ
     endmacro _SEQUENCE_PLAY_INSTNAME_CHANNEL
 endmacro SEQUENCE_MAKE_INST
@@ -446,7 +458,7 @@ macro SEQUENCE_GET_INST_OBJ INST HANDLE
 endmacro SEQUENCE_GET_INST_OBJ
 
 macro SEQUENCE_FREE_INST_OBJ INST HANDLE
-    call sequence_free_inst_INST HANDLE
+    call sequence_inst_free_INST HANDLE
 endmacro SEQUENCE_FREE_INST_OBJ
 
 macro SEQUENCE_GET_INST_OBJ_MEM TEMP RESULT NAME HANDLE OFFSET
@@ -471,6 +483,7 @@ macro SEQUENCE_PLAY_LOCALS
     local remain
     local freq floats 1
     local speed floats 1
+    local ended 0
 endmacro SEQUENCE_PLAY_LOCALS
 
 macro SEQUENCE_PLAY_CHANNEL INST SQ OBJ

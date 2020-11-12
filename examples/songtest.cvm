@@ -1,0 +1,43 @@
+include crustygame.inc
+include waves.inc
+include sequence.inc
+include crustris_instruments.inc
+include tylko_jedno_w_głowie_mam.inc
+
+static audio_fragments 1
+
+proc init
+    call sequence_set_rate audio_get_rate
+    call sequence_tune 440
+
+    move audio_set_fragments 1
+    move audio_set_enabled 1
+
+    call song_testsong_start
+ret
+
+proc frame
+    cmp audio_has_underrun
+    jumpz no_reinit_audio
+        move audio_set_enabled 0
+        move audio_set_fragments audio_fragments
+        add audio_fragments 1
+        move audio_set_enabled 1
+    label no_reinit_audio
+ret
+
+proc audio
+    local needed
+    move needed audio_get_samples_needed
+
+    call song_testsong_run needed
+ret
+
+proc event
+    cmp event_get_type INPUT_TYPE_KEYDOWN
+    jumpn end
+
+    move set_running 0
+
+    label end
+ret
