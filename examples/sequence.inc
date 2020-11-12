@@ -40,9 +40,6 @@ proc sequence_set_rate rate
     move sequence_scratch_speed_buffer get_return
 ret
 
-macro _SEQUENCE_CALC_LENGTH RESULT DIV MUL TEMPO
-endmacro _SEQUENCE_CALC_LENGTH
-
 proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq pos
     local i
     local dotted 0
