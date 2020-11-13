@@ -1,8 +1,8 @@
 include lib/crustygame.inc
 include lib/waves.inc
 include lib/sequence.inc
-include crustris_instruments.inc
-include tylko_jedno_w_głowie_mam.inc
+include crustris_files/crustris_instruments.inc
+include crustris_files/tylko_jedno_w_głowie_mam.inc
 
 static audio_fragments 1
 

@@ -20,14 +20,14 @@ macro CENTER RESULT SPACESIZE ITEMSIZE
     div  RESULT 2
 endmacro CENTER
 
-include crustris_defs.inc
-include crustris_pit.inc
-include crustris_highscore.inc
-include crustris_instruments.inc
+include crustris_files/crustris_defs.inc
+include crustris_files/crustris_pit.inc
+include crustris_files/crustris_highscore.inc
+include crustris_files/crustris_instruments.inc
 
-binclude gfx ints "crustris.crsg"
-binclude font ints "font.crsg"
-binclude title ints "crustris_logo.crsg"
+binclude gfx ints crustris_files/crustris.crsg
+binclude font ints lib/font.crsg
+binclude title ints crustris_files/crustris_logo.crsg
 
 proc draw_pit
     move gfx_draw_layer pit_shadow_layer_id
