@@ -50,11 +50,18 @@ def paramgen(curve, bpm, div, startval, endval, notelens):
     totaldiff = endval - startval
     wholediff = totaldiff / totaltime
     start = startval
-    curtime = 0
+    if totaldiff < 0:
+        curtime = totaltime
+    else:
+        curtime = 0
     for time in times:
         starts.append(start)
-        diff = totaldiff * func(totaltime, curtime, time)
-        curtime = curtime + time
+        if totaldiff < 0:
+            curtime = curtime - time
+            diff = totaldiff * func(totaltime, curtime, time)
+        else:
+            diff = totaldiff * func(totaltime, curtime, time)
+            curtime = curtime + time
         diffs.append(diff)
         lengths.append(time * wholepersec)
         start = start + diff
