@@ -59,6 +59,11 @@ def paramgen(curve, bpm, div, startval, endval, notelens):
         lengths.append(time * wholepersec)
         start = start + diff
 
+    print("Lengths:", end='')
+    for length in lengths:
+        print(" {: .6f}".format(length), end='')
+    print()
+    print("--------")
     print("Starts: ", end='')
     for start in starts:
         print(" {: .6f}".format(start), end='')
@@ -67,9 +72,9 @@ def paramgen(curve, bpm, div, startval, endval, notelens):
     for diff in diffs:
         print(" {: .6f}".format(diff), end='')
     print()
-    print("Lengths:", end='')
+    print("Speeds: ", end='')
     for length in lengths:
-        print(" {: .6f}".format(length), end='')
+        print(" {: .6f}".format(1 / length), end='')
     print()
 
 
