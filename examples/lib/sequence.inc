@@ -164,7 +164,7 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         mul  len 60
         div  len tempo
         ; this is a length and not rate so the divisions increase the length of a
-        ; nove and the multiplying of the notes shortens them
+        ; note and the multiplying of the notes shortens them
         mul  len div
         div  len mul
         cmp dotted
