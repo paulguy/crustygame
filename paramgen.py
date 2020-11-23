@@ -86,7 +86,7 @@ def paramgen(curve, bpm, div, startval, endval, notelens):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
+    if len(sys.argv) < 7:
         print("Usage: {} <linear|power> <tempo> <div> <startval> <endval> <notelens>".format(sys.argv[0]))
     else:
         paramgen(sys.argv[1],

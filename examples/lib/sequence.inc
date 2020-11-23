@@ -12,35 +12,18 @@ static _SEQUENCE_DIVS  string "whqestio"
 static _SEQUENCE_DIV_VALS ints "1 2 4 8 16 32 64 128"
 ; Whole, Half, Quarter, Eighth, Sixteenth,
 ; Thirdtysecond, sIxtyfourth, Onetwentyeighth
-static _SEQUENCE_PIANO string "p"
-static _SEQUENCE_MEZZO string "m"
-static _SEQUENCE_FORTE string "f"
 static _SEQUENCE_SLUR string "_"
 static _SEQUENCE_DOT string "."
 static _SEQUENCE_DOT_MUL floats "1.5"
 static _SEQUENCE_TUNINGS floats 12
 static _sequence_rate
 static sequence_user_scratch_mem floats SEQUENCE_USER_SCRATCH_MEM_SIZE
-static sequence_scratch_volume_buffer -1
-static sequence_scratch_speed_buffer -1
 
-proc sequence_set_rate rate
-    move _sequence_rate rate
+macro SEQUENCE_SET_RATE RATE
+    move _sequence_rate RATE
+endmacro SEQUENCE_SET_RATE
 
-    cmp sequence_scratch_volume_buffer 0
-    jumpl no_free
-    move audio_free_buffer sequence_scratch_volume_buffer
-    move audio_free_buffer sequence_scratch_speed_buffer
-    label no_free
-
-    ; make the buffer 1 second, should be plenty
-    move audio_add_empty_buffer rate
-    move sequence_scratch_volume_buffer get_return
-    move audio_add_empty_buffer rate
-    move sequence_scratch_speed_buffer get_return
-ret
-
-proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq pos
+proc _sequence_get_next_note note len div mul tempo octave slurred seq pos
     local i
     local dotted 0
 
@@ -121,27 +104,6 @@ proc _sequence_get_next_note note len div mul tempo octave velocity slurred seq 
         jump end_note
         label not_rest
 
-        cmp seq:pos _SEQUENCE_PIANO
-        jumpn not_piano
-            add pos 1
-            sub velocity 1
-        jump try_find_note
-        label not_piano
-
-        cmp seq:pos _SEQUENCE_MEZZO
-        jumpn not_mezzo
-            add pos 1
-            move velocity 0
-        jump try_find_note
-        label not_mezzo
-
-        cmp seq:pos _SEQUENCE_FORTE
-        jumpn not_forte
-            add pos 1
-            add velocity 1
-        jump try_find_note
-        label not_forte
-
         cmp seq:pos _SEQUENCE_SLUR
         jumpn not_slurred
             add pos 1
@@ -182,7 +144,6 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
     static _sequence_pos_SEQ
     static _sequence_note_SEQ
     static _sequence_octave_SEQ
-    static _sequence_velocity_SEQ
     static _sequence_slurred_SEQ
     static _sequence_notelen_SEQ
     static _sequence_notetime_SEQ
@@ -197,16 +158,15 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
         move _sequence_consumed_SEQ 0
         move _sequence_pos_SEQ 0
         move _sequence_octave_SEQ 4
-        move _sequence_velocity_SEQ 0
         move _sequence_time_SEQ 0
         move _sequence_notetime_SEQ 0
-        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ _sequence_slurred_SEQ SEQ _sequence_pos_SEQ
+        call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_slurred_SEQ SEQ _sequence_pos_SEQ
         move _sequence_notes_missed_SEQ 0
     ret
 
     ; note = 0 -> note off/rest
     ; remain = -1 -> sequence ended
-    proc _sequence_get_cur_note_SEQ note velocity remain
+    proc _sequence_get_cur_note_SEQ note remain
         cmp _sequence_note_SEQ 0
         jumpl finished
 
@@ -222,7 +182,6 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
         jumpz next_note
         ; just return the note
             move note _sequence_note_SEQ
-            move velocity _sequence_velocity_SEQ
         jump end
 
         label next_note
@@ -230,7 +189,7 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
             add _sequence_notetime_SEQ _sequence_notelen_SEQ
 
             ; get the next note information
-            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_velocity_SEQ _sequence_slurred_SEQ SEQ _sequence_pos_SEQ
+            call _sequence_get_next_note _sequence_note_SEQ _sequence_notelen_SEQ _sequence_notediv_SEQ _sequence_notemul_SEQ _sequence_tempo_SEQ _sequence_octave_SEQ _sequence_slurred_SEQ SEQ _sequence_pos_SEQ
 
             ; see if the sequence has ended
             cmp _sequence_note_SEQ 0
@@ -246,13 +205,11 @@ macro SEQUENCE_MAKE_SEQ SEQ DIV TEMPO
             ; otherwise, pass a 0 length rest to signal note off before the
             ; next note on
             move note 0
-            move velocity _sequence_velocity_SEQ
             move remain 0
         jump end
 
         label pass
             move note _sequence_note_SEQ
-            move velocity _sequence_velocity_SEQ
             move remain _sequence_notelen_SEQ
         jump end
 
@@ -268,8 +225,8 @@ macro SEQUENCE_START SEQ
     call _sequence_start_SEQ
 endmacro SEQUENCE_START
 
-macro SEQUENCE_GET_CUR_NOTE SEQ NOTE VELOCITY REMAIN
-    call _sequence_get_cur_note_SEQ NOTE VELOCITY REMAIN
+macro SEQUENCE_GET_CUR_NOTE SEQ NOTE REMAIN
+    call _sequence_get_cur_note_SEQ NOTE REMAIN
 endmacro SEQUENCE_GET_CUR_NOTE 
 
 macro SEQUENCE_ADVANCE_TIME SEQ SAMPLES
@@ -284,6 +241,50 @@ macro SEQUENCE_SET_DIVISIONS SEQ DIV
     move _sequence_notediv_SEQ DIV
 endmacro SEQUENCE_SET_DIVISIONS
 
+macro SEQUENCE_MAKE_PARAM NAME
+    static _sequence_param_pos_NAME
+
+    proc _sequence_param_start_NAME
+        move _sequence_param_pos_NAME 0
+    ret
+
+    proc _sequence_param_ended_NAME ended
+        move ended 0
+        cmp _sequence_param_pos_NAME NAME:
+        jumpl end
+        move ended 1
+        label end
+    ret
+        
+    proc _sequence_param_next_NAME param
+        local ended
+
+        call _sequence_param_ended_NAME ended
+        cmp ended
+        jumpz get
+        move param NAME:
+        sub param 1
+        move param NAME:param
+        jump end
+        label get
+        move param NAME:_sequence_param_pos_NAME
+        label end
+    ret
+endmacro SEQUENCE_MAKE_PARAM
+
+macro SEQUENCE_PARAM_START NAME
+    call _sequence_param_start_NAME
+endmacro SEQUENCE_PARAM_START
+
+macro SEQUENCE_PARAM_ENDED NAME ENDED
+    call _sequence_param_ended_NAME ENDED
+endmacro SEQUENCE_PARAM_ENDED
+
+macro SEQUENCE_PARAM_NEXT NAME PARAM
+    call _sequence_param_next_NAME PARAM
+endmacro SEQUENCE_PARAM_NEXT
+
+macro SEQUENCE_PARAM_NEXT
 proc _sequence_clamp_val val max
     label find_val
         cmp val max
@@ -390,98 +391,65 @@ macro SEQUENCE_CALC_SPEED TEMP RESULT LEN FREQ
     div  RESULT TEMP
 endmacro SEQUENCE_CALC_SPEED
 
-expr _SEQUENCE_MAX_INST_OBJS 10
-
-macro SEQUENCE_MAKE_INST INSTNAME OBJSIZE
-    expr _SEQUENCE_ISIZE_INSTNAME "OBJSIZE + 1"
-    expr _SEQUENCE_IMEM_INSTNAME "_SEQUENCE_MAX_INST_OBJS * _SEQUENCE_ISIZE_INSTNAME"
-
-    static _sequence_inst_objbuffer_INSTNAME ints _SEQUENCE_IMEM_INSTNAME
-
-    proc sequence_inst_init_INSTNAME hInst
-        ; find free slot
-        move hInst _SEQUENCE_IMEM_INSTNAME
-        label loop
-            sub hInst _SEQUENCE_ISIZE_INSTNAME
-            jumpl end
-            cmp _sequence_inst_objbuffer_INSTNAME:hInst 0
-            jumpz found
-        jump loop
-        label found
-        ; mark used
-        move _sequence_inst_objbuffer_INSTNAME:hInst 1
-        add hInst 1
-        call inst_INSTNAME_obj_init hInst
-        label end
-    ret
-
-    proc sequence_inst_free_INSTNAME hInst
-        call inst_INSTNAME_obj_free hInst
-        sub hInst 1
-        move _sequence_inst_objbuffer_INSTNAME:hInst 0
-    ret
-
-    macro _SEQUENCE_PLAY_INSTNAME_CHANNEL SQ OBJ
-        move tempneeded needed
-        call inst_INSTNAME_frame OBJ tempneeded
-        label need_more_SQ
-            SEQUENCE_GET_CUR_NOTE SQ note velocity remain
-            cmp remain 0 ; end of sequence
-            jumpl ended_SQ
-            call inst_INSTNAME_note OBJ note velocity remain
-
-            move request remain
-            cmp request tempneeded
-            jumpl no_set_needed_SQ
-            move request tempneeded
-            label no_set_needed_SQ
-
-            call inst_INSTNAME_run OBJ request
-            SEQUENCE_ADVANCE_TIME SQ request
-
-            sub tempneeded request
-        jumpg need_more_SQ
-        jump end_SQ
-
-        label ended_SQ
-            add ended 1
-        label end_SQ
-    endmacro _SEQUENCE_PLAY_INSTNAME_CHANNEL
-endmacro SEQUENCE_MAKE_INST
-
-macro SEQUENCE_GET_INST_OBJ INST HANDLE
-    call sequence_inst_init_INST HANDLE
-endmacro SEQUENCE_GET_INST_OBJ
-
-macro SEQUENCE_FREE_INST_OBJ INST HANDLE
-    call sequence_inst_free_INST HANDLE
-endmacro SEQUENCE_FREE_INST_OBJ
-
-macro SEQUENCE_GET_INST_OBJ_MEM TEMP RESULT NAME HANDLE OFFSET
-    move TEMP HANDLE
-    add  TEMP OFFSET
-    move RESULT _sequence_inst_objbuffer_NAME:TEMP
-endmacro SEQUENCE_GET_INST_OBJ_MEM
-
-macro SEQUENCE_SET_INST_OBJ_MEM TEMP NAME HANDLE OFFSET VAL
-    move TEMP HANDLE
-    add  TEMP OFFSET
-    move _sequence_inst_objbuffer_NAME:TEMP VAL
-endmacro SEQUENCE_SET_INST_OBJ_MEM
-
 ; _SEQUENCE_PLAY_*_CHANNEL needs some local variables to work
 macro SEQUENCE_PLAY_LOCALS
     local tempneeded
     local temp
     local request
     local note
-    local velocity
     local remain
     local freq floats 1
     local speed floats 1
     local ended 0
 endmacro SEQUENCE_PLAY_LOCALS
 
-macro SEQUENCE_PLAY_CHANNEL INST SQ OBJ
-    _SEQUENCE_PLAY_INST_CHANNEL SQ OBJ
-endmacro SEQUENCE_PLAY_CHANNEL
+macro SEQUENCE_MAKE_TONE_CHANNEL INSTNAME SQ DIV TEMPO VOLSTARTS VOLDIFFS VOLSPEEDS DETUNES SPEEDDIFFS SPEEDSPEEDS
+    static _sequence_channel_obj_SQ
+
+    SEQUENCE_MAKE_SEQ SQ DIV TEMPO
+    SEQUENCE_MAKE_PARAM VOLSTARTS
+    SEQUENCE_MAKE_PARAM VOLDIFFS
+    SEQUENCE_MAKE_PARAM VOLSPEEDS
+    SEQUENCE_MAKE_PARAM DETUNES
+    SEQUENCE_MAKE_PARAM SPEEDDIFFS
+    SEQUENCE_MAKE_PARAM SPEEDSPEEDS
+
+    macro _SEQUENCE_CHANNEL_START_SQ
+        SEQUENCE_START SQ
+        SEQUENCE_PARAM_START VOLSTARTS
+        SEQUENCE_PARAM_START VOLDIFFS
+        SEQUENCE_PARAM_START VOLSPEEDS
+        SEQUENCE_PARAM_START DETUNES
+        SEQUENCE_PARAM_START SPEEDDIFFS
+        SEQUENCE_PARAM_START SPEEDSPEEDS
+    endmacro _SEQUENCE_CHANNEL_START_SQ
+
+    macro _SEQUENCE_CHANNEL_INIT_SQ OUTBUFFER
+        SEQUENCE_GET_INST_OBJ INSTNAME _sequence_channel_obj_SQ OUTBUFFER
+        _SEQUENCE_CHANNEL_START_SQ
+    endmacro _SEQUENCE_CHANNEL_INIT_SQ
+
+    macro _SEQUENCE_CHANNEL_PLAY_SQ
+        _SEQUENCE_PLAY_INST_INSTNAME OBJ SQ VOLSTARTS VOLDIFFS VOLSPEEDS SPEEDSTARTS SPEEDDIFFS SPEEDSPEEDS
+    endmacro _SEQUENCE_CHANNEL_PLAY_SQ
+
+    macro _SEQUENCE_CHANNEL_FREE_SQ
+        SEQUENCE_FREE_INST_OBJ INSTNAME _sequence_channel_obj_SQ
+    endmacro _SEQUENCE_CHANNEL_FREE_SQ
+endmacro SEQUENCE_MAKE_TONE_CHANNEL
+
+macro SEQUENCE_CHANNEL_START NAME
+    _SEQUENCE_CHANNEL_START_NAME
+endmacro SEQUENCE_CHANNEL_START
+
+macro SEQUENCE_CHANNEL_INIT NAME OUTBUFFER
+    _SEQUENCE_CHANNEL_INIT_NAME OUTBUFFER
+endmacro SEQUENCE_CHANNEL_INIT
+
+macro SEQUENCE_CHANNEL_PLAY NAME
+    _SEQUENCE_CHANNEL_PLAY_NAME
+endmacro SEQUENCE_CHANNEL_PLAY
+
+macro SEQUENCE_CHANNEL_FREE NAME
+    _SEQUENCE_CHANNEL_FREE_NAME
+endmacro SEQUENCE_CHANNEL_FREE

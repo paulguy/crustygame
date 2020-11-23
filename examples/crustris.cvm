@@ -209,7 +209,7 @@ ret
 proc song_testsong_run needed
     SEQUENCE_PLAY_LOCALS
 
-   SEQUENCE_PLAY_CHANNEL sine testseq sineobj1
+    SEQUENCE_PLAY_CHANNEL sine testseq sineobj1
 ret
 
 proc song_testsong_end

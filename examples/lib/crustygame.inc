@@ -5,6 +5,13 @@ expr SIZEOF_CHAR  1
 expr SIZEOF_INT   4
 expr SIZEOF_FLOAT 8
 
+; also gross but this also assumes such a "common" platform
+; chars are unsigned
+expr CHAR_MIN 0x00
+expr CHAR_MAX 0xFF
+expr INT_MIN  0x80000000
+expr INT_MAX  0x7FFFFFFF
+
 ; useful for printing debug/error strings
 static SPC string " "
 static NL  string "\n"
