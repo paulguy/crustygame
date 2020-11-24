@@ -1,4 +1,8 @@
 expr _INST_MAX_INST_OBJS 10
+; pretty big but it's 1 second at a crazy high sample rate so it should be
+; relatively reasonable.  Better than a bunch of things having their own
+; buffers
+expr SEQUENCE_USER_SCRATCH_MEM_SIZE 192000
 
 static _inst_scratch_mem floats SEQUENCE_USER_SCRATCH_MEM_SIZE
 static _inst_scratch_buffer
@@ -106,6 +110,8 @@ macro _INST_MAKE_SETGET NAME INTMEM MEMBERSIZE MEMORYSIZE FLOATMEM FLOATSIZE
         move INTMEM:RESULT 1
     endmacro _INST_NAME_FIND
 endmacro _INST_MAKE_SETGET
+
+; ========== Tone Instrument ==========
 
 ;<used idx> 0
 expr _INST_TONE_LENGTH_IDX 1
@@ -304,6 +310,8 @@ proc inst_tone_run hInst request
     label off
 ret
 
+; ========== Simple Envelope Effect ==========
+
 ;<used idx> 0
 expr _INST_FX_ENV_PLAYER_IDX 1
 expr _INST_FX_ENV_ENVSLOPE_PLAYER_IDX 2
@@ -320,9 +328,9 @@ expr _INST_FX_ENV_OBJMEM_SIZE "_INST_MAX_INST_OBJS * _INST_FX_ENV_OBJSIZE"
 expr _INST_FX_ENV_FLOATS_SIZE "_INST_MAX_INST_OBJS * _INST_FX_ENV_FLOATSIZE"
 
 static _inst_fx_env_objmem ints _INST_FX_ENV_OBJMEM_SIZE
-static _inst_fx_env_floatmem floats _INST_FX_ENV_FLOATS_SIZE
+static _inst_fx_env_floats floats _INST_FX_ENV_FLOATS_SIZE
 
-_INST_MAKE_SETGET FX_ENV _inst_fx_env_objmem _INST_FX_ENV_OBJSIZE _INST_FX_ENV_OBJMEM_SIZE _inst_fx_env_floatmem _INST_FX_ENV_FLOATSIZE
+_INST_MAKE_SETGET FX_ENV _inst_fx_env_objmem _INST_FX_ENV_OBJSIZE _INST_FX_ENV_OBJMEM_SIZE _inst_fx_env_floats _INST_FX_ENV_FLOATSIZE
 
 proc effect_env_init hInst outbuffer inbuffer
     local temp
@@ -340,7 +348,7 @@ proc effect_env_init hInst outbuffer inbuffer
 
     move audio_add_player _inst_env_const
     move envbiasplayer get_return
-    move audio_set_player_mode:player AUDIO_MODE_ONCE
+    move audio_set_player_mode:player AUDIO_MODE_LOOP
     move audio_set_player_output_mode:player AUDIO_OUTPUT_MODE_ADD
     move audio_set_player_output_buffer:player _inst_scratch_buffer
 
@@ -466,4 +474,181 @@ proc effect_env_run hInst request
 
     label end
     _INST_FX_ENV_SET_INT hInst _INST_FX_ENV_OUTPOS_IDX outpos
+ret
+
+; ========== ADSR Generator ==========
+
+;<used idx> 0
+expr _INST_ADSR_ENVSLOPE_PLAYER_IDX 1
+expr _INST_ADSR_ENVBIAS_PLAYER_IDX 2
+expr _INST_ADSR_MODE_IDX 3
+expr _INST_ADSR_OBJSIZE 4
+
+expr _INST_ADSR_DECAYRATE_IDX 0
+expr _INST_ADSR_SUSTAINLEVEL_IDX 1
+expr _INST_ADSR_FLOATSIZE 2
+
+expr _INST_ADSR_OBJMEM_SIZE "_INST_MAX_INST_OBJS * _INST_ADSR_OBJSIZE"
+expr _INST_ADSR_FLOATS_SIZE "_INST_MAX_INST_OBJS * _INST_ADSR_FLOATSIZE"
+
+static _inst_adsr_objmem ints _INST_ADSR_OBJMEM_SIZE
+static _inst_adsr_floats floats _INST_ADSR_FLOATS_SIZE
+
+_INST_MAKE_SETGET ADSR _inst_adsr_objmem _INST_ADSR_OBJSIZE _INST_ADSR_OBJMEM_SIZE _inst_adsr_floats _INST_ADSR_FLOATSIZE
+
+expr _INST_ADSR_MODE_ATTACK 0
+expr _INST_ADSR_MODE_DECAY 1
+expr _INST_ADSR_MODE_SUSTAIN 2
+expr _INST_ADSR_MODE_RESONATE 3
+
+proc gen_adsr_init hInst outbuffer
+    local temp
+    local envslopeplayer
+    local envbiasplayer
+
+    _INST_ADSR_FIND hInst
+
+    move audio_add_player _inst_env_asc
+    move envslopeplayer get_return
+    move audio_set_player_mode:player AUDIO_MODE_ONCE
+    move audio_set_player_output_mode:player AUDIO_OUTPUT_MODE_REPLACE
+    move audio_set_player_output_buffer:player outbuffer
+
+    move audio_add_player _inst_env_const
+    move envbiasplayer get_return
+    move audio_set_player_mode:player AUDIO_MODE_LOOP
+    move audio_set_player_output_mode:player AUDIO_OUTPUT_MODE_ADD
+    move audio_set_player_output_buffer:player outbuffer
+
+    _INST_ADSR_SET_INT hInst _INST_ADSR_PLAYER_IDX player
+    _INST_ADSR_SET_INT hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX envslopeplayer
+    _INST_ADSR_SET_INT hInst _INST_ADSR_ENVBIAS_PLAYER_IDX envbiasplayer
+    ; meaningless but safe defaults
+    call get_adsr_start hInst 1 1 1
+
+    ; _INST_*_FIND needs an end label to quit out on failure
+    label end
+ret
+
+proc gen_adsr_free hInst
+    local temp
+
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_PLAYER_IDX
+    move audio_free_player temp
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+    move audio_free_player temp
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
+    move audio_free_player temp
+    _INST_ADSR_SET_INT hInst _INST_USED_IDX 0
+ret
+
+proc gen_adsr_start hInst attackrate decayrate sustainlevel
+    local envslopeplayer
+    local envbiasplayer
+
+    _INST_ADSR_GET_INT envslopeplayer hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+    _INST_ADSR_GET_INT envbiasplayer hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
+
+    move audio_set_player_input_buffer:envslopeplayer _inst_env_asc
+    move audio_set_player_speed:envslopeplayer attackrate
+
+    ; reset the positions to 0 since this will be at the start of a note, so
+    ; the output can be used as the input to a note's volume easily.
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+    move audio_set_player_output_buffer_pos:temp 0
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
+    move audio_set_player_output_buffer_pos:temp 0
+ret
+
+    _INST_ADSR_SET_FLOAT hInst _INST_ADSR_DECAYRATE_IDX decayrate
+    _INST_ADSR_SET_FLOAT hInst _INST_ADSR_SUSTAINLEVEL_IDX sustainlevel
+    _INST_ADSR_SET_INT hInst _INST_ADSR_RESONATERATE_IDX _INST_ADSR_MODE_ATTACK
+ret
+
+proc gen_adsr_resonate hInst resonaterate
+    local envslopeplayer
+    local envbiasplayer
+    local sustainlevel
+
+    _INST_ADSR_GET_INT envslopeplayer hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+    _INST_ADSR_GET_INT envbiasplayer hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
+    _INST_ADSR_GET_FLOAT sustainlevel hInst _INST_ADSR_SUSTAINLEVEL_IDX
+
+    move audio_set_player_input_buffer:envslopeplayer _inst_env_desc
+    move audio_set_player_volume:envslopeplayer sustainlevel
+    move audio_set_player_speed:envslopeplayer resonaterate
+
+    _INST_ADSR_SET_INT hInst _INST_ADSR_RESONATERATE_IDX _INST_ADSR_MODE_RESONATE
+ret
+
+proc gen_adsr_frame hInst
+    local temp
+
+    ; just set the output positions to 0, because this will be called as a
+    ; generator to determine how much of a note is to be played
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+    move audio_set_player_output_buffer_pos:temp 0
+    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
+    move audio_set_player_output_buffer_pos:temp 0
+ret
+
+proc gen_adsr_run hInst request returned
+    local tempf floats 2
+    local envslopeplayer
+    local envbiasplayer
+    local mode
+    local slopegot
+    local remain
+
+    _INST_ADSR_GET_INT mode hInst _INST_ADSR_MODE_IDX
+
+    move remain request
+    label loop
+        cmp remain 0
+        jumpz end
+
+        cmp mode _INST_ADSR_MODE_SUSTAIN
+        jumpz sustain
+            _INST_ADSR_GET_INT envslopeplayer hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+            move audio_run_player:envslopeplayer request
+            move slopegot get_return
+            cmp slopegot 0
+            jumpz next
+
+            sub remain slopegot
+
+            cmp mode _INST_ADSR_MODE_DECAY
+            jumpn no_bias
+                move audio_run_player:envbiasplayer slopegot
+            label no_bias
+        jump loop
+        label next
+            cmp mode _INST_ADSR_MODE_ATTACK
+            jumpz decay
+            cmp mode _INST_ADSR_MODE_DECAY
+            jumpz sustain
+            jump end ; resonate ended
+            label sustain
+                _INST_ADSR_SET_INT hInst _INST_ADSR_MODE_IDX _INST_ADSR_MODE_SUSTAIN
+                move mode _INST_ADSR_MODE_SUSTAIN
+            jump sustain
+            label decay
+                move audio_set_player_input_buffer:envslopeplayer _inst_env_desc
+                _INST_ADSR_GET_FLOAT tempf hInst _INST_ADSR_DECAYRATE_IDX
+                move audio_set_player_speed:envslopeplayer tempf
+                _INST_ADSR_GET_FLOAT tempf hInst _INST_ADSR_SUSTAINLEVEL_IDX
+                move tempf:1 1
+                sub  tempf:1 tempf
+                move audio_set_player_volume:envslopeplayer tempf:1
+                move audio_set_player_volume:envbiasplayer tempf
+
+                _INST_ADSR_SET_INT hInst _INST_ADSR_MODE_IDX _INST_ADSR_MODE_DECAY
+                move mode _INST_ADSR_MODE_DECAY
+    jump loop
+    label sustain
+        move audio_run_player:envbiasplayer remain
+        move remain 0
+    label end
+        move returned request
+        sub  returned remain
 ret

@@ -1,8 +1,3 @@
-; pretty big but it's 1 second at a crazy high sample rate so it should be
-; relatively reasonable.  Better than a bunch of things having their own
-; buffers
-expr SEQUENCE_USER_SCRATCH_MEM_SIZE 192000
-
 static _SEQUENCE_NOTES string "CCDDEFFGGAAB"
 static _SEQUENCE_SHARP string "#"
 static _SEQUENCE_FLAT  string "b"
@@ -17,7 +12,6 @@ static _SEQUENCE_DOT string "."
 static _SEQUENCE_DOT_MUL floats "1.5"
 static _SEQUENCE_TUNINGS floats 12
 static _sequence_rate
-static sequence_user_scratch_mem floats SEQUENCE_USER_SCRATCH_MEM_SIZE
 
 macro SEQUENCE_SET_RATE RATE
     move _sequence_rate RATE
