@@ -118,9 +118,8 @@ expr _INST_TONE_LENGTH_IDX 1
 expr _INST_TONE_PLAYER_IDX 2
 expr _INST_TONE_SPEEDSLOPE_PLAYER_IDX 3
 expr _INST_TONE_SPEEDBIAS_PLAYER_IDX 4
-expr _INST_TONE_OUTPOS_IDX 6
-expr _INST_TONE_NOTE_IDX 7
-expr _INST_TONE_OBJSIZE 8
+expr _INST_TONE_NOTE_IDX 5
+expr _INST_TONE_OBJSIZE 6
 
 expr _INST_TONE_OBJMEM_SIZE "_INST_MAX_INST_OBJS * _INST_TONE_OBJSIZE"
 
@@ -262,8 +261,12 @@ proc inst_tone_note hInst note remain detune speeddiff speedspeed
 ret
 
 proc inst_tone_frame hInst needed
-    ; don't reset input position, since the phase should be preserved
-    _INST_TONE_SET_INT hInst _INST_TONE_OUTPOS_IDX 0
+    local player
+
+    ; reset to the beginning of the output buffer each frame so it can mix
+    ; into a mix output buffer
+    _INST_TONE_GET_INT player hInst _INST_TONE_PLAYER_IDX
+    move audio_set_player_output_buffer_pos:player 0
 ret
 
 proc inst_tone_run hInst request
@@ -272,7 +275,6 @@ proc inst_tone_run hInst request
     local player
     local speedslopeplayer
     local speedbiasplayer
-    local outpos
     local remain
     local speedgot
 
@@ -283,7 +285,6 @@ proc inst_tone_run hInst request
     _INST_TONE_GET_INT player hInst _INST_TONE_PLAYER_IDX
     _INST_TONE_GET_INT speedslopeplayer hInst _INST_TONE_SPEEDSLOPE_PLAYER_IDX
     _INST_TONE_GET_INT speedbiasplayer hInst _INST_TONE_SPEEDBIAS_PLAYER_IDX
-    _INST_TONE_GET_INT outpos hInst _INST_TONE_OUTPOS_IDX
 
     move remain request
     label loop
@@ -305,7 +306,6 @@ proc inst_tone_run hInst request
         sub remain speedgot
         cmp remain 0
     jumpg loop
-    _INST_TONE_SET_INT outpos hInst _INST_TONE_OUTPOS_IDX outpos
 
     label off
 ret
@@ -318,8 +318,7 @@ expr _INST_FX_ENV_ENVSLOPE_PLAYER_IDX 2
 expr _INST_FX_ENV_ENVBIAS_PLAYER_IDX 3
 expr _INST_FX_ENV_ENDVOL_WHOLE_IDX 4
 expr _INST_FX_ENV_ENDVOL_FRAC_IDX 5
-expr _INST_FX_ENV_OUTPOS_IDX 6
-expr _INST_FX_ENV_OBJSIZE 7
+expr _INST_FX_ENV_OBJSIZE 6
 
 expr _INST_FX_ENV_ENDVOL_IDX 0
 expr _INST_FX_ENV_FLOATSIZE 1
@@ -427,12 +426,11 @@ ret
 proc effect_env_frame hInst
     local player
 
-    ; reset output position and input position, the assumption is that on each
-    ; frame, an intermediate buffer is reused, otherwise this procedure can
-    ; just be used as a generic position reset
-    _INST_FX_ENV_SET_INT hInst _INST_FX_ENV_OUTPOS_IDX 0
+    ; reset input and output on each frame since a generator treats its output
+    ; as a mix buffer starting at 0, treat the output of this effect the same
     _INST_FX_ENV_GET_INT player hInst _INST_FX_ENV_PLAYER_IDX
     move audio_set_input_buffer_pos:player 0
+    move audio_set_output_buffer_pos:player 0
 ret
 
 proc effect_env_run hInst request
@@ -440,16 +438,12 @@ proc effect_env_run hInst request
     local player
     local envslopeplayer
     local envbiasplayer
-    local outpos
     local slopegot
     local remain
 
     _INST_FX_ENV_GET_INT envslopeplayer hInst _INST_FX_ENV_ENVSLOPE_PLAYER_IDX
     _INST_FX_ENV_GET_INT envbiasplayer hInst _INST_FX_ENV_ENVBIAS_PLAYER_IDX
     _INST_FX_ENV_GET_INT player hInst _INST_FX_ENV_PLAYER_IDX
-    _INST_FX_ENV_GET_INT outpos hInst _INST_FX_ENV_OUTPOS_IDX
-
-    move audio_set_player_output_pos:player outpos
 
     move remain request
 
@@ -460,7 +454,6 @@ proc effect_env_run hInst request
     jumpz constant
         move audio_run_player:envbiasplayer slopegot
         move audio_run_player:player slopegot
-        add outpos slopegot
         sub remain slopegot
 
         cmp remain 0
@@ -470,10 +463,8 @@ proc effect_env_run hInst request
         _INST_FX_ENV_GET_FLOAT tempf hInst _INST_FX_ENV_ENDVOL_IDX
         move audio_set_player_volume:player tempf
         move audio_run_player:player remain
-        add outpos remain
 
     label end
-    _INST_FX_ENV_SET_INT hInst _INST_FX_ENV_OUTPOS_IDX outpos
 ret
 
 ; ========== ADSR Generator ==========
@@ -552,14 +543,6 @@ proc gen_adsr_start hInst attackrate decayrate sustainlevel
     move audio_set_player_input_buffer:envslopeplayer _inst_env_asc
     move audio_set_player_speed:envslopeplayer attackrate
 
-    ; reset the positions to 0 since this will be at the start of a note, so
-    ; the output can be used as the input to a note's volume easily.
-    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
-    move audio_set_player_output_buffer_pos:temp 0
-    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
-    move audio_set_player_output_buffer_pos:temp 0
-ret
-
     _INST_ADSR_SET_FLOAT hInst _INST_ADSR_DECAYRATE_IDX decayrate
     _INST_ADSR_SET_FLOAT hInst _INST_ADSR_SUSTAINLEVEL_IDX sustainlevel
     _INST_ADSR_SET_INT hInst _INST_ADSR_RESONATERATE_IDX _INST_ADSR_MODE_ATTACK
@@ -581,17 +564,6 @@ proc gen_adsr_resonate hInst resonaterate
     _INST_ADSR_SET_INT hInst _INST_ADSR_RESONATERATE_IDX _INST_ADSR_MODE_RESONATE
 ret
 
-proc gen_adsr_frame hInst
-    local temp
-
-    ; just set the output positions to 0, because this will be called as a
-    ; generator to determine how much of a note is to be played
-    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
-    move audio_set_player_output_buffer_pos:temp 0
-    _INST_ADSR_GET_INT temp hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
-    move audio_set_player_output_buffer_pos:temp 0
-ret
-
 proc gen_adsr_run hInst request returned
     local tempf floats 2
     local envslopeplayer
@@ -599,6 +571,11 @@ proc gen_adsr_run hInst request returned
     local mode
     local slopegot
     local remain
+
+    _INST_ADSR_GET_INT envslopeplayer hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
+    _INST_ADSR_GET_INT envbiasplayer hInst _INST_ADSR_ENVBIAS_PLAYER_IDX
+    move audio_set_player_output_buffer_pos:envslopeplayer 0
+    move audio_set_player_output_buffer_pos:envbiasplayer 0
 
     _INST_ADSR_GET_INT mode hInst _INST_ADSR_MODE_IDX
 
@@ -609,7 +586,6 @@ proc gen_adsr_run hInst request returned
 
         cmp mode _INST_ADSR_MODE_SUSTAIN
         jumpz sustain
-            _INST_ADSR_GET_INT envslopeplayer hInst _INST_ADSR_ENVSLOPE_PLAYER_IDX
             move audio_run_player:envslopeplayer request
             move slopegot get_return
             cmp slopegot 0
