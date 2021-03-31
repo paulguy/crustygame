@@ -122,8 +122,8 @@ int initialize_SDL(SDL_Window **win,
         fprintf(stderr, "Formats: ");
         for(j = 0; j < driver.num_texture_formats; j++) {
             fprintf(stderr, "(%08X) %s ",
-                    driver.texture_formats[i],
-                    SDL_GetPixelFormatName(driver.texture_formats[i]));
+                    driver.texture_formats[j],
+                    SDL_GetPixelFormatName(driver.texture_formats[j]));
         }
         fprintf(stderr, "\n");
         fprintf(stderr, "Max Texture Size: %d x %d\n",
