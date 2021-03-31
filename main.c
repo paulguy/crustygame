@@ -87,9 +87,11 @@ int initialize_SDL(SDL_Window **win,
                     break;
                 }
             }
-        } else if(strcmp(driver.name, "direct3d11") == 0 ||
-                  strncmp(driver.name, "opengles", 8) == 0) {
-            /* prefer direct3d 11 or opengles for better blend mode support */
+        } else if((strcmp(driver.name, "direct3d11") == 0 ||
+                  strncmp(driver.name, "opengles", 8) == 0 ||
+                  strcmp(driver.name, "metal") == 0) &&
+                  bestdrv == -1) {
+            /* prefer direct3d 11 or opengles or metal for better blend mode support */
             for(j = 0; j < driver.num_texture_formats; j++) {
                 if(SDL_BITSPERPIXEL(driver.texture_formats[j]) >= 24) {
                     bestfmt = driver.texture_formats[j];
