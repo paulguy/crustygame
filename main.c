@@ -47,9 +47,9 @@ int initialize_SDL(SDL_Window **win,
                    SDL_Renderer **renderer,
                    Uint32 *format) {
     int drivers;
-    int bestdrv, softdrv, selectdrv;
+    int nameddrv, bestdrv, softdrv, selectdrv;
     int selectfmt;
-    Uint32 bestfmt, softfmt;
+    Uint32 namedfmt, bestfmt, softfmt;
     int i, j;
     SDL_RendererInfo driver;
 
@@ -66,6 +66,8 @@ int initialize_SDL(SDL_Window **win,
     drivers = SDL_GetNumRenderDrivers();
     fprintf(stderr, "Video Drivers: %d\n", drivers);
 
+    nameddrv = -1;
+    namedfmt = SDL_PIXELFORMAT_UNKNOWN;
     bestdrv = -1;
     bestfmt = SDL_PIXELFORMAT_UNKNOWN;
     softdrv = -1;
@@ -87,13 +89,15 @@ int initialize_SDL(SDL_Window **win,
                     break;
                 }
             }
-        } else if(strcmp(driver.name, "direct3d11") == 0 ||
-                  strncmp(driver.name, "opengles", 8) == 0) {
-            /* prefer direct3d 11 or opengles for better blend mode support */
+        } else if((strcmp(driver.name, "direct3d11") == 0 ||
+                  strncmp(driver.name, "opengles", 8) == 0 ||
+                  strcmp(driver.name, "metal") == 0) &&
+                  nameddrv == -1) {
+            /* prefer direct3d 11 or opengles or metal for better blend mode support */
             for(j = 0; j < driver.num_texture_formats; j++) {
                 if(SDL_BITSPERPIXEL(driver.texture_formats[j]) >= 24) {
-                    bestfmt = driver.texture_formats[j];
-                    bestdrv = i;
+                    namedfmt = driver.texture_formats[j];
+                    nameddrv = i;
                     break;
                 }
             }
@@ -122,13 +126,18 @@ int initialize_SDL(SDL_Window **win,
         fprintf(stderr, "Formats: ");
         for(j = 0; j < driver.num_texture_formats; j++) {
             fprintf(stderr, "(%08X) %s ",
-                    driver.texture_formats[i],
-                    SDL_GetPixelFormatName(driver.texture_formats[i]));
+                    driver.texture_formats[j],
+                    SDL_GetPixelFormatName(driver.texture_formats[j]));
         }
         fprintf(stderr, "\n");
         fprintf(stderr, "Max Texture Size: %d x %d\n",
                 driver.max_texture_width,
                 driver.max_texture_height);
+    }
+
+    if(nameddrv != -1) {
+        bestfmt = namedfmt;
+        bestdrv = nameddrv;
     }
 
     /* create the window then try to create a renderer for it */
