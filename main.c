@@ -46,11 +46,11 @@ CrustyGame state;
 int initialize_SDL(SDL_Window **win,
                    SDL_Renderer **renderer,
                    Uint32 *format) {
-    int drivers;
+    unsigned int drivers;
     int nameddrv, bestdrv, softdrv, selectdrv;
     int selectfmt;
     Uint32 namedfmt, bestfmt, softfmt;
-    int i, j;
+    unsigned int i, j;
     SDL_RendererInfo driver;
 
     /* SDL/Windows/Render initialization stuff */
@@ -329,7 +329,8 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
                     this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
                                 SAVE_FILL_BUFFER_SIZE :
                                 need_fill;
-                    if(fwrite(buffer, 1, this_fill, savefile) < this_fill) {
+                    if(fwrite(buffer, 1, this_fill, savefile) <
+                       (unsigned int)this_fill) {
                         fprintf(stderr, "Failed to fill save file.\n");
                         free(dot);
                         fclose(savefile);
@@ -365,7 +366,8 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
             this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
                         SAVE_FILL_BUFFER_SIZE :
                         need_fill;
-            if(fwrite(buffer, 1, this_fill, savefile) < this_fill) {
+            if(fwrite(buffer, 1, this_fill, savefile) < 
+               (unsigned int)this_fill) {
                 fprintf(stderr, "Failed to fill save file.\n");
                 free(dot);
                 fclose(savefile);
@@ -387,6 +389,19 @@ int audio_frame_cb(void *priv) {
                         "%s\n",
                 crustyvm_statusstr(crustyvm_get_status(state->cvm)));
         crustyvm_debugtrace(state->cvm, 1);
+        return(-1);
+    }
+
+    return(0);
+}
+
+int notify_event(CrustyVM *cvm) {
+    int result = crustyvm_run(cvm, "event");
+    if(result < 0) {
+        fprintf(stderr, "Program reached an exception while "
+                        "running: %s\n",
+                crustyvm_statusstr(crustyvm_get_status(cvm)));
+        crustyvm_debugtrace(cvm, 0);
         return(-1);
     }
 
@@ -598,6 +613,7 @@ int main(int argc, char **argv) {
         goto error_sdl;
     }
 
+#if 0
     /* initialize the audio */
     state.s = synth_new(audio_frame_cb,
                         &state,
@@ -607,6 +623,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to create synth.\n");
         goto error_ll;
     }
+#endif
 
     /* seed random */
     srand(time(NULL));
@@ -686,6 +703,10 @@ int main(int argc, char **argv) {
                     if(((SDL_KeyboardEvent *)&(state.lastEvent))->repeat) {
                         continue;
                     }
+                    if(notify_event(state.cvm) < 0) {
+                        goto error_synth;
+                    }
+                    break;
                 case SDL_MOUSEMOTION:
                 case SDL_MOUSEBUTTONDOWN:
                 case SDL_MOUSEBUTTONUP:
@@ -698,12 +719,7 @@ int main(int argc, char **argv) {
                 case SDL_CONTROLLERAXISMOTION:
                 case SDL_CONTROLLERBUTTONDOWN:
                 case SDL_CONTROLLERBUTTONUP:
-                    result = crustyvm_run(state.cvm, "event");
-                    if(result < 0) {
-                        fprintf(stderr, "Program reached an exception while "
-                                        "running: %s\n",
-                                crustyvm_statusstr(crustyvm_get_status(state.cvm)));
-                        crustyvm_debugtrace(state.cvm, 0);
+                    if(notify_event(state.cvm) < 0) {
                         goto error_synth;
                     }
                     break;
@@ -712,10 +728,12 @@ int main(int argc, char **argv) {
             }
         }
 
+#if 0
         if(synth_frame(state.s) < 0) {
             fprintf(stderr, "Audio failed.\n");
             goto error_synth;
         }
+#endif
 
         result = crustyvm_run(state.cvm, "frame");
         if(result < 0) {
@@ -730,7 +748,9 @@ int main(int argc, char **argv) {
     }
 
     fprintf(stderr, "Program completed successfully.\n");
+/*
     synth_free(state.s);
+*/
     layerlist_free(state.ll);
 
     SDL_DestroyWindow(state.win);
@@ -741,7 +761,9 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
 
 error_synth:
+/*
     synth_free(state.s);
+*/
 error_ll:
     layerlist_free(state.ll);
 error_sdl:

@@ -23,7 +23,9 @@
 #include <SDL.h>
 #include "crustyvm.h"
 #include "tilemap.h"
+/*
 #include "synth.h"
+*/
 
 #define CRUSTYGAME_KEYDOWN              (1)
 #define CRUSTYGAME_KEYUP                (2)
@@ -93,7 +95,9 @@ typedef struct {
     SDL_Renderer *renderer;
     SDL_Event lastEvent;
     LayerList *ll;
+/*
     Synth *s;
+*/
     int running;
 
     void *buffer;

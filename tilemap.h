@@ -63,7 +63,7 @@ LayerList *layerlist_new(SDL_Renderer *renderer,
 void layerlist_free(LayerList *ll);
 
 int tilemap_add_tileset(LayerList *ll,
-                        const void *pixels,
+                        void *pixels,
                         unsigned int w,
                         unsigned int h,
                         unsigned int pitch,

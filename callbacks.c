@@ -27,7 +27,9 @@
 #include "crustygame.h"
 #include "crustyvm.h"
 #include "tilemap.h"
+/*
 #include "synth.h"
+*/
 
 #define VIDEO_MODE_STR_SIZE (256)
 #define VIDEO_MODE_SEPARATOR 'x'
@@ -150,7 +152,8 @@ int gfx_add_tileset(void *priv,
     }
     /* check to see, given a particular dimensions and pitch, that
      * the buffer has enough space to create the entire surface */
-    if(state->size < (pitch * (h - 1)) + (w * 4)) {
+    if(state->size < ((unsigned int)pitch *
+                      ((unsigned int)h - 1)) + ((unsigned int)w * 4)) {
         fprintf(stderr, "Buffer too small to create requested tileset.\n");
         return(-1);
     }
@@ -973,7 +976,7 @@ int savedata_write(void *priv,
             fprintf(stderr, "Failed to write to savefile.\n");
             return(-1);
         }
-        if(pos + 1 == state->savesize) {
+        if((unsigned int)pos + 1 == state->savesize) {
             if(fseek(state->savefile, 0, SEEK_SET)) {
                 fprintf(stderr, "Failed to seek in save file: %s\n",
                                 strerror(errno));
@@ -982,7 +985,7 @@ int savedata_write(void *priv,
             }
         }
     } else if(type == CRUSTY_TYPE_INT) {
-        if(pos > state->savesize - sizeof(int)) {
+        if((unsigned int)pos > state->savesize - sizeof(int)) {
             fprintf(stderr, "Not enough space to write int value.\n");
             return(-1);
         }
@@ -990,7 +993,7 @@ int savedata_write(void *priv,
             fprintf(stderr, "Failed to write to savefile.\n");
             return(-1);
         }
-        if(pos + sizeof(int) == state->savesize) {
+        if((unsigned int)pos + sizeof(int) == state->savesize) {
             if(fseek(state->savefile, 0, SEEK_SET)) {
                 fprintf(stderr, "Failed to seek in save file: %s\n",
                                 strerror(errno));
@@ -999,7 +1002,7 @@ int savedata_write(void *priv,
             }
         }
     } else { /* FLOAT */
-        if(pos > state->savesize - sizeof(double)) {
+        if((unsigned int)pos > state->savesize - sizeof(double)) {
             fprintf(stderr, "Not enough space to write float value.\n");
             return(-1);
         }
@@ -1007,7 +1010,7 @@ int savedata_write(void *priv,
             fprintf(stderr, "Failed to write to savefile.\n");
             return(-1);
         }
-        if(pos + sizeof(double) == state->savesize) {
+        if((unsigned int)pos + sizeof(double) == state->savesize) {
             if(fseek(state->savefile, 0, SEEK_SET)) {
                 fprintf(stderr, "Failed to seek in save file: %s\n",
                                 strerror(errno));
@@ -1038,7 +1041,7 @@ int savedata_read_char(void *priv, void *val, unsigned int index) {
         fprintf(stderr, "Failed to read from savefile.\n");
         return(-1);
     }
-    if(pos + 1 == state->savesize) {
+    if((unsigned int)pos + 1 == state->savesize) {
         if(fseek(state->savefile, 0, SEEK_SET)) {
             fprintf(stderr, "Failed to seek in save file: %s\n",
                             strerror(errno));
@@ -1069,7 +1072,7 @@ int savedata_read_int(void *priv, void *val, unsigned int index) {
         fprintf(stderr, "Failed to read from savefile.\n");
         return(-1);
     }
-    if(pos + sizeof(int) == state->savesize) {
+    if((unsigned int)pos + sizeof(int) == state->savesize) {
         if(fseek(state->savefile, 0, SEEK_SET)) {
             fprintf(stderr, "Failed to seek in save file: %s\n",
                             strerror(errno));
@@ -1099,7 +1102,7 @@ int savedata_read_float(void *priv, void *val, unsigned int index) {
         fprintf(stderr, "Failed to read from savefile.\n");
         return(-1);
     }
-    if(pos + sizeof(float) == state->savesize) {
+    if((unsigned int)pos + sizeof(float) == state->savesize) {
         if(fseek(state->savefile, 0, SEEK_SET)) {
             fprintf(stderr, "Failed to seek in save file: %s\n",
                             strerror(errno));
@@ -1131,6 +1134,7 @@ int set_window_title(void *priv,
     return(0);
 }
 
+#if 0
 int audio_get_samples_needed(void *priv, void *val, unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
@@ -1231,28 +1235,28 @@ int audio_add_buffer(void *priv,
 
     switch(bufferType) {
         case CRUSTYGAME_AUDIO_TYPE_U8:
-            if(bufferSize > state->size) {
+            if((unsigned int)bufferSize > state->size) {
                 fprintf(stderr, "Buffer too small for declared size.\n");
                 return(-1);
             }
             bufferType = SYNTH_TYPE_U8;
             break;
         case CRUSTYGAME_AUDIO_TYPE_S16:
-            if(bufferSize * sizeof(Sint16) > state->size) {
+            if((unsigned int)bufferSize * sizeof(Sint16) > state->size) {
                 fprintf(stderr, "Buffer too small for declared size.\n");
                 return(-1);
             }
             bufferType = SYNTH_TYPE_S16;
             break;
         case CRUSTYGAME_AUDIO_TYPE_F32:
-            if(bufferSize * sizeof(float) > state->size) {
+            if((unsigned int)bufferSize * sizeof(float) > state->size) {
                 fprintf(stderr, "Buffer too small for declared size.\n");
                 return(-1);
             }
             bufferType = SYNTH_TYPE_F32;
             break;
         case CRUSTYGAME_AUDIO_TYPE_F64:
-            if(bufferSize * sizeof(double) > state->size) {
+            if((unsigned int)bufferSize * sizeof(double) > state->size) {
                 fprintf(stderr, "Buffer too small for declared size.\n");
                 return(-1);
             }
@@ -1683,6 +1687,7 @@ int audio_run_player(void *priv,
 
     return(0);
 }
+#endif
 
 CrustyCallback cb[] = {
     {
@@ -1934,6 +1939,7 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = set_window_title, .writepriv = &state
+#if 0
     },
     {
         .name = "audio_get_samples_needed", .length = 1,
@@ -2102,6 +2108,7 @@ CrustyCallback cb[] = {
         .readType = CRUSTY_TYPE_NONE,
         .read = NULL, .readpriv = NULL,
         .write = audio_run_player, .writepriv = &state
+#endif
     }
 };
 

@@ -1457,7 +1457,7 @@ static CrustyExpr *add_expr(CrustyVM *cvm,
                             CrustyExprOp op,
                             int number,
                             CrustyExpr *buffer,
-                            int *len,
+                            unsigned int *len,
                             CrustyExpr **new) {
     CrustyExpr *expr;
     expr = realloc(buffer, sizeof(CrustyExpr) * (*len + 1));
@@ -1481,7 +1481,7 @@ static long evaluate_expr(CrustyVM *cvm,
                           const char *expression,
                           unsigned int exprlen) {
     CrustyExpr *expr = NULL;
-    int exprmem = 0;
+    unsigned int exprmem = 0;
     CrustyExpr *temp;
     CrustyExpr *new = NULL;
     int parens = 0;
@@ -1490,7 +1490,7 @@ static long evaluate_expr(CrustyVM *cvm,
     char *end;
     long num;
 
-    int i;
+    unsigned int i;
     long tokenstart;
 
     for(i = 0; i < exprlen; i++) {
@@ -3084,7 +3084,7 @@ static int symbols_scan(CrustyVM *cvm,
                 goto failure;
             }
 
-            if(fread(buf, 1, fileLength, in) != fileLength) {
+            if(fread(buf, 1, fileLength, in) != (unsigned int)fileLength) {
                 LOG_PRINTF_LINE(cvm, "Couldn't read full length.\n");
                 free(buf);
                 goto failure;
