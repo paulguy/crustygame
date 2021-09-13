@@ -63,7 +63,7 @@ LayerList *layerlist_new(SDL_Renderer *renderer,
 void layerlist_free(LayerList *ll);
 
 int tilemap_add_tileset(LayerList *ll,
-                        void *pixels,
+                        const void *pixels,
                         unsigned int w,
                         unsigned int h,
                         unsigned int pitch,
@@ -72,6 +72,7 @@ int tilemap_add_tileset(LayerList *ll,
 int tilemap_free_tileset(LayerList *ll, unsigned int index);
 
 int tilemap_add_tilemap(LayerList *ll,
+                        unsigned int tileset,
                         unsigned int w,
                         unsigned int h);
 int tilemap_free_tilemap(LayerList *ll, unsigned int index);
@@ -85,17 +86,17 @@ int tilemap_set_tilemap_map(LayerList *ll,
                             int pitch,
                             int w,
                             int h,
-                            unsigned int *value,
+                            const unsigned int *value,
                             unsigned int size);
 int tilemap_set_tilemap_attr_flags(LayerList *ll,
-                              unsigned int index,
-                              unsigned int x,
-                              unsigned int y,
-                              int pitch,
-                              int w,
-                              int h,
-                              unsigned int *value,
-                              unsigned int size);
+                                   unsigned int index,
+                                   unsigned int x,
+                                   unsigned int y,
+                                   int pitch,
+                                   int w,
+                                   int h,
+                                   const unsigned int *value,
+                                   unsigned int size);
 int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       unsigned int index,
                                       unsigned int x,
@@ -103,7 +104,7 @@ int tilemap_set_tilemap_attr_colormod(LayerList *ll,
                                       int pitch,
                                       int w,
                                       int h,
-                                      Uint32 *value,
+                                      const Uint32 *value,
                                       unsigned int size);
 int tilemap_update_tilemap(LayerList *ll,
                            unsigned int index,
@@ -122,12 +123,12 @@ int tilemap_set_layer_pos(LayerList *ll,
                           int y);
 int tilemap_set_layer_window(LayerList *ll,
                              unsigned int index,
-                             int w,
-                             int h);
+                             unsigned int w,
+                             unsigned int h);
 int tilemap_set_layer_scroll_pos(LayerList *ll,
                                  unsigned int index,
-                                 int scroll_x,
-                                 int scroll_y);
+                                 unsigned int scroll_x,
+                                 unsigned int scroll_y);
 int tilemap_set_layer_scale(LayerList *ll,
                             unsigned int index,
                             double scale_x,

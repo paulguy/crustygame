@@ -185,22 +185,23 @@ int gfx_add_tilemap(void *priv,
                     unsigned int index) {
     CrustyGame *state = (CrustyGame *)priv;
 
-    int w, h;
+    int tileset, w, h;
     /* check data type and size */
-    if(type != CRUSTY_TYPE_INT || size < 2) {
+    if(type != CRUSTY_TYPE_INT || size < 3) {
         fprintf(stderr, "Wrong type.\n");
         return(-1);
     }
     /* set variables to usable names */
     int *buf = (int *)ptr;
-    w = buf[0]; h = buf[1];
+    tileset = buf[0];
+    w = buf[1]; h = buf[2];
   
     if(w < 0 || h < 0) {
         fprintf(stderr, "Value out of range.\n");
         return(-1);
     }
 
-    state->ret = tilemap_add_tilemap(state->ll, w, h);
+    state->ret = tilemap_add_tilemap(state->ll, tileset, w, h);
     if(state->ret < 0) {
         return(-1);
     }

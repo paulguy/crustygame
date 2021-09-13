@@ -225,8 +225,7 @@ proc init
     mul  temp:0 TILEMAP_PIXEL_BYTES
     call gfx_add_tileset title:CRSG_OFFSET_DATA title:CRSG_OFFSET_WIDTH title:CRSG_OFFSET_HEIGHT temp:0 title:CRSG_OFFSET_WIDTH title:CRSG_OFFSET_HEIGHT title_id
 
-    call gfx_add_tilemap TILEMAP_WIDTH TILEMAP_HEIGHT block_tilemap_id
-    move gfx_set_tilemap_tileset:block_tilemap_id gfx_id
+    call gfx_add_tilemap gfx_id TILEMAP_WIDTH TILEMAP_HEIGHT block_tilemap_id
     call gfx_set_tilemap_map block_tilemap_id PIECE_TILEMAP
     call gfx_set_tilemap_attr_colormod block_tilemap_id PIECE_COLORMOD
     call gfx_update_tilemap block_tilemap_id
@@ -237,21 +236,17 @@ proc init
     move temp:0 TILE_SIDE
     move temp:1 TILE_SIDE
     move gfx_set_layer_window:block_layer_id temp
-    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_background_id
-    move gfx_set_tilemap_tileset:pit_background_id gfx_id
+    call gfx_add_tilemap gfx_id PIT_BG_WIDTH PIT_BG_HEIGHT pit_background_id
     call gfx_add_layer pit_background_id pit_background_layer_id
     call objects_get_free pit_bg_obj pit_background_layer_id
 
-    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
-    move gfx_set_tilemap_tileset:pit_tilemap_id0 gfx_id
+    call gfx_add_tilemap gfx_id PIT_WIDTH PIT_HEIGHT pit_tilemap_id0
     call gfx_add_layer pit_tilemap_id0 pit_layer_id0
     call objects_get_free pit0_obj pit_layer_id0
-    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id1
-    move gfx_set_tilemap_tileset:pit_tilemap_id1 gfx_id
+    call gfx_add_tilemap gfx_id PIT_WIDTH PIT_HEIGHT pit_tilemap_id1
     call gfx_add_layer pit_tilemap_id1 pit_layer_id1
     call objects_get_free pit1_obj pit_layer_id1
-    call gfx_add_tilemap PIT_WIDTH PIT_HEIGHT pit_tilemap_id2
-    move gfx_set_tilemap_tileset:pit_tilemap_id2 gfx_id
+    call gfx_add_tilemap gfx_id PIT_WIDTH PIT_HEIGHT pit_tilemap_id2
     call gfx_add_layer pit_tilemap_id2 pit_layer_id2
     call objects_get_free pit2_obj pit_layer_id2
   
@@ -265,16 +260,14 @@ proc init
     call gfx_set_tilemap_attr_colormod pit_background_id pitcolormod
     call gfx_update_tilemap pit_background_id
     
-    call gfx_add_tilemap PIT_BG_WIDTH PIT_BG_HEIGHT pit_shadow_id
-    move gfx_set_tilemap_tileset:pit_shadow_id gfx_id
+    call gfx_add_tilemap gfx_id PIT_BG_WIDTH PIT_BG_HEIGHT pit_shadow_id
     call gfx_add_layer pit_shadow_id pit_shadow_layer_id
     call objects_get_free pit_sh_obj pit_shadow_id
     call fill row PIT_BG_WIDTH 1 PIT_BG_WIDTH SOLID_TILE
     call gfx_set_tilemap_map3 pit_shadow_id row 0 0 0 PIT_BG_WIDTH PIT_BG_HEIGHT
     call gfx_update_tilemap pit_shadow_id
 
-    call gfx_add_tilemap SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
-    move gfx_set_tilemap_tileset:window_background_id gfx_id
+    call gfx_add_tilemap gfx_id SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT window_background_id
     call fill row SCREEN_TILES_WIDTH 1 SCREEN_TILES_WIDTH SOLID_TILE
     ; pitch = 0 so the same row is copied for each row
     call gfx_set_tilemap_map3 window_background_id row 0 0 0 SCREEN_TILES_WIDTH SCREEN_TILES_HEIGHT
@@ -289,8 +282,7 @@ proc init
 
     call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
 
-    call gfx_add_tilemap BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern_id
-    move gfx_set_tilemap_tileset:window_pattern_id gfx_id
+    call gfx_add_tilemap gfx_id BACKGROUND_WIDTH BACKGROUND_HEIGHT window_pattern_id
     call gfx_set_tilemap_map window_pattern_id background_pattern
     call gfx_update_tilemap window_pattern_id
     call gfx_add_layer window_pattern_id window_pattern0_layer_id
@@ -310,8 +302,7 @@ proc init
 
     call fill_with_pattern background_pattern BACKGROUND_WIDTH BACKGROUND_HEIGHT BACKGROUND_WIDTH BACKGROUND_PATTERN:BACKGROUND_PATTERN_SIZE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE BACKGROUND_PATTERN_SIDE
 
-    call gfx_add_tilemap PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern_id
-    move gfx_set_tilemap_tileset:pit_pattern_id gfx_id
+    call gfx_add_tilemap gfx_id PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT pit_pattern_id
     call gfx_set_tilemap_map3 pit_pattern_id background_pattern 0 0 BACKGROUND_WIDTH PIT_PATTERN_WIDTH PIT_PATTERN_HEIGHT
     call gfx_update_tilemap pit_pattern_id
     call gfx_add_layer pit_pattern_id pit_pattern0_layer_id
@@ -328,8 +319,7 @@ proc init
     call objects_get_free pit_pat1_obj pit_pattern1_layer_id
 
     ; reuse background_pattern because it's a very large buffer
-    call gfx_add_tilemap LABELS_TILEMAP_WIDTH LABELS_TILEMAP_HEIGHT labels_tilemap_id
-    move gfx_set_tilemap_tileset:labels_tilemap_id font_id
+    call gfx_add_tilemap font_id LABELS_TILEMAP_WIDTH LABELS_TILEMAP_HEIGHT labels_tilemap_id
     call text_string_to_tilemap background_pattern CONTROLS_TEXT_WIDTH CONTROLS_TEXT_HEIGHT LABELS_TILEMAP_WIDTH CONTROLS_TEXT
     move temp LABELS_TILEMAP_WIDTH
     mul  temp LINES_POS
@@ -357,8 +347,7 @@ proc init
     OBJECTS_SET_SCALE labels0_obj FONT_SCALE FONT_SCALE
     OBJECTS_SET_SCALE labels1_obj FONT_SCALE FONT_SCALE
 
-    call gfx_add_tilemap 128 1 characters_tilemap_id
-    move gfx_set_tilemap_tileset:characters_tilemap_id font_id
+    call gfx_add_tilemap font_id 128 1 characters_tilemap_id
     move temp 0
     label characters_fill
         cmp temp 128
@@ -376,8 +365,7 @@ proc init
     call objects_get_free characters_obj characters_layer_id
     OBJECTS_SET_SCALE characters_obj FONT_SCALE FONT_SCALE
 
-    call gfx_add_tilemap 1 1 title_tilemap_id
-    move gfx_set_tilemap_tileset:title_tilemap_id title_id
+    call gfx_add_tilemap title_id 1 1 title_tilemap_id
     move temp 0
     call gfx_set_tilemap_map title_tilemap_id temp
     call gfx_update_tilemap title_tilemap_id
@@ -388,8 +376,7 @@ proc init
     CENTER tempf:0 SCREEN_WIDTH tempf:1
     OBJECTS_SET_POS_AND_SCALE title_obj tempf:0 tempf:0 TITLE_SCALE TITLE_SCALE
 
-    call gfx_add_tilemap HIGH_SCORE_TILEMAP_WIDTH HIGH_SCORE_COUNT high_score_tilemap_id
-    move gfx_set_tilemap_tileset:high_score_tilemap_id font_id
+    call gfx_add_tilemap font_id HIGH_SCORE_TILEMAP_WIDTH HIGH_SCORE_COUNT high_score_tilemap_id
     call gfx_add_layer high_score_tilemap_id high_score_layer_id
     call objects_get_free high_score_obj high_score_layer_id
     OBJECTS_SET_SCALE high_score_obj FONT_SCALE FONT_SCALE
