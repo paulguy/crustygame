@@ -4,7 +4,7 @@ CFLAGS = `pkg-config sdl2 --cflags` -D_GNU_SOURCE -Wall -Wextra -Wno-unused-para
 LDFLAGS = `pkg-config sdl2 --libs` -lm
 
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJS)
+	$(CC) -o $(TARGET) $(OBJS) $(LDFLAGS)
 
 all: $(TARGET)
 
