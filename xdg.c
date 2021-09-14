@@ -61,12 +61,12 @@ unsigned int get_xdg_home_dirs(char **list, const char *orig) {
     }
     count++;
 
-    *list = append_string(*list, &listlen, home, homelen);
-    if(*list == NULL) {
-        return(0);
-    }
     xdg_data_home = getenv("XDG_DATA_HOME");
     if(xdg_data_home == NULL) {
+        *list = append_string(*list, &listlen, home, homelen);
+        if(*list == NULL) {
+            return(0);
+        }
         len = strlen(XDG_DATA_DEFAULT);
         *list = append_string(*list, &listlen, XDG_DATA_DEFAULT, len + 1);
         if(*list == NULL) {
