@@ -308,13 +308,14 @@ FILE *crustyvm_open_file(const char *filename,
     }
     /* not likely but may as well */
     slash = strrchr(fullpath, '/');
-    if(slash[1] == '\0') {
+    if(slash == NULL || slash[1] == '\0') {
         log_cb(log_priv, "Invalid path? %s\n", fullpath);
         return(NULL);
     }
-    slash[1] = '\0';
+
     if(*safepath != NULL) {
-        if(strncmp(fullpath, *safepath, strlen(*safepath)) != 0) {
+        slash = strrchr(*safepath, '/');
+        if(memcmp(fullpath, *safepath, slash - *safepath + 1) != 0) {
             log_cb(log_priv, "File attempted to be accessed from unsafe path: "
                               "%s\n", fullpath);
             free(fullpath);

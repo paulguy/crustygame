@@ -30,6 +30,7 @@
 #include "crustyvm.h"
 #include "tilemap.h"
 #include "callbacks.h"
+#include "xdg.h"
 
 /* initial settings */
 #define WINDOW_TITLE    "CrustyGame"
@@ -38,6 +39,7 @@
 
 const char META_PREFIX[] = ";crustygame ";
 const char SAVE_SIZE_PREFIX[] = "save:";
+const char SAVE_PATH_DIR[] = "/crustygame saves/";
 const char SAVE_PATH_SUFFIX[] = ".sav";
 #define SAVE_FILL_BUFFER_SIZE (64 * 1024)
 
@@ -285,80 +287,214 @@ failure:
     return(-1);
 }
 
-FILE *create_save_file(const char *fullpath, unsigned int size) {
-    char *dot;
+/* must be an absolute path including with a file of some sort, at this point
+ * this is guaranteed because fullpath came from crustyvm_open_file, which
+ * determines if the file actually existed and is a regular file at all before
+ * returning a path.
+ * Only path needs to be freed. */
+char *split_path_and_filename(const char *fullpath, char **filename) {
+    char *slash;
     unsigned int pathlen;
-    FILE* savefile;
+    unsigned int slashpos;
+    char *path;
+
+    slash = strrchr(fullpath, '/');
+    if(slash == NULL) {
+        /* wasn't fed an absolute path for sure */
+        return(NULL);
+    }
+    slashpos = slash - fullpath;
+    pathlen = strlen(fullpath);
+    if(slashpos == pathlen) {
+        /* string ends in /, meaning it'd certainly be a directory already */
+        return(NULL);
+    }
+    path = malloc(pathlen + 1);
+    if(path == NULL) {
+        return(NULL);
+    }
+    memcpy(path, fullpath, pathlen + 1);
+    path[slashpos] = '\0';
+
+    *filename = &(path[slashpos + 1]);
+    return(path);
+}
+
+/* must accept only a filename, no path parts */
+void trim_extension(char *filename) {
+    char *dot;
+
+    dot = strrchr(filename, '.');
+    if(dot == NULL || dot == filename) {
+        return;
+    }
+
+    *dot = '\0';
+}
+
+/* check to see if a directory exists and if not, try to recursively create
+ * directories until it does.
+ * must be an absolute path */
+int is_existing_dir(const char *dir) {
+    unsigned int len = strlen(dir);
+    char path[len+1];
+    unsigned int i;
+    struct stat filestat;
+
+    memcpy(path, dir, len + 1);
+
+    /* don't process the first leading / */
+    for(i = 1; i < len; i++) {
+        if(path[i] == '/') {
+            path[i] = '\0';
+            if(stat(path, &filestat) == 0) {
+                if(!S_ISDIR(filestat.st_mode)) {
+                    /* something not a directory in the way */
+                    return(0);
+                }
+            } else {
+                /* directory doesn't exist, try to create it */
+                if(mkdir(path, 0755) < 0) {
+                    return(0);
+                }
+            }
+            path[i] = '/';
+        }
+    }
+
+    /* if there's no trailing /, make sure the full path is tried */
+    if(path[len - 1] != '/') {
+        if(stat(path, &filestat) == 0) {
+            if(!S_ISDIR(filestat.st_mode)) {
+                /* something not a directory in the way */
+                return(0);
+            }
+        } else {
+            /* directory doesn't exist, try to create it */
+            if(mkdir(path, 0755) < 0) {
+                return(0);
+            }
+        }
+    }
+
+    return(1);
+}
+
+FILE *create_save_file(const char *fullpath, unsigned int size) {
+    char *path;
+    char *filename;
+    char *xdgdirs;
+    unsigned int xdgcount;
+    unsigned int xdgcountbackup;
+    char *curpath;
+    char savepath[PATH_MAX];
+    char savename[PATH_MAX];
+
+    FILE *savefile;
     char buffer[SAVE_FILL_BUFFER_SIZE];
     int need_fill;
     int this_fill;
     struct stat filestat;
 
-    dot = strrchr(fullpath, '.');
-    if(dot == NULL) {
-        pathlen = strlen(fullpath);
-    } else {
-        /* ick */
-        pathlen = dot - fullpath;
-    }
-    dot = malloc(pathlen + sizeof(SAVE_PATH_SUFFIX));
-    if(dot == NULL) {
-        fprintf(stderr, "Failed to allocate memory for save path.\n");
+    path = split_path_and_filename(fullpath, &filename);
+    if(path == NULL) {
+        fprintf(stderr, "Failed to split path and filename parts.\n");
         return(NULL);
     }
-    memcpy(dot, fullpath, pathlen);
-    memcpy(&(dot[pathlen]), SAVE_PATH_SUFFIX, sizeof(SAVE_PATH_SUFFIX));
+    trim_extension(filename);
 
-    if(stat(dot, &filestat) == 0) {
-        if(S_ISREG(filestat.st_mode)) {
-            /* file exists */
-            if(filestat.st_size < size) {
-                /* old save file is smaller than requested size, grow it */
-                savefile = fopen(dot, "a");
-                if(savefile == NULL) {
-                    fprintf(stderr, "Failed to open save file: %s\n", dot);
-                    free(dot);
-                    return(NULL);
-                }
+    xdgcount = get_xdg_home_dirs(&xdgdirs, path);
+    xdgcountbackup = xdgcount;
+    /* check for an existing save file */
+    curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+    while(curpath != NULL) {
+        if(snprintf(savepath, PATH_MAX, "%s%s", curpath, SAVE_PATH_DIR) >= PATH_MAX) {
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
+        if(snprintf(savename, PATH_MAX, "%s%s%s", savepath, filename, SAVE_PATH_SUFFIX) >= PATH_MAX) {
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
 
-                memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
-                for(need_fill = filestat.st_size - size;
-                    need_fill > 0;
-                    need_fill -= SAVE_FILL_BUFFER_SIZE) {
-
-                    this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
-                                SAVE_FILL_BUFFER_SIZE :
-                                need_fill;
-                    if(fwrite(buffer, 1, this_fill, savefile) <
-                       (unsigned int)this_fill) {
-                        fprintf(stderr, "Failed to fill save file.\n");
-                        free(dot);
-                        fclose(savefile);
-                        return(NULL);
+        if(stat(savename, &filestat) == 0) {
+            if(S_ISREG(filestat.st_mode)) {
+                if(filestat.st_size < size) {
+                    /* old save file is smaller than requested size, grow it */
+                    savefile = fopen(savename, "a");
+                    if(savefile == NULL) {
+                        fprintf(stderr, "Failed to open save file: %s\n", savename);
+                        curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+                        continue;
                     }
-                }
-                fclose(savefile);
-            }
 
-            /* open the file for read+write */
-            savefile = fopen(dot, "r+");
-            if(savefile == NULL) {
-                fprintf(stderr, "Failed to open save file: %s\n", dot);
-                free(dot);
-                return(NULL);
+                    memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
+                    for(need_fill = filestat.st_size - size;
+                        need_fill > 0;
+                        need_fill -= SAVE_FILL_BUFFER_SIZE) {
+
+                        this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
+                                    SAVE_FILL_BUFFER_SIZE :
+                                    need_fill;
+                        if(fwrite(buffer, 1, this_fill, savefile) <
+                           (unsigned int)this_fill) {
+                            fprintf(stderr, "Failed to fill save file.\n");
+                            fclose(savefile);
+                            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+                            continue;
+                        }
+                    }
+                    fclose(savefile);
+                }
+
+                /* open the file for read+write */
+                savefile = fopen(savename, "r+");
+                if(savefile == NULL) {
+                    fprintf(stderr, "Failed to open save file: %s\n", savename);
+                    curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+                    continue;
+                }
+                fprintf(stderr, "Save file found at: %s\n", savename);
+
+                free(xdgdirs);
+                free(path);
+
+                return(savefile);
+            } else {
+                fprintf(stderr, "Save file exists but is not a regular file: %s\n", savename);
+                curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+                continue;
             }
         } else {
-            fprintf(stderr, "Save file exists but is not a regular file: %s\n", dot);
-            free(dot);
-            return(NULL);
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
         }
-    } else {
-        /* file doesn't exist, create it */
-        savefile = fopen(dot, "w+");
+    }
+
+    /* Try to create a new save file. */
+    xdgcount = xdgcountbackup;
+    curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+    while(curpath != NULL) {
+        if(snprintf(savepath, PATH_MAX, "%s%s", curpath, SAVE_PATH_DIR) >= PATH_MAX) {
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
+        if(snprintf(savename, PATH_MAX, "%s%s%s", savepath, filename, SAVE_PATH_SUFFIX) >= PATH_MAX) {
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
+
+        if(is_existing_dir(savepath) == 0) {
+            fprintf(stderr, "Directory doesn't exist and couldn't be created: %s\n", savepath);
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
+
+        savefile = fopen(savename, "w+");
         if(savefile == NULL) {
-            fprintf(stderr, "Failed to open save file: %s\n", dot);
-            free(dot);
-            return(NULL);
+            fprintf(stderr, "Failed to open save file: %s\n", savename);
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
         }
 
         memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
@@ -369,16 +505,24 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
             if(fwrite(buffer, 1, this_fill, savefile) < 
                (unsigned int)this_fill) {
                 fprintf(stderr, "Failed to fill save file.\n");
-                free(dot);
                 fclose(savefile);
-                return(NULL);
+                curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+                continue;
             }
         }
+        rewind(savefile);
+        fprintf(stderr, "Save file createed at: %s\n", savename);
+
+        free(xdgdirs);
+        free(path);
+
+        return(savefile);
     }
 
-    free(dot);
+    free(xdgdirs);
+    free(path);
 
-    return(savefile);
+    return(NULL);
 }
 
 int audio_frame_cb(void *priv) {
@@ -568,10 +712,13 @@ int main(int argc, char **argv) {
         goto error_infile;
     }
     if(state.savesize > 0) {
-        state.savefile = create_save_file(filename, state.savesize);
+        state.savefile = create_save_file(fullpath, state.savesize);
         if(state.savefile == NULL) {
+            fprintf(stderr, "Couldn't create save file.\n");
             goto error_infile;
         }
+    } else {
+        state.savefile = NULL;
     }
 
     state.cvm = crustyvm_new(filename, fullpath, 
