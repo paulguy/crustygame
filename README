@@ -13,6 +13,22 @@ modifying various options.
 CTRL+F10 will have to be pressed again to allow the script to recapture the
 mouse.
 
+SAVE DATA
+    If a game has save data specified, it'll be created on first run and
+reloaded on each consecutive run.  This is accomplished by forming a list of
+locations to look in the order of, based on XDG base directory specification:
+1.
+  $XDG_DATA_HOME/crustygame saves
+    or if $XDG_DATA_HOME isn't defined:
+  $HOME/.local/share
+2.
+  $HOME
+3.
+  the directory the game was determined to be in
+    It will first try to look in to each of those directories for existing
+save data, otherwise it'll try each location trying to create a save file.
+Directories will try to be created.
+
 METADATA
     Metadata may be provided to crustygame in a comment on the absolute
 beginning of the program.  the comment must read ";crustygame ", and only data

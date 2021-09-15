@@ -104,7 +104,7 @@ Q - Rotate Counter Clockwise
 E - Rotate Clockwise
 A - Move Left
 S - Move Down
-D - Move Up"
+D - MoveRight"
 expr CONTROLS_TEXT_POS    0
 expr CONTROLS_TEXT_WIDTH  13
 expr CONTROLS_TEXT_HEIGHT 9
