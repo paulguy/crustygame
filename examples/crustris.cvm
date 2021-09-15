@@ -374,7 +374,9 @@ proc init
     move tempf:1 title:CRSG_OFFSET_WIDTH
     mul  tempf:1 TITLE_SCALE
     CENTER tempf:0 SCREEN_WIDTH tempf:1
-    OBJECTS_SET_POS_AND_SCALE title_obj tempf:0 tempf:0 TITLE_SCALE TITLE_SCALE
+    move tempf:1 SCREEN_HEIGHT
+    div  tempf:1 5
+    OBJECTS_SET_POS_AND_SCALE title_obj tempf:0 tempf:1 TITLE_SCALE TITLE_SCALE
 
     call gfx_add_tilemap font_id HIGH_SCORE_TILEMAP_WIDTH HIGH_SCORE_COUNT high_score_tilemap_id
     call gfx_add_layer high_score_tilemap_id high_score_layer_id
@@ -909,8 +911,8 @@ proc do_title_frame
     mul  titlew TITLE_SCALE
     CENTER titlex SCREEN_WIDTH titlew
     move shadey SCREEN_HEIGHT
-    sub  shadey titlex
-    sub  shadey shadeh
+    mul  shadey 5
+    div  shadey 7
     move texty shadey
     add  texty FONT_SCALED_SIDE
 
