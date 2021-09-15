@@ -347,12 +347,7 @@ int is_existing_dir(const char *dir) {
     for(i = 1; i < len; i++) {
         if(path[i] == '/') {
             path[i] = '\0';
-            if(stat(path, &filestat) == 0) {
-                if(!S_ISDIR(filestat.st_mode)) {
-                    /* something not a directory in the way */
-                    return(0);
-                }
-            } else {
+            if(!stat(path, &filestat) == 0) {
                 /* directory doesn't exist, try to create it */
                 if(mkdir(path, 0755) < 0) {
                     return(0);
@@ -364,13 +359,7 @@ int is_existing_dir(const char *dir) {
 
     /* if there's no trailing /, make sure the full path is tried */
     if(path[len - 1] != '/') {
-        if(stat(path, &filestat) == 0) {
-            if(!S_ISDIR(filestat.st_mode)) {
-                /* something not a directory in the way */
-                return(0);
-            }
-        } else {
-            /* directory doesn't exist, try to create it */
+        if(!stat(path, &filestat) == 0) {
             if(mkdir(path, 0755) < 0) {
                 return(0);
             }
@@ -391,10 +380,10 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
     char savename[PATH_MAX];
 
     FILE *savefile;
+    long filesize;
     char buffer[SAVE_FILL_BUFFER_SIZE];
     int need_fill;
     int this_fill;
-    struct stat filestat;
 
     path = split_path_and_filename(fullpath, &filename);
     if(path == NULL) {
@@ -408,67 +397,79 @@ FILE *create_save_file(const char *fullpath, unsigned int size) {
     /* check for an existing save file */
     curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
     while(curpath != NULL) {
-        if(snprintf(savepath, PATH_MAX, "%s%s", curpath, SAVE_PATH_DIR) >= PATH_MAX) {
+        if(snprintf(savename, PATH_MAX, "%s%s%s%s", curpath, SAVE_PATH_DIR, filename, SAVE_PATH_SUFFIX) >= PATH_MAX) {
+            fprintf(stderr, "Path too long! %s%s%s%s\n", curpath, SAVE_PATH_DIR, filename, SAVE_PATH_SUFFIX);
             curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
             continue;
         }
-        if(snprintf(savename, PATH_MAX, "%s%s%s", savepath, filename, SAVE_PATH_SUFFIX) >= PATH_MAX) {
+
+        /* try to open and get the size of the file */
+        savefile = fopen(savename, "r");
+        if(savefile == NULL) {
+            /* file couldn't be opened, not an error yet */
             curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
             continue;
         }
+        if(fseek(savefile, 0, SEEK_END) < 0) {
+            fprintf(stderr, "Failed to seek in %s.\n", savename);
+            fclose(savefile);
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
+        filesize = ftell(savefile);
+        if(filesize < 0) {
+            fprintf(stderr, "Failed to get size of %s.\n", savename);
+            fclose(savefile);
+            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+            continue;
+        }
+        fclose(savefile);
 
-        if(stat(savename, &filestat) == 0) {
-            if(S_ISREG(filestat.st_mode)) {
-                if(filestat.st_size < size) {
-                    /* old save file is smaller than requested size, grow it */
-                    savefile = fopen(savename, "a");
-                    if(savefile == NULL) {
-                        fprintf(stderr, "Failed to open save file: %s\n", savename);
-                        curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
-                        continue;
-                    }
+        /* expand if it's too small, while preserving the original content */
+        if(filesize < size) {
+            fprintf(stderr, "Expanding save data... ");
 
-                    memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
-                    for(need_fill = filestat.st_size - size;
-                        need_fill > 0;
-                        need_fill -= SAVE_FILL_BUFFER_SIZE) {
-
-                        this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
-                                    SAVE_FILL_BUFFER_SIZE :
-                                    need_fill;
-                        if(fwrite(buffer, 1, this_fill, savefile) <
-                           (unsigned int)this_fill) {
-                            fprintf(stderr, "Failed to fill save file.\n");
-                            fclose(savefile);
-                            curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
-                            continue;
-                        }
-                    }
-                    fclose(savefile);
-                }
-
-                /* open the file for read+write */
-                savefile = fopen(savename, "r+");
-                if(savefile == NULL) {
-                    fprintf(stderr, "Failed to open save file: %s\n", savename);
-                    curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
-                    continue;
-                }
-                fprintf(stderr, "Save file found at: %s\n", savename);
-
-                free(xdgdirs);
-                free(path);
-
-                return(savefile);
-            } else {
-                fprintf(stderr, "Save file exists but is not a regular file: %s\n", savename);
+            savefile = fopen(savename, "a");
+            if(savefile == NULL) {
+                fprintf(stderr, "Failed to open save file for expanding: %s\n", savename);
+                fclose(savefile);
                 curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
                 continue;
             }
-        } else {
+
+            memset(buffer, 0, SAVE_FILL_BUFFER_SIZE);
+            for(need_fill = filesize - size;
+                need_fill > 0;
+                need_fill -= SAVE_FILL_BUFFER_SIZE) {
+
+                this_fill = (need_fill > SAVE_FILL_BUFFER_SIZE) ?
+                            SAVE_FILL_BUFFER_SIZE :
+                            need_fill;
+                if(fwrite(buffer, 1, this_fill, savefile) <
+                   (unsigned int)this_fill) {
+                    fprintf(stderr, "Failed to fill save file.\n");
+                    fclose(savefile);
+                    curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
+                    continue;
+                }
+            }
+            fclose(savefile);
+            fprintf(stderr, "done\n");
+        }
+        
+        /* open the file for read+write */
+        savefile = fopen(savename, "r+");
+        if(savefile == NULL) {
+            fprintf(stderr, "Failed to open save file for read-write: %s\n", savename);
             curpath = get_next_xdg_home_dir(xdgdirs, &xdgcount);
             continue;
         }
+        fprintf(stderr, "Save file found at: %s\n", savename);
+
+        free(xdgdirs);
+        free(path);
+
+        return(savefile);
     }
 
     /* Try to create a new save file. */
